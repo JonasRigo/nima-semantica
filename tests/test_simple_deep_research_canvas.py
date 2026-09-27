@@ -5,6 +5,9 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace
 
+import pytest
+
+pytest.importorskip("lfx")
 from lfx.schema import DataFrame
 
 from nima_semantica.deep_research_contracts import DeepResearchRequest

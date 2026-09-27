@@ -546,7 +546,7 @@
     "tests/test_security_and_lean.py": "f28d38e43b59c144e68d2ed7a2a6d2400a76aaf7bdcb2d75a1d185d6e727fa69",
     "tests/test_setup_services.py": "72a66eeda9b5177d9cc85da988cc1500fb16b1729bbc5dbc2e47b279cab19994",
     "tests/test_simple_deep_research.py": "fc5bccbdd8c1cb601cabf9e50a9e381ca99507c58f966365e4468924b9547a80",
-    "tests/test_simple_deep_research_canvas.py": "35ee47d1a7d783c7fbb3de9ed3862dac9513e02adbd55f779ba21245ab714ed3",
+    "tests/test_simple_deep_research_canvas.py": "e9e4c5b30e5db9f4cd3aa554e46cfc831059d177b821758f9f0d67367efb34b6",
     "tests/test_snapshot_and_retrieval_contracts.py": "20090295c8ab13dabee4c31910a97481878979564c72aba64872772a9e99e876",
     "tests/test_source_canvas.py": "8a93329a4b98e33080d6b4e80d31f1fe101a00abd3227382ed057ef55ead6772",
     "tests/test_source_corpus.py": "1fec59650f2bdf80fed2ad063a29e06489c3738e61bd2b13b814c371268851e4",

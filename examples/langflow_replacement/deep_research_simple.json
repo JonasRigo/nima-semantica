@@ -1,0 +1,2301 @@
+{
+  "name": "Deep Research \u00b7 Regional Graph Passes",
+  "is_component": false,
+  "endpoint_name": "nima-deep-research-simple",
+  "description": "Harness-controlled literature review with pinned coverage subquestions, relevance-screened short queries, regional/consolidated provisional graphs and one gap-directed follow-up. Final feedback is a list of questions not covered by the current graph, with graph links for covered facets and controller-derived source inventory; no narrative gap answer. Fast reading stages exact passages without corpus indexing. No automatic scientific admission. Execution disabled by default; visual approval pending.",
+  "data": {
+    "nodes": [
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "files": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "file_path": "",
+                "fileTypes": [
+                  "csv",
+                  "json",
+                  "pdf",
+                  "txt",
+                  "md",
+                  "mdx",
+                  "yaml",
+                  "yml",
+                  "xml",
+                  "html",
+                  "htm",
+                  "docx",
+                  "py",
+                  "sh",
+                  "sql",
+                  "js",
+                  "ts",
+                  "tsx",
+                  "jpg",
+                  "jpeg",
+                  "png",
+                  "bmp",
+                  "image"
+                ],
+                "temp_file": true,
+                "list": true,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "files",
+                "value": [],
+                "display_name": "Files",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Files to be sent with the message.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "file",
+                "_input_type": "FileInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from lfx.base.data.utils import IMG_FILE_TYPES, TEXT_FILE_TYPES\nfrom lfx.base.io.chat import ChatComponent\nfrom lfx.inputs.inputs import BoolInput\nfrom lfx.io import (\n    DropdownInput,\n    FileInput,\n    MessageTextInput,\n    MultilineInput,\n    Output,\n)\nfrom lfx.schema.image import get_file_paths\nfrom lfx.schema.message import Message\nfrom lfx.services.deps import get_settings_service\nfrom lfx.utils.constants import (\n    MESSAGE_SENDER_AI,\n    MESSAGE_SENDER_NAME_USER,\n    MESSAGE_SENDER_USER,\n)\nfrom lfx.utils.file_path_security import (\n    component_file_access_scopes,\n    enforce_local_file_access,\n    is_local_file_access_restricted,\n)\n\n\nclass ChatInput(ChatComponent):\n    display_name = \"Chat Input\"\n    description = \"Get chat inputs from the Playground.\"\n    documentation: str = \"https://docs.langflow.org/chat-input-and-output\"\n    icon = \"MessagesSquare\"\n    name = \"ChatInput\"\n    minimized = True\n\n    inputs = [\n        MultilineInput(\n            name=\"input_value\",\n            display_name=\"Input Text\",\n            value=\"\",\n            info=\"Message to be passed as input.\",\n            input_types=[],\n        ),\n        BoolInput(\n            name=\"should_store_message\",\n            display_name=\"Store Messages\",\n            info=\"Store the message in the history.\",\n            value=True,\n            advanced=True,\n        ),\n        DropdownInput(\n            name=\"sender\",\n            display_name=\"Sender Type\",\n            options=[MESSAGE_SENDER_AI, MESSAGE_SENDER_USER],\n            value=MESSAGE_SENDER_USER,\n            info=\"Type of sender.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"sender_name\",\n            display_name=\"Sender Name\",\n            info=\"Name of the sender.\",\n            value=MESSAGE_SENDER_NAME_USER,\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"session_id\",\n            display_name=\"Session ID\",\n            info=\"The session ID of the chat. If empty, the current session ID parameter will be used.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"context_id\",\n            display_name=\"Context ID\",\n            info=\"The context ID of the chat. Adds an extra layer to the local memory.\",\n            value=\"\",\n            advanced=True,\n        ),\n        FileInput(\n            name=\"files\",\n            display_name=\"Files\",\n            file_types=TEXT_FILE_TYPES + IMG_FILE_TYPES,\n            info=\"Files to be sent with the message.\",\n            advanced=True,\n            is_list=True,\n            temp_file=True,\n        ),\n    ]\n    outputs = [\n        Output(display_name=\"Chat Message\", name=\"message\", method=\"message_response\"),\n    ]\n\n    async def message_response(self) -> Message:\n        # Ensure files is a list and filter out empty/None values\n        files = self.files if self.files else []\n        if files and not isinstance(files, list):\n            files = [files]\n        # Filter out None/empty values\n        files = [f for f in files if f is not None and f != \"\"]\n\n        # Build endpoints inject caller-controlled file references directly into\n        # ChatInput. Resolve and validate local references before the Message can\n        # later read them while constructing model attachment content.\n        if files:\n            settings_service = get_settings_service()\n            storage_type = getattr(getattr(settings_service, \"settings\", None), \"storage_type\", \"local\")\n            # The storage factory falls back to local storage for unsupported\n            # values, so only the explicitly configured S3 backend may bypass\n            # filesystem containment.\n            if str(storage_type).lower() != \"s3\" and is_local_file_access_restricted():\n                scope_ids = list(component_file_access_scopes(self))\n                # Public executions replace graph.flow_id with a per-visitor\n                # virtual ID. Only the server-populated source provenance may\n                # restore the already-validated public attachment namespace.\n                source_flow_id = getattr(self.graph, \"source_flow_id\", None)\n                if source_flow_id:\n                    scope_ids.append(source_flow_id)\n                for file_path in get_file_paths(files):\n                    enforce_local_file_access(file_path, scope_ids=scope_ids)\n\n        session_id = self.session_id or self.graph.session_id or \"\"\n        message = await Message.create(\n            text=self.input_value,\n            sender=self.sender,\n            sender_name=self.sender_name,\n            session_id=session_id,\n            context_id=self.context_id,\n            files=files,\n        )\n        if session_id and isinstance(message, Message) and self.should_store_message:\n            stored_message = await self.send_message(\n                message,\n            )\n            self.message.value = stored_message\n            message = stored_message\n\n        self.status = message\n        return message\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_id",
+                "value": "",
+                "display_name": "Context ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The context ID of the chat. Adds an extra layer to the local memory.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "input_value": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "multiline": true,
+                "ai_enabled": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": "{\"research\": {\"mode\": \"preview\"}}",
+                "display_name": "Input Text",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [],
+                "dynamic": false,
+                "info": "Message to be passed as input.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "copy_field": false,
+                "password": false,
+                "type": "str",
+                "_input_type": "MultilineInput"
+              },
+              "sender": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "Machine",
+                  "User"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender",
+                "value": "User",
+                "display_name": "Sender Type",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Type of sender.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "sender_name": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender_name",
+                "value": "User",
+                "display_name": "Sender Name",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Name of the sender.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "session_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "session_id",
+                "value": "",
+                "display_name": "Session ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The session ID of the chat. If empty, the current session ID parameter will be used.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "should_store_message": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "should_store_message",
+                "value": false,
+                "display_name": "Store Messages",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Store the message in the history.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Get chat inputs from the Playground.",
+            "icon": "MessagesSquare",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Request \u00b7 Deep Research",
+            "documentation": "https://docs.langflow.org/chat-input-and-output",
+            "minimized": true,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Chat Message",
+                "method": "message_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {},
+            "tool_mode": false
+          },
+          "type": "ChatInput",
+          "id": "ChatInput-deep_research_simple",
+          "selected_output": "message"
+        },
+        "id": "ChatInput-deep_research_simple",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "input_value": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": "",
+                "display_name": "Inputs",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON",
+                  "DataFrame",
+                  "Table",
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Message to be passed as output.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "clean_data": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "clean_data",
+                "value": true,
+                "display_name": "Basic Clean Data",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Whether to clean data before converting to string.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from collections.abc import Generator\nfrom typing import Any\n\nimport orjson\nfrom fastapi.encoders import jsonable_encoder\n\nfrom lfx.base.io.chat import ChatComponent\nfrom lfx.helpers.data import safe_convert\nfrom lfx.inputs.inputs import BoolInput, DropdownInput, HandleInput, MessageTextInput\nfrom lfx.schema.data import Data\nfrom lfx.schema.dataframe import DataFrame\nfrom lfx.schema.message import Message\nfrom lfx.schema.properties import Source\nfrom lfx.template.field.base import Output\nfrom lfx.utils.constants import (\n    MESSAGE_SENDER_AI,\n    MESSAGE_SENDER_NAME_AI,\n    MESSAGE_SENDER_USER,\n)\n\n\nclass ChatOutput(ChatComponent):\n    display_name = \"Chat Output\"\n    description = \"Display a chat message in the Playground.\"\n    documentation: str = \"https://docs.langflow.org/chat-input-and-output\"\n    icon = \"MessagesSquare\"\n    name = \"ChatOutput\"\n    minimized = True\n\n    inputs = [\n        HandleInput(\n            name=\"input_value\",\n            display_name=\"Inputs\",\n            info=\"Message to be passed as output.\",\n            input_types=[\"Data\", \"JSON\", \"DataFrame\", \"Table\", \"Message\"],\n            required=True,\n        ),\n        BoolInput(\n            name=\"should_store_message\",\n            display_name=\"Store Messages\",\n            info=\"Store the message in the history.\",\n            value=True,\n            advanced=True,\n        ),\n        DropdownInput(\n            name=\"sender\",\n            display_name=\"Sender Type\",\n            options=[MESSAGE_SENDER_AI, MESSAGE_SENDER_USER],\n            value=MESSAGE_SENDER_AI,\n            advanced=True,\n            info=\"Type of sender.\",\n        ),\n        MessageTextInput(\n            name=\"sender_name\",\n            display_name=\"Sender Name\",\n            info=\"Name of the sender.\",\n            value=MESSAGE_SENDER_NAME_AI,\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"session_id\",\n            display_name=\"Session ID\",\n            info=\"The session ID of the chat. If empty, the current session ID parameter will be used.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"context_id\",\n            display_name=\"Context ID\",\n            info=\"The context ID of the chat. Adds an extra layer to the local memory.\",\n            value=\"\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"data_template\",\n            display_name=\"Data Template\",\n            value=\"{text}\",\n            advanced=True,\n            info=\"Template to convert Data to Text. If left empty, it will be dynamically set to the Data's text key.\",\n        ),\n        BoolInput(\n            name=\"clean_data\",\n            display_name=\"Basic Clean Data\",\n            value=True,\n            advanced=True,\n            info=\"Whether to clean data before converting to string.\",\n        ),\n    ]\n    outputs = [\n        Output(\n            display_name=\"Output Message\",\n            name=\"message\",\n            method=\"message_response\",\n        ),\n    ]\n\n    def _build_source(self, id_: str | None, display_name: str | None, source: str | None) -> Source:\n        source_dict = {}\n        if id_:\n            source_dict[\"id\"] = id_\n        if display_name:\n            source_dict[\"display_name\"] = display_name\n        if source:\n            # Handle case where source is a ChatOpenAI object\n            if hasattr(source, \"model_name\"):\n                source_dict[\"source\"] = source.model_name\n            elif hasattr(source, \"model\"):\n                source_dict[\"source\"] = str(source.model)\n            else:\n                source_dict[\"source\"] = str(source)\n        return Source(**source_dict)\n\n    async def message_response(self) -> Message:\n        # First convert the input to string if needed\n        text = self.convert_to_string()\n\n        # Get source properties\n        source, _, display_name, source_id = self.get_properties_from_source_component()\n\n        # Create or use existing Message object\n        if isinstance(self.input_value, Message) and not self.is_connected_to_chat_input():\n            message = self.input_value\n            # Update message properties\n            message.text = text\n            # Preserve existing session_id from the incoming message if it exists\n            existing_session_id = message.session_id\n        else:\n            message = Message(text=text)\n            existing_session_id = None\n\n        # Set message properties\n        message.sender = self.sender\n        message.sender_name = self.sender_name\n        # Preserve session_id from incoming message, or use component/graph session_id\n        message.session_id = (\n            self.session_id or existing_session_id or (self.graph.session_id if hasattr(self, \"graph\") else None) or \"\"\n        )\n        message.context_id = self.context_id\n        message.flow_id = self.graph.flow_id if hasattr(self, \"graph\") else None\n        message.properties.source = self._build_source(source_id, display_name, source)\n\n        # Store message if needed\n        if message.session_id and self.should_store_message:\n            stored_message = await self.send_message(message)\n            self.message.value = stored_message\n            message = stored_message\n\n        # Set accumulated token usage from all upstream LLM vertices.\n        # This must happen AFTER send_message() because streaming captures\n        # usage from chunks and would overwrite accumulated totals.\n        if hasattr(self, \"_vertex\") and self._vertex is not None:\n            accumulated_usage = self._vertex._accumulate_upstream_token_usage()  # noqa: SLF001\n            if accumulated_usage:\n                message.properties.usage = accumulated_usage\n                if self.should_store_message and message.get_id():\n                    message = await self._update_stored_message(message)\n                    await self._send_message_event(message, id_=message.get_id())\n\n        self.status = message\n        return message\n\n    def _serialize_data(self, data: Data) -> str:\n        \"\"\"Serialize Data object to JSON string.\"\"\"\n        # Convert data.data to JSON-serializable format\n        serializable_data = jsonable_encoder(data.data)\n        # Serialize with orjson, enabling pretty printing with indentation\n        json_bytes = orjson.dumps(serializable_data, option=orjson.OPT_INDENT_2)\n        # Convert bytes to string and wrap in Markdown code blocks\n        return \"```json\\n\" + json_bytes.decode(\"utf-8\") + \"\\n```\"\n\n    def _validate_input(self) -> None:\n        \"\"\"Validate the input data and raise ValueError if invalid.\"\"\"\n        if self.input_value is None:\n            msg = \"Input data cannot be None\"\n            raise ValueError(msg)\n        if isinstance(self.input_value, list) and not all(\n            isinstance(item, Message | Data | DataFrame | str) for item in self.input_value\n        ):\n            invalid_types = [\n                type(item).__name__\n                for item in self.input_value\n                if not isinstance(item, Message | Data | DataFrame | str)\n            ]\n            msg = f\"Expected Data or DataFrame or Message or str, got {invalid_types}\"\n            raise TypeError(msg)\n        if not isinstance(\n            self.input_value,\n            Message | Data | DataFrame | str | list | Generator | type(None),\n        ):\n            type_name = type(self.input_value).__name__\n            msg = f\"Expected Data or DataFrame or Message or str, Generator or None, got {type_name}\"\n            raise TypeError(msg)\n\n    def convert_to_string(self) -> str | Generator[Any, None, None]:\n        \"\"\"Convert input data to string with proper error handling.\"\"\"\n        self._validate_input()\n        if isinstance(self.input_value, list):\n            clean_data: bool = getattr(self, \"clean_data\", False)\n            return \"\\n\".join([safe_convert(item, clean_data=clean_data) for item in self.input_value])\n        if isinstance(self.input_value, Generator):\n            return self.input_value\n        return safe_convert(self.input_value)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_id",
+                "value": "",
+                "display_name": "Context ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The context ID of the chat. Adds an extra layer to the local memory.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "data_template": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "data_template",
+                "value": "{text}",
+                "display_name": "Data Template",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Template to convert Data to Text. If left empty, it will be dynamically set to the Data's text key.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "sender": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "Machine",
+                  "User"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender",
+                "value": "Machine",
+                "display_name": "Sender Type",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Type of sender.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "sender_name": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender_name",
+                "value": "AI",
+                "display_name": "Sender Name",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Name of the sender.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "session_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "session_id",
+                "value": "",
+                "display_name": "Session ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The session ID of the chat. If empty, the current session ID parameter will be used.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "should_store_message": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "should_store_message",
+                "value": false,
+                "display_name": "Store Messages",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Store the message in the history.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Display a chat message in the Playground.",
+            "icon": "MessagesSquare",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Result \u00b7 Deep Research",
+            "documentation": "https://docs.langflow.org/chat-input-and-output",
+            "minimized": true,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Output Message",
+                "method": "message_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {},
+            "tool_mode": false
+          },
+          "type": "ChatOutput",
+          "id": "ChatOutput-deep_research_simple"
+        },
+        "id": "ChatOutput-deep_research_simple",
+        "type": "genericNode",
+        "position": {
+          "x": 2100,
+          "y": 0
+        },
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "mcp_request": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "mcp_request",
+                "value": "",
+                "display_name": "Optional typed request JSON",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Message",
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Harness-owned question, optional focus, search phrases and prior graph candidate.\"\"\"\nimport json\n\nfrom lfx.io import DropdownInput, HandleInput, Output, StrInput\nfrom lfx.schema import Data\n\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.deep_research_passes import PassResearchRequest\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.providers import strict_json_object\n\n\nclass DeepResearchPassFields(BaseComponent):\n    name = \"DeepResearchPassFields\"\n    display_name = \"Deep Research \u00b7 Question and Focus\"\n    description = \"The harness supplies the original research question and optionally a prior review-graph artifact plus a focus question. Short first-pass phrases may be supplied; absent phrases are generated by the bounded planner. No public field grants provider/model/write authority.\"\n    nima_manifest = manifest_for_component(\"DeepResearchPassFields\")\n    inputs = [DropdownInput(name=\"mode\", display_name=\"Mode\", options=[\"preview\", \"research\"], value=\"preview\"),\n        StrInput(name=\"operation_id\", display_name=\"Unique attempt ID\", value=\"\"),\n        StrInput(name=\"run_id\", display_name=\"Harness run ID\", value=\"\"),\n        StrInput(name=\"questions_json\", display_name=\"Original research questions (JSON list)\", value=\"[]\"),\n        StrInput(name=\"graph_revision_json\", display_name=\"Exact project graph revision (JSON)\", value=\"null\"),\n        StrInput(name=\"search_phrases_json\", display_name=\"Optional short first-pass phrases (JSON list)\", value=\"[]\"),\n        StrInput(name=\"input_graph_artifact_id\", display_name=\"Optional prior review-graph artifact ID\", value=\"\"),\n        StrInput(name=\"focus_question\", display_name=\"Optional continuation focus question\", value=\"\"),\n        HandleInput(name=\"mcp_request\", display_name=\"Optional typed request JSON\", input_types=[\"Message\", \"Data\", \"JSON\"], required=False)]\n    outputs = [Output(name=\"request\", display_name=\"Validated pass request\", method=\"request_data\", group_outputs=True),\n        Output(name=\"preview\", display_name=\"Request preview\", method=\"preview_message\", group_outputs=True)]\n\n    async def run(self):\n        override = native(getattr(self, \"mcp_request\", None))\n        if isinstance(override, str):\n            if len(override) > 150_000:\n                raise ValueError(\"request exceeds input limit\")\n            override = strict_json_object(override) if override.strip() else {}\n        if override is None:\n            override = {}\n        if not isinstance(override, dict):\n            raise ValueError(\"expected request object\")\n        research = {\"mode\": self.mode, \"operation_id\": self.operation_id or None,\n            \"run_id\": self.run_id or None, \"questions\": json.loads(self.questions_json),\n            \"graph_revision\": json.loads(self.graph_revision_json)}\n        payload = {\"research\": research, \"search_phrases\": json.loads(self.search_phrases_json),\n            \"input_graph_artifact_id\": self.input_graph_artifact_id or None,\n            \"focus_question\": self.focus_question or None}\n        return PassResearchRequest.model_validate(payload | override).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "focus_question": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "focus_question",
+                "value": "",
+                "display_name": "Optional continuation focus question",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "graph_revision_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "graph_revision_json",
+                "value": "null",
+                "display_name": "Exact project graph revision (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "input_graph_artifact_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "input_graph_artifact_id",
+                "value": "",
+                "display_name": "Optional prior review-graph artifact ID",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "mode": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "preview",
+                  "research"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "mode",
+                "value": "preview",
+                "display_name": "Mode",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "operation_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_id",
+                "value": "",
+                "display_name": "Unique attempt ID",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "questions_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "questions_json",
+                "value": "[]",
+                "display_name": "Original research questions (JSON list)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "run_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "run_id",
+                "value": "",
+                "display_name": "Harness run ID",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "search_phrases_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "search_phrases_json",
+                "value": "[]",
+                "display_name": "Optional short first-pass phrases (JSON list)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "The harness supplies the original research question and optionally a prior review-graph artifact plus a focus question. Short first-pass phrases may be supplied; absent phrases are generated by the bounded planner. No public field grants provider/model/write authority.",
+            "base_classes": [
+              "JSON",
+              "Message"
+            ],
+            "display_name": "Deep Research \u00b7 Question and Focus",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "request",
+                "display_name": "Validated pass request",
+                "method": "request_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Request preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "deep_research_pass_fields",
+              "contract_version": "2",
+              "source_sha256": "8da1ad507747119e383f40fd832aec9dd0bde46cd2510e84bcc8b71f6aff3f1f"
+            },
+            "tool_mode": false
+          },
+          "type": "DeepResearchPassFields",
+          "id": "DeepResearchPassFields-nima"
+        },
+        "id": "DeepResearchPassFields-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 340,
+          "y": 0
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "paper_discovery": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "paper_discovery",
+                "value": "",
+                "display_name": "Operator discovery policy",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Tool"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "payload": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "payload",
+                "value": "",
+                "display_name": "Harness research question",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Conditional stock Langflow arXiv search followed by the stock URL HTML reader.\"\"\"\nimport json\nimport asyncio\n\nfrom lfx.io import HandleInput, IntInput, Output, StrInput\nfrom lfx.schema import Data, DataFrame, Message\nfrom lfx_arxiv.components.arxiv.arxiv import ArXivComponent\nfrom lfx.components.data_source.url import URLComponent\nfrom langchain_core.tools import StructuredTool\nfrom lfx.base.tools.base import Tool\nfrom pydantic import BaseModel, Field\n\nfrom nima_semantica import arxiv_search_fallback\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.deep_research_contracts import DeepResearchRequest\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\nfrom nima_semantica.paper_discovery import arxiv\nfrom nima_semantica.paper_discovery import PaperDiscoveryPolicy\n\n\nclass ArxivSearchPhrase(BaseModel):\n    query: str = Field(min_length=1, max_length=160)\n\n\nclass StockArxivHTML(BaseComponent):\n    name = \"StockArxivHTML\"\n    display_name = \"Stock arXiv \u2192 URL HTML\"\n    description = \"Run Langflow's official arXiv search component and, only for observed hits, its stock URL component at depth one on available arXiv HTML renditions. This is metadata and an HTML preview, not NIMA source ingestion or evidence.\"\n    nima_manifest = manifest_for_component(\"StockArxivHTML\")\n    inputs = [handle(\"payload\", \"Harness research question\"),\n        HandleInput(name=\"paper_discovery\", display_name=\"Operator discovery policy\", input_types=[\"Tool\"], required=False),\n        StrInput(name=\"search_phrase\", display_name=\"Short search phrase (harness or planner)\", value=\"\"),\n        IntInput(name=\"max_results\", display_name=\"Maximum arXiv metadata hits\", value=5),\n        IntInput(name=\"max_html\", display_name=\"Maximum HTML previews\", value=3)]\n    outputs = [Output(name=\"result\", display_name=\"Metadata and HTML availability\", method=\"result_data\", group_outputs=True),\n        Output(name=\"preview\", display_name=\"Readable preview\", method=\"preview_message\", group_outputs=True),\n        Output(name=\"table\", display_name=\"arXiv metadata table\", method=\"table_data\", group_outputs=True),\n        Output(name=\"tool\", display_name=\"Bounded on-demand arXiv discovery\", method=\"build_tool\", group_outputs=True)]\n\n    def _policy(self):\n        discovery = getattr(self, \"paper_discovery\", None)\n        return PaperDiscoveryPolicy.model_validate(discovery.metadata[\"nima_paper_discovery\"]) if discovery else PaperDiscoveryPolicy()\n\n    async def _search(self, query, policy):\n        if \"arxiv\" not in policy.discovery_providers:\n            return {\"provider\": \"arxiv\", \"backend\": \"stock_langflow_arxiv_and_url\", \"outcome\": \"not_authorized\", \"rows\": [], \"html_pages\": []}\n        query = ArxivSearchPhrase(query=query).query\n        arxiv_search = ArXivComponent()\n        arxiv_search.search_query = query\n        arxiv_search.search_type = \"all\"\n        arxiv_search.max_results = min(max(int(self.max_results), 1), 10)\n        source = \"stock_langflow_arxiv_api\"\n        try:\n            rows = arxiv_search.search_papers_dataframe().to_dict(orient=\"records\")\n        except Exception as exc:\n            rows = [{\"error\": type(exc).__name__ + \":\" + str(exc)[:200]}]\n        errors = [str(row[\"error\"])[:500] for row in rows if isinstance(row, dict) and row.get(\"error\")]\n        if errors and any(\"406\" in error for error in errors):\n            source = \"arxiv_search_html_fallback\"\n            try:\n                rows = arxiv_search_fallback.search_page(query, max_results=arxiv_search.max_results)\n            except RuntimeError as exc:\n                errors.append(\"fallback:\" + str(exc)[:300])\n                rows = []\n            except Exception as exc:\n                errors.append(\"fallback:\" + type(exc).__name__)\n                rows = []\n        elif errors:\n            rows = []\n        if not rows:\n            return {\"provider\": \"arxiv\", \"backend\": source, \"query\": query,\n                \"outcome\": \"unavailable\", \"rows\": [], \"html_pages\": [], \"errors\": errors, \"metadata_only\": True}\n        html_pages = []\n        for row in rows[:min(max(int(self.max_html), 0), 5)]:\n            identifier = arxiv(row.get(\"arxiv_url\") or row.get(\"id\") or \"\")\n            if not identifier:\n                continue\n            address = \"https://arxiv.org/html/\" + identifier\n            url_reader = URLComponent()\n            url_reader.urls = [address]\n            url_reader.max_depth = 1\n            url_reader.prevent_outside = True\n            url_reader.use_async = True\n            url_reader.follow_redirects = True\n            url_reader.format = \"HTML\"\n            url_reader.timeout = 30\n            url_reader.filter_text_html = True\n            url_reader.continue_on_failure = True\n            url_reader.check_response_status = True\n            url_reader.autoset_encoding = True\n            url_reader.headers = DataFrame([{\"key\": \"User-Agent\", \"value\": \"NIMA-DeepResearch/5.0\"}])\n            try:\n                pages = (await url_reader.fetch_content()).to_dict(orient=\"records\")\n            except Exception as exc:\n                html_pages.append({\"url\": address, \"error\": type(exc).__name__})\n                continue\n            for page in pages:\n                meta = page.get(\"metadata\") if isinstance(page.get(\"metadata\"), dict) else {}\n                page_source = page.get(\"url\") or page.get(\"source\") or meta.get(\"source\") or address\n                content = page.get(\"text\") or page.get(\"page_content\") or \"\"\n                html_pages.append({\"url\": page_source, \"text\": \"HTML available\" if content else \"\", \"content_chars\": len(content),\n                    \"title\": page.get(\"title\") or meta.get(\"title\")})\n        return {\"provider\": \"arxiv\", \"backend\": source, \"query\": query,\n            \"outcome\": \"metadata_ready\", \"rows\": rows, \"html_pages\": html_pages,\n            \"errors\": errors, \"metadata_only\": True}\n\n    async def run(self):\n        payload = _value(self.payload)\n        request = DeepResearchRequest.model_validate(payload.get(\"research\", payload) if isinstance(payload, dict) else payload)\n        if request.mode == \"preview\":\n            return {\"executed\": False, \"provider\": \"arxiv\", \"backend\": \"stock_langflow_arxiv_and_url\"}\n        query = self.search_phrase.strip() or \" \".join(item.question for item in request.questions)\n        return await self._search(query, self._policy())\n\n    async def build_tool(self) -> Tool:\n        policy = self._policy()\n        def discover(query: str):\n            return asyncio.run(self._search(query, policy))\n        return StructuredTool.from_function(func=discover, name=\"stock_arxiv_html_discovery\",\n            description=\"On-demand bounded arXiv metadata search with stock API and explicit fixed-host search-page fallback; URL previews are not evidence.\",\n            args_schema=ArxivSearchPhrase, metadata={\"nima_arxiv_policy\": policy.model_dump(mode=\"json\")})\n\n    async def table_data(self) -> DataFrame:\n        return DataFrame((await self.result_data()).data.get(\"rows\", []))\n\n    async def preview_message(self) -> Message:\n        packet = (await self.result_data()).data\n        return Message(text=json.dumps({\"provider\": \"arxiv\", \"rows\": len(packet.get(\"rows\", [])),\n            \"html_pages\": packet.get(\"html_pages\", []), \"metadata_only\": True}, ensure_ascii=False))\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "max_html": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_html",
+                "value": 3,
+                "display_name": "Maximum HTML previews",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_results": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_results",
+                "value": 5,
+                "display_name": "Maximum arXiv metadata hits",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "search_phrase": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "search_phrase",
+                "value": "",
+                "display_name": "Short search phrase (harness or planner)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "Run Langflow's official arXiv search component and, only for observed hits, its stock URL component at depth one on available arXiv HTML renditions. This is metadata and an HTML preview, not NIMA source ingestion or evidence.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table",
+              "Tool"
+            ],
+            "display_name": "Stock arXiv \u2192 URL HTML",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "Metadata and HTML availability",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "arXiv metadata table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Tool"
+                ],
+                "selected": "Tool",
+                "name": "tool",
+                "display_name": "Bounded on-demand arXiv discovery",
+                "method": "build_tool",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "stock_arxiv_html",
+              "contract_version": "3",
+              "source_sha256": "34060d3226d7bf8189cc0106b9e0a835ee187ec3b0ac9ba8f8fe488fb0f40bd3"
+            },
+            "tool_mode": false
+          },
+          "type": "StockArxivHTML",
+          "id": "StockArxivHTML-nima"
+        },
+        "id": "StockArxivHTML-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 740,
+          "y": -360
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Inspectable on-demand provider capability; building the tool performs no search.\"\"\"\nimport json\nfrom lfx.custom import Component\nfrom lfx.io import StrInput, IntInput, Output\nfrom lfx.base.tools.base import Tool\nfrom langchain_core.tools import StructuredTool\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.paper_discovery import PaperDiscoveryPolicy, PaperDiscoveryQuery, search_papers\n\n\nclass PaperDiscovery(Component):\n    name = \"PaperDiscovery\"\n    display_name = \"Paper Discovery\"\n    description = \"On-demand arXiv, OpenAlex, Semantic Scholar and Crossref metadata search. The OSA controls when to search and retains request limits, receipts and deduplication. No full-text ingestion or scientific evidence admission.\"\n    nima_manifest = manifest_for_component(\"PaperDiscovery\")\n    inputs = [\n        StrInput(name=\"discovery_providers_json\",display_name=\"Approved providers (JSON list, operator)\",value=\"[]\"),\n        IntInput(name=\"max_discoveries\",display_name=\"Maximum provider requests per research run (operator)\",value=3),\n    ]\n    outputs = [Output(name=\"tool\",display_name=\"Paper discovery capability\",method=\"build_tool\",group_outputs=True)]\n\n    async def build_tool(self) -> Tool:\n        policy = PaperDiscoveryPolicy(discovery_providers=json.loads(self.discovery_providers_json),max_discoveries=self.max_discoveries)\n\n        def discover(provider: str, query: str):\n            request = PaperDiscoveryQuery(provider=provider,query=query)\n            if request.provider not in policy.discovery_providers or policy.max_discoveries == 0:\n                raise ValueError(\"Paper discovery is not authorized for this provider\")\n            return search_papers(request.provider,request.query)\n\n        return StructuredTool.from_function(\n            func=discover,name=\"paper_discovery\",description=self.description,\n            args_schema=PaperDiscoveryQuery,\n            metadata={\"nima_paper_discovery\":policy.model_dump(mode=\"json\")},\n        )\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "discovery_providers_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "discovery_providers_json",
+                "value": "[]",
+                "display_name": "Approved providers (JSON list, operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "max_discoveries": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_discoveries",
+                "value": 3,
+                "display_name": "Maximum provider requests per research run (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              }
+            },
+            "description": "On-demand arXiv, OpenAlex, Semantic Scholar and Crossref metadata search. The OSA controls when to search and retains request limits, receipts and deduplication. No full-text ingestion or scientific evidence admission.",
+            "base_classes": [
+              "Tool"
+            ],
+            "display_name": "Paper Discovery",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Tool"
+                ],
+                "selected": "Tool",
+                "name": "tool",
+                "display_name": "Paper discovery capability",
+                "method": "build_tool",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "paper_discovery",
+              "contract_version": "1",
+              "source_sha256": "c71f49a60ee70ece75bf8c8ee4c54afbc63c322496024ecf561a91572f802c24"
+            },
+            "tool_mode": false
+          },
+          "type": "PaperDiscovery",
+          "id": "PaperDiscovery-nima"
+        },
+        "id": "PaperDiscovery-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 740,
+          "y": 490
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "model": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "model",
+                "value": "",
+                "display_name": "Review language model (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "LanguageModel"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "paper_discovery": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "paper_discovery",
+                "value": "",
+                "display_name": "Other approved paper providers",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Tool"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "payload": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "payload",
+                "value": "",
+                "display_name": "Harness pass request",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "stock_arxiv": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "stock_arxiv",
+                "value": "",
+                "display_name": "Stock arXiv and URL capability",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Tool"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "acquisition_policy_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "acquisition_policy_json",
+                "value": "{}",
+                "display_name": "Approved acquisition policy JSON (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "allow_audit_writes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_audit_writes",
+                "value": false,
+                "display_name": "Allow attempts and outcome artifacts (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_fast_read": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_fast_read",
+                "value": false,
+                "display_name": "Allow staged fast reading (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_model_calls": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model_calls",
+                "value": false,
+                "display_name": "Allow bounded model stages (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_pdf": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_pdf",
+                "value": false,
+                "display_name": "Allow PDF reading (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_source_ingestion": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_source_ingestion",
+                "value": false,
+                "display_name": "Allow corpus ingestion (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Visible controller for two bounded regional-graph literature passes.\"\"\"\nimport asyncio\nimport json\n\nfrom lfx.io import BoolInput, DropdownInput, HandleInput, IntInput, StrInput\nfrom lfx.schema import Message\n\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.deep_research_passes import PassResearchRequest, deep_research_passes\nfrom nima_semantica.models import AcquisitionPolicy, canonical\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.pdf_client import PdfNormalizerClient\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\nfrom nima_semantica.paper_discovery import PaperDiscoveryPolicy\nfrom nima_semantica.providers import ModelManifest, completion_envelope\nfrom nima_semantica.simple_deep_research import SimpleDeepResearchContext\n\n\nclass ConductPassDeepResearch(BaseComponent):\n    name = \"ConductPassDeepResearch\"\n    display_name = \"Deep Research \u00b7 Regional Graph Passes\"\n    description = \"Pin atomic coverage questions, screen and refine short paper queries, confirm passage relevance, then build regional graphs. Return uncovered questions and graph links, not a narrative gap answer. Supplied graph skips first-pass search. No automatic scientific admission.\"\n    nima_manifest = manifest_for_component(\"ConductPassDeepResearch\")\n    inputs = [handle(\"payload\", \"Harness pass request\"),\n        HandleInput(name=\"stock_arxiv\", display_name=\"Stock arXiv and URL capability\", input_types=[\"Tool\"], required=False),\n        HandleInput(name=\"paper_discovery\", display_name=\"Other approved paper providers\", input_types=[\"Tool\"], required=False),\n        StrInput(name=\"corpus_id\", display_name=\"Authorized corpus (operator)\", value=\"papers\"),\n        StrInput(name=\"project_id\", display_name=\"Authorized project (operator)\", value=\"research\"),\n        BoolInput(name=\"allow_audit_writes\", display_name=\"Allow attempts and outcome artifacts (operator)\", value=False),\n        BoolInput(name=\"allow_model_calls\", display_name=\"Allow bounded model stages (operator)\", value=False),\n        DropdownInput(name=\"reading_mode\", display_name=\"Source reading path (operator)\",\n            options=[\"fast_provisional\", \"prepared\"], value=\"fast_provisional\"),\n        BoolInput(name=\"allow_fast_read\", display_name=\"Allow staged fast reading (operator)\", value=False),\n        BoolInput(name=\"allow_source_ingestion\", display_name=\"Allow corpus ingestion (operator)\", value=False),\n        StrInput(name=\"acquisition_policy_json\", display_name=\"Approved acquisition policy JSON (operator)\", value=\"{}\"),\n        BoolInput(name=\"allow_pdf\", display_name=\"Allow PDF reading (operator)\", value=False),\n        StrInput(name=\"pdf_url\", display_name=\"PDF worker URL (operator)\", value=\"\"),\n        StrInput(name=\"pdf_token_file\", display_name=\"PDF worker token file (operator)\", value=\"\"),\n        IntInput(name=\"max_papers\", display_name=\"Maximum papers per search\", value=2),\n        IntInput(name=\"max_regions\", display_name=\"Maximum exact-read regions per search\", value=16),\n        IntInput(name=\"max_chars\", display_name=\"Maximum evidence characters per search\", value=48000),\n        StrInput(name=\"model_manifest_json\", display_name=\"Model identity JSON (operator)\", value=\"{}\", advanced=True),\n        HandleInput(name=\"model\", display_name=\"Review language model (operator)\", input_types=[\"LanguageModel\"], required=False)]\n\n    async def run(self):\n        packet = PassResearchRequest.model_validate(_value(self.payload))\n        paper = getattr(self, \"paper_discovery\", None)\n        stock = getattr(self, \"stock_arxiv\", None)\n        policy = PaperDiscoveryPolicy.model_validate(paper.metadata[\"nima_paper_discovery\"]) if paper else PaperDiscoveryPolicy()\n        manifest = ModelManifest.model_validate_json(self.model_manifest_json) if self.model_manifest_json.strip() not in (\"\", \"{}\") else None\n        context = SimpleDeepResearchContext(corpus_id=self.corpus_id, project_id=self.project_id,\n            allow_model_calls=self.allow_model_calls, allow_audit_writes=self.allow_audit_writes,\n            allow_source_ingestion=self.allow_source_ingestion, allow_fast_read=self.allow_fast_read,\n            reading_mode=self.reading_mode, allow_pdf=self.allow_pdf,\n            discovery_providers=policy.discovery_providers, acquisition=AcquisitionPolicy.model_validate_json(self.acquisition_policy_json),\n            max_papers=self.max_papers, max_regions=self.max_regions, max_chars=self.max_chars, model_manifest=manifest)\n        if packet.research.mode == \"preview\":\n            return deep_research_passes(None, packet, context).model_dump(mode=\"json\")\n        language_model = getattr(self, \"model\", None)\n        def invoke(prompt):\n            response = language_model.invoke([{\"role\": \"system\", \"content\": \"Return exactly one JSON object matching the supplied stage contract, without Markdown. Pin atomic research subquestions. Search phrases must be short. Reject off-topic metadata before acquisition and require exact passage support before regional graphing. At gap assessment, return only per-facet coverage and specific unanswered questions, not narrative answers or source-read claims. Metadata never substantiates scientific claims. Regional claims cite supplied passage IDs. Fast-read passages and gap judgments are provisional, not certifications.\"},\n                {\"role\": \"user\", \"content\": canonical(prompt).decode()}])\n            if not response.usage_metadata:\n                raise ValueError(\"model omitted usage metadata\")\n            content = response.content if isinstance(response.content, str) else json.dumps(response.content)\n            return completion_envelope(content, manifest, response.usage_metadata, response.response_metadata)\n        def normalize_pdf(data):\n            result = PdfNormalizerClient(self.pdf_url, self.pdf_token_file).normalize(data)\n            return result[\"text\"], result[\"diagnostics\"]\n        def check_pdf_worker():\n            return PdfNormalizerClient(self.pdf_url, self.pdf_token_file).health()\n        with configured_store(required=False) as store:\n            result = await asyncio.to_thread(deep_research_passes, store, packet, context,\n                model=invoke if language_model is not None else None,\n                arxiv_search=(lambda query: stock.invoke({\"query\": query})) if stock else None,\n                paper_search=(lambda provider, query: paper.invoke({\"provider\": provider, \"query\": query})) if paper else None,\n                pdf_normalizer=normalize_pdf if self.allow_pdf and self.reading_mode == \"prepared\" else None,\n                pdf_preflight=check_pdf_worker if self.allow_pdf and self.reading_mode == \"prepared\" else None)\n        return result.model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        packet = (await self.result_data()).data\n        data = packet.get(\"data\", {})\n        return Message(text=json.dumps({\"status\": packet.get(\"status\"), \"entry_mode\": data.get(\"entry_mode\"),\n            \"regional_passes\": data.get(\"regional_passes\"), \"coverage_facets\": data.get(\"coverage_facets\"),\n            \"coverage\": data.get(\"coverage\"), \"uncovered_questions\": data.get(\"uncovered_questions\"),\n            \"source_inventory\": data.get(\"source_inventory\"), \"assessments\": data.get(\"assessments\"),\n            \"review_graph\": data.get(\"review_graph\"), \"graph_commit\": data.get(\"graph_commit\")}, ensure_ascii=False, indent=2))\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "corpus_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "corpus_id",
+                "value": "papers",
+                "display_name": "Authorized corpus (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "max_chars": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_chars",
+                "value": 48000,
+                "display_name": "Maximum evidence characters per search",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_papers": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_papers",
+                "value": 2,
+                "display_name": "Maximum papers per search",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_regions": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_regions",
+                "value": 16,
+                "display_name": "Maximum exact-read regions per search",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "model_manifest_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "model_manifest_json",
+                "value": "{}",
+                "display_name": "Model identity JSON (operator)",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "pdf_token_file": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "pdf_token_file",
+                "value": "",
+                "display_name": "PDF worker token file (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "pdf_url": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "pdf_url",
+                "value": "",
+                "display_name": "PDF worker URL (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "project_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "project_id",
+                "value": "research",
+                "display_name": "Authorized project (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "reading_mode": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "fast_provisional",
+                  "prepared"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "reading_mode",
+                "value": "fast_provisional",
+                "display_name": "Source reading path (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              }
+            },
+            "description": "Pin atomic coverage questions, screen and refine short paper queries, confirm passage relevance, then build regional graphs. Return uncovered questions and graph links, not a narrative gap answer. Supplied graph skips first-pass search. No automatic scientific admission.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Deep Research \u00b7 Regional Graph Passes",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "deep_research_passes",
+              "contract_version": "4",
+              "source_sha256": "549aac368399de1d69b5e245669e61ea539de231f2bf914d2283b642204f9df3"
+            },
+            "tool_mode": false
+          },
+          "type": "ConductPassDeepResearch",
+          "id": "ConductPassDeepResearch-nima"
+        },
+        "id": "ConductPassDeepResearch-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 1210,
+          "y": 0
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "payload": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "payload",
+                "value": "",
+                "display_name": "Deep Research result",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "actor": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "actor",
+                "value": "harness",
+                "display_name": "Approving actor (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "allow_audit_writes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_audit_writes",
+                "value": false,
+                "display_name": "Allow commit receipts (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_graph_writes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_graph_writes",
+                "value": false,
+                "display_name": "Allow approved graph writes (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_projection_writes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_projection_writes",
+                "value": false,
+                "display_name": "Allow projection rebuild (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "approval_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "approval_json",
+                "value": "null",
+                "display_name": "Exact OKFCommitApproval JSON (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Explicit exact-approval seam for committing a Deep Research review graph.\"\"\"\nimport json\n\nfrom lfx.io import BoolInput, DropdownInput, StrInput\nfrom lfx.schema import Message\n\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.graph_commit import OKFCommitApproval\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\nfrom nima_semantica.project_update import UpdateProjectContext, UpdateProjectRequest, update_project_graph\n\n\nclass ReviewGraphCommit(BaseComponent):\n    name = \"ReviewGraphCommit\"\n    display_name = \"Review Graph \u00b7 Approved Project Commit\"\n    description = \"Prepare an exact review-graph delta or commit only with operator-owned matching approval. Default leaves the graph proposal pending. Committed scientific status remains proposed/attributed.\"\n    nima_manifest = manifest_for_component(\"ReviewGraphCommit\")\n    inputs = [handle(\"payload\", \"Deep Research result\"),\n        DropdownInput(name=\"commit_mode\", display_name=\"Project graph action (operator)\", options=[\"pending\", \"prepare\", \"commit\"], value=\"pending\"),\n        StrInput(name=\"corpus_id\", display_name=\"Authorized corpus (operator)\", value=\"papers\"),\n        StrInput(name=\"project_id\", display_name=\"Authorized project (operator)\", value=\"research\"),\n        StrInput(name=\"actor\", display_name=\"Approving actor (operator)\", value=\"harness\"),\n        StrInput(name=\"approval_json\", display_name=\"Exact OKFCommitApproval JSON (operator)\", value=\"null\"),\n        BoolInput(name=\"allow_graph_writes\", display_name=\"Allow approved graph writes (operator)\", value=False),\n        BoolInput(name=\"allow_audit_writes\", display_name=\"Allow commit receipts (operator)\", value=False),\n        BoolInput(name=\"allow_projection_writes\", display_name=\"Allow projection rebuild (operator)\", value=False)]\n\n    async def run(self):\n        prior = _value(self.payload)\n        data = prior.get(\"data\", {})\n        proposal = data.get(\"project_graph_prepare_request\")\n        if self.commit_mode == \"pending\" or proposal is None:\n            status = \"pending_approval\" if proposal else data.get(\"graph_commit\", {}).get(\"status\", \"no_graph_candidate\")\n            return {\"deep_research\": prior, \"graph_commit\": {\"status\": status}}\n        request = UpdateProjectRequest.model_validate({**proposal, \"mode\": self.commit_mode})\n        raw = json.loads(self.approval_json)\n        context = UpdateProjectContext(corpus_id=self.corpus_id, project_id=self.project_id, actor=self.actor,\n            approval=OKFCommitApproval.model_validate(raw) if raw else None,\n            allow_graph_writes=self.allow_graph_writes, allow_audit_writes=self.allow_audit_writes,\n            allow_projection_writes=self.allow_projection_writes)\n        with configured_store(required=False) as store:\n            result = update_project_graph(store, request, context).model_dump(mode=\"json\")\n        return {\"deep_research\": prior, \"graph_commit\": result}\n\n    async def preview_message(self) -> Message:\n        packet = (await self.result_data()).data\n        research = packet[\"deep_research\"]\n        return Message(text=json.dumps({\"research_status\": research.get(\"status\"),\n            \"review\": research.get(\"data\", {}).get(\"review\"),\n            \"coverage_status\": research.get(\"data\", {}).get(\"coverage_status\"),\n            \"coverage_facets\": research.get(\"data\", {}).get(\"coverage_facets\"),\n            \"coverage\": research.get(\"data\", {}).get(\"coverage\"),\n            \"uncovered_questions\": research.get(\"data\", {}).get(\"uncovered_questions\"),\n            \"source_inventory\": research.get(\"data\", {}).get(\"source_inventory\"),\n            \"entry_mode\": research.get(\"data\", {}).get(\"entry_mode\"),\n            \"focus_question\": research.get(\"data\", {}).get(\"focus_question\"),\n            \"regional_passes\": research.get(\"data\", {}).get(\"regional_passes\"),\n            \"assessments\": research.get(\"data\", {}).get(\"assessments\"),\n            \"review_graph\": research.get(\"data\", {}).get(\"review_graph\"), \"graph_commit\": packet[\"graph_commit\"]}, ensure_ascii=False, indent=2))\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "commit_mode": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "pending",
+                  "prepare",
+                  "commit"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "commit_mode",
+                "value": "pending",
+                "display_name": "Project graph action (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "corpus_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "corpus_id",
+                "value": "papers",
+                "display_name": "Authorized corpus (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "project_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "project_id",
+                "value": "research",
+                "display_name": "Authorized project (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "Prepare an exact review-graph delta or commit only with operator-owned matching approval. Default leaves the graph proposal pending. Committed scientific status remains proposed/attributed.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Review Graph \u00b7 Approved Project Commit",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "review_graph_commit",
+              "contract_version": "1",
+              "source_sha256": "f35c805da2b365ac5ad17ba598a713a81b96e27c5c574d32a9b6bc14dfa6f16b"
+            },
+            "tool_mode": false
+          },
+          "type": "ReviewGraphCommit",
+          "id": "ReviewGraphCommit-nima"
+        },
+        "id": "ReviewGraphCommit-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 1660,
+          "y": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "ChatInput-deep_research_simple-message-DeepResearchPassFields-nima-mcp_request",
+        "source": "ChatInput-deep_research_simple",
+        "target": "DeepResearchPassFields-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153ChatInput\u0153, \u0153id\u0153: \u0153ChatInput-deep_research_simple\u0153, \u0153name\u0153: \u0153message\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153mcp_request\u0153, \u0153id\u0153: \u0153DeepResearchPassFields-nima\u0153, \u0153inputTypes\u0153: [\u0153Message\u0153, \u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ChatInput",
+            "id": "ChatInput-deep_research_simple",
+            "name": "message",
+            "output_types": [
+              "Message"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "mcp_request",
+            "id": "DeepResearchPassFields-nima",
+            "inputTypes": [
+              "Message",
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "DeepResearchPassFields-nima-request-StockArxivHTML-nima-payload",
+        "source": "DeepResearchPassFields-nima",
+        "target": "StockArxivHTML-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153DeepResearchPassFields\u0153, \u0153id\u0153: \u0153DeepResearchPassFields-nima\u0153, \u0153name\u0153: \u0153request\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153StockArxivHTML-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "DeepResearchPassFields",
+            "id": "DeepResearchPassFields-nima",
+            "name": "request",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "payload",
+            "id": "StockArxivHTML-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "DeepResearchPassFields-nima-request-ConductPassDeepResearch-nima-payload",
+        "source": "DeepResearchPassFields-nima",
+        "target": "ConductPassDeepResearch-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153DeepResearchPassFields\u0153, \u0153id\u0153: \u0153DeepResearchPassFields-nima\u0153, \u0153name\u0153: \u0153request\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153ConductPassDeepResearch-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "DeepResearchPassFields",
+            "id": "DeepResearchPassFields-nima",
+            "name": "request",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "payload",
+            "id": "ConductPassDeepResearch-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "PaperDiscovery-nima-tool-StockArxivHTML-nima-paper_discovery",
+        "source": "PaperDiscovery-nima",
+        "target": "StockArxivHTML-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153PaperDiscovery\u0153, \u0153id\u0153: \u0153PaperDiscovery-nima\u0153, \u0153name\u0153: \u0153tool\u0153, \u0153output_types\u0153: [\u0153Tool\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153paper_discovery\u0153, \u0153id\u0153: \u0153StockArxivHTML-nima\u0153, \u0153inputTypes\u0153: [\u0153Tool\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "PaperDiscovery",
+            "id": "PaperDiscovery-nima",
+            "name": "tool",
+            "output_types": [
+              "Tool"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "paper_discovery",
+            "id": "StockArxivHTML-nima",
+            "inputTypes": [
+              "Tool"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "StockArxivHTML-nima-tool-ConductPassDeepResearch-nima-stock_arxiv",
+        "source": "StockArxivHTML-nima",
+        "target": "ConductPassDeepResearch-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153StockArxivHTML\u0153, \u0153id\u0153: \u0153StockArxivHTML-nima\u0153, \u0153name\u0153: \u0153tool\u0153, \u0153output_types\u0153: [\u0153Tool\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153stock_arxiv\u0153, \u0153id\u0153: \u0153ConductPassDeepResearch-nima\u0153, \u0153inputTypes\u0153: [\u0153Tool\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "StockArxivHTML",
+            "id": "StockArxivHTML-nima",
+            "name": "tool",
+            "output_types": [
+              "Tool"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "stock_arxiv",
+            "id": "ConductPassDeepResearch-nima",
+            "inputTypes": [
+              "Tool"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "PaperDiscovery-nima-tool-ConductPassDeepResearch-nima-paper_discovery",
+        "source": "PaperDiscovery-nima",
+        "target": "ConductPassDeepResearch-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153PaperDiscovery\u0153, \u0153id\u0153: \u0153PaperDiscovery-nima\u0153, \u0153name\u0153: \u0153tool\u0153, \u0153output_types\u0153: [\u0153Tool\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153paper_discovery\u0153, \u0153id\u0153: \u0153ConductPassDeepResearch-nima\u0153, \u0153inputTypes\u0153: [\u0153Tool\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "PaperDiscovery",
+            "id": "PaperDiscovery-nima",
+            "name": "tool",
+            "output_types": [
+              "Tool"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "paper_discovery",
+            "id": "ConductPassDeepResearch-nima",
+            "inputTypes": [
+              "Tool"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "ConductPassDeepResearch-nima-result-ReviewGraphCommit-nima-payload",
+        "source": "ConductPassDeepResearch-nima",
+        "target": "ReviewGraphCommit-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153ConductPassDeepResearch\u0153, \u0153id\u0153: \u0153ConductPassDeepResearch-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153ReviewGraphCommit-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ConductPassDeepResearch",
+            "id": "ConductPassDeepResearch-nima",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "payload",
+            "id": "ReviewGraphCommit-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "ReviewGraphCommit-nima-preview-ChatOutput-deep_research_simple-input_value",
+        "source": "ReviewGraphCommit-nima",
+        "target": "ChatOutput-deep_research_simple",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153ReviewGraphCommit\u0153, \u0153id\u0153: \u0153ReviewGraphCommit-nima\u0153, \u0153name\u0153: \u0153preview\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153input_value\u0153, \u0153id\u0153: \u0153ChatOutput-deep_research_simple\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153, \u0153DataFrame\u0153, \u0153Table\u0153, \u0153Message\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ReviewGraphCommit",
+            "id": "ReviewGraphCommit-nima",
+            "name": "preview",
+            "output_types": [
+              "Message"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "input_value",
+            "id": "ChatOutput-deep_research_simple",
+            "inputTypes": [
+              "Data",
+              "JSON",
+              "DataFrame",
+              "Table",
+              "Message"
+            ],
+            "type": "other"
+          }
+        }
+      }
+    ],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 0.48
+    }
+  },
+  "nima_tool_manifest": {
+    "tool_id": "deep_research",
+    "contract_version": "11",
+    "visual_approval": "pending",
+    "controller_version": "deep-research-passes-v11",
+    "policy_digest": "c3e4118d070f10070cb238bf1c7f413931bc6b9f75932651a464a0861f84d048",
+    "native_sources_sha256": {
+      "deep_research_passes": "7e3aee7743ffafed147e563ec81013941a914a69acb26f51a5ee1447c05cc6cb",
+      "deep_research_fast": "0bbe72b41c09c798856e13fba5e3e380d5ae31be69a602cae7cb8f4dde91854c",
+      "deep_research_fast_pdf": "3dca39f58023096badee5f07f9d02db58270c7880f38f74bf7523946d04f1f0b",
+      "arxiv_search_fallback": "6d55243dbf5bdae8142214c579e40220f44380d63d686a835c7193ca5422dd6d",
+      "simple_deep_research": "07fbad69410836071c314d9afc56089581c8e91d33bc8cc3630668a60f9c55f0",
+      "graph_extraction": "dc92a8f4dabdd684456d7954ac39920b13ee8d48c1b44b17cb8beeccd4c544cf",
+      "paper_discovery": "e68dd4be4f87ee68eeef26eaac6d6b074171044ca71d33d947a3de5c88c0b5ef",
+      "literature_acquisition": "b79270790f07fed45353afff96000d61786e5b55d223efbee5580b7c2b3ab884",
+      "source_tools": "f07aa718b1398da34e3ca0aec0bae01837dca920f59ec7ee39dc34baced78d11",
+      "project_update": "3b71f3b401d82047200ff773c07c9ad1f457524cb8a7a37f6dac8342f26336a5",
+      "ontology_profiles": "739ec33fa95ab57d15cb868c8a0f95373aca7a443dbd947b26fea9d2b938ffda"
+    },
+    "publication": "not_published_by_builder",
+    "components": {
+      "DeepResearchPassFields": {
+        "nima_component_id": "deep_research_pass_fields",
+        "contract_version": "2",
+        "source_sha256": "8da1ad507747119e383f40fd832aec9dd0bde46cd2510e84bcc8b71f6aff3f1f"
+      },
+      "StockArxivHTML": {
+        "nima_component_id": "stock_arxiv_html",
+        "contract_version": "3",
+        "source_sha256": "34060d3226d7bf8189cc0106b9e0a835ee187ec3b0ac9ba8f8fe488fb0f40bd3"
+      },
+      "PaperDiscovery": {
+        "nima_component_id": "paper_discovery",
+        "contract_version": "1",
+        "source_sha256": "c71f49a60ee70ece75bf8c8ee4c54afbc63c322496024ecf561a91572f802c24"
+      },
+      "ConductPassDeepResearch": {
+        "nima_component_id": "deep_research_passes",
+        "contract_version": "4",
+        "source_sha256": "549aac368399de1d69b5e245669e61ea539de231f2bf914d2283b642204f9df3"
+      },
+      "ReviewGraphCommit": {
+        "nima_component_id": "review_graph_commit",
+        "contract_version": "1",
+        "source_sha256": "f35c805da2b365ac5ad17ba598a713a81b96e27c5c574d32a9b6bc14dfa6f16b"
+      }
+    }
+  }
+}

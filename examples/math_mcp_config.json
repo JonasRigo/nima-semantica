@@ -1,0 +1,10 @@
+{
+  "database_path": "/tmp/nima-math-example.sqlite3",
+  "project_id": "example-project",
+  "run_id": "example-run",
+  "corpus_id": "papers",
+  "retrieval_projection_id": null,
+  "allow_retrieval": false,
+  "allow_execution": false,
+  "timeout_seconds": 60
+}

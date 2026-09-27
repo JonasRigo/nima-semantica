@@ -1,0 +1,2439 @@
+{
+  "name": "Review Research",
+  "is_component": false,
+  "endpoint_name": "nima-review-research",
+  "description": "Scoped advisory review OSA: exact proof/claim revisions, evidence retrieval, native dependency analysis, authorized counterexample search and missing-support substantiation. Harness-owned acceptance; execution disabled.",
+  "data": {
+    "nodes": [
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "files": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "file_path": "",
+                "fileTypes": [
+                  "csv",
+                  "json",
+                  "pdf",
+                  "txt",
+                  "md",
+                  "mdx",
+                  "yaml",
+                  "yml",
+                  "xml",
+                  "html",
+                  "htm",
+                  "docx",
+                  "py",
+                  "sh",
+                  "sql",
+                  "js",
+                  "ts",
+                  "tsx",
+                  "jpg",
+                  "jpeg",
+                  "png",
+                  "bmp",
+                  "image"
+                ],
+                "temp_file": true,
+                "list": true,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "files",
+                "value": [],
+                "display_name": "Files",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Files to be sent with the message.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "file",
+                "_input_type": "FileInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from lfx.base.data.utils import IMG_FILE_TYPES, TEXT_FILE_TYPES\nfrom lfx.base.io.chat import ChatComponent\nfrom lfx.inputs.inputs import BoolInput\nfrom lfx.io import (\n    DropdownInput,\n    FileInput,\n    MessageTextInput,\n    MultilineInput,\n    Output,\n)\nfrom lfx.schema.image import get_file_paths\nfrom lfx.schema.message import Message\nfrom lfx.services.deps import get_settings_service\nfrom lfx.utils.constants import (\n    MESSAGE_SENDER_AI,\n    MESSAGE_SENDER_NAME_USER,\n    MESSAGE_SENDER_USER,\n)\nfrom lfx.utils.file_path_security import (\n    component_file_access_scopes,\n    enforce_local_file_access,\n    is_local_file_access_restricted,\n)\n\n\nclass ChatInput(ChatComponent):\n    display_name = \"Chat Input\"\n    description = \"Get chat inputs from the Playground.\"\n    documentation: str = \"https://docs.langflow.org/chat-input-and-output\"\n    icon = \"MessagesSquare\"\n    name = \"ChatInput\"\n    minimized = True\n\n    inputs = [\n        MultilineInput(\n            name=\"input_value\",\n            display_name=\"Input Text\",\n            value=\"\",\n            info=\"Message to be passed as input.\",\n            input_types=[],\n        ),\n        BoolInput(\n            name=\"should_store_message\",\n            display_name=\"Store Messages\",\n            info=\"Store the message in the history.\",\n            value=True,\n            advanced=True,\n        ),\n        DropdownInput(\n            name=\"sender\",\n            display_name=\"Sender Type\",\n            options=[MESSAGE_SENDER_AI, MESSAGE_SENDER_USER],\n            value=MESSAGE_SENDER_USER,\n            info=\"Type of sender.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"sender_name\",\n            display_name=\"Sender Name\",\n            info=\"Name of the sender.\",\n            value=MESSAGE_SENDER_NAME_USER,\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"session_id\",\n            display_name=\"Session ID\",\n            info=\"The session ID of the chat. If empty, the current session ID parameter will be used.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"context_id\",\n            display_name=\"Context ID\",\n            info=\"The context ID of the chat. Adds an extra layer to the local memory.\",\n            value=\"\",\n            advanced=True,\n        ),\n        FileInput(\n            name=\"files\",\n            display_name=\"Files\",\n            file_types=TEXT_FILE_TYPES + IMG_FILE_TYPES,\n            info=\"Files to be sent with the message.\",\n            advanced=True,\n            is_list=True,\n            temp_file=True,\n        ),\n    ]\n    outputs = [\n        Output(display_name=\"Chat Message\", name=\"message\", method=\"message_response\"),\n    ]\n\n    async def message_response(self) -> Message:\n        # Ensure files is a list and filter out empty/None values\n        files = self.files if self.files else []\n        if files and not isinstance(files, list):\n            files = [files]\n        # Filter out None/empty values\n        files = [f for f in files if f is not None and f != \"\"]\n\n        # Build endpoints inject caller-controlled file references directly into\n        # ChatInput. Resolve and validate local references before the Message can\n        # later read them while constructing model attachment content.\n        if files:\n            settings_service = get_settings_service()\n            storage_type = getattr(getattr(settings_service, \"settings\", None), \"storage_type\", \"local\")\n            # The storage factory falls back to local storage for unsupported\n            # values, so only the explicitly configured S3 backend may bypass\n            # filesystem containment.\n            if str(storage_type).lower() != \"s3\" and is_local_file_access_restricted():\n                scope_ids = list(component_file_access_scopes(self))\n                # Public executions replace graph.flow_id with a per-visitor\n                # virtual ID. Only the server-populated source provenance may\n                # restore the already-validated public attachment namespace.\n                source_flow_id = getattr(self.graph, \"source_flow_id\", None)\n                if source_flow_id:\n                    scope_ids.append(source_flow_id)\n                for file_path in get_file_paths(files):\n                    enforce_local_file_access(file_path, scope_ids=scope_ids)\n\n        session_id = self.session_id or self.graph.session_id or \"\"\n        message = await Message.create(\n            text=self.input_value,\n            sender=self.sender,\n            sender_name=self.sender_name,\n            session_id=session_id,\n            context_id=self.context_id,\n            files=files,\n        )\n        if session_id and isinstance(message, Message) and self.should_store_message:\n            stored_message = await self.send_message(\n                message,\n            )\n            self.message.value = stored_message\n            message = stored_message\n\n        self.status = message\n        return message\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_id",
+                "value": "",
+                "display_name": "Context ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The context ID of the chat. Adds an extra layer to the local memory.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "input_value": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "multiline": true,
+                "ai_enabled": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": "{\"mode\": \"preview\"}",
+                "display_name": "Input Text",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [],
+                "dynamic": false,
+                "info": "Message to be passed as input.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "copy_field": false,
+                "password": false,
+                "type": "str",
+                "_input_type": "MultilineInput"
+              },
+              "sender": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "Machine",
+                  "User"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender",
+                "value": "User",
+                "display_name": "Sender Type",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Type of sender.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "sender_name": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender_name",
+                "value": "User",
+                "display_name": "Sender Name",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Name of the sender.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "session_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "session_id",
+                "value": "",
+                "display_name": "Session ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The session ID of the chat. If empty, the current session ID parameter will be used.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "should_store_message": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "should_store_message",
+                "value": false,
+                "display_name": "Store Messages",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Store the message in the history.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Get chat inputs from the Playground.",
+            "icon": "MessagesSquare",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Request \u00b7 Review Research",
+            "documentation": "https://docs.langflow.org/chat-input-and-output",
+            "minimized": true,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Chat Message",
+                "method": "message_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {},
+            "tool_mode": false
+          },
+          "type": "ChatInput",
+          "id": "ChatInput-review_research",
+          "selected_output": "message"
+        },
+        "id": "ChatInput-review_research",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "input_value": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": "",
+                "display_name": "Inputs",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON",
+                  "DataFrame",
+                  "Table",
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Message to be passed as output.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "clean_data": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "clean_data",
+                "value": true,
+                "display_name": "Basic Clean Data",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Whether to clean data before converting to string.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from collections.abc import Generator\nfrom typing import Any\n\nimport orjson\nfrom fastapi.encoders import jsonable_encoder\n\nfrom lfx.base.io.chat import ChatComponent\nfrom lfx.helpers.data import safe_convert\nfrom lfx.inputs.inputs import BoolInput, DropdownInput, HandleInput, MessageTextInput\nfrom lfx.schema.data import Data\nfrom lfx.schema.dataframe import DataFrame\nfrom lfx.schema.message import Message\nfrom lfx.schema.properties import Source\nfrom lfx.template.field.base import Output\nfrom lfx.utils.constants import (\n    MESSAGE_SENDER_AI,\n    MESSAGE_SENDER_NAME_AI,\n    MESSAGE_SENDER_USER,\n)\n\n\nclass ChatOutput(ChatComponent):\n    display_name = \"Chat Output\"\n    description = \"Display a chat message in the Playground.\"\n    documentation: str = \"https://docs.langflow.org/chat-input-and-output\"\n    icon = \"MessagesSquare\"\n    name = \"ChatOutput\"\n    minimized = True\n\n    inputs = [\n        HandleInput(\n            name=\"input_value\",\n            display_name=\"Inputs\",\n            info=\"Message to be passed as output.\",\n            input_types=[\"Data\", \"JSON\", \"DataFrame\", \"Table\", \"Message\"],\n            required=True,\n        ),\n        BoolInput(\n            name=\"should_store_message\",\n            display_name=\"Store Messages\",\n            info=\"Store the message in the history.\",\n            value=True,\n            advanced=True,\n        ),\n        DropdownInput(\n            name=\"sender\",\n            display_name=\"Sender Type\",\n            options=[MESSAGE_SENDER_AI, MESSAGE_SENDER_USER],\n            value=MESSAGE_SENDER_AI,\n            advanced=True,\n            info=\"Type of sender.\",\n        ),\n        MessageTextInput(\n            name=\"sender_name\",\n            display_name=\"Sender Name\",\n            info=\"Name of the sender.\",\n            value=MESSAGE_SENDER_NAME_AI,\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"session_id\",\n            display_name=\"Session ID\",\n            info=\"The session ID of the chat. If empty, the current session ID parameter will be used.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"context_id\",\n            display_name=\"Context ID\",\n            info=\"The context ID of the chat. Adds an extra layer to the local memory.\",\n            value=\"\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"data_template\",\n            display_name=\"Data Template\",\n            value=\"{text}\",\n            advanced=True,\n            info=\"Template to convert Data to Text. If left empty, it will be dynamically set to the Data's text key.\",\n        ),\n        BoolInput(\n            name=\"clean_data\",\n            display_name=\"Basic Clean Data\",\n            value=True,\n            advanced=True,\n            info=\"Whether to clean data before converting to string.\",\n        ),\n    ]\n    outputs = [\n        Output(\n            display_name=\"Output Message\",\n            name=\"message\",\n            method=\"message_response\",\n        ),\n    ]\n\n    def _build_source(self, id_: str | None, display_name: str | None, source: str | None) -> Source:\n        source_dict = {}\n        if id_:\n            source_dict[\"id\"] = id_\n        if display_name:\n            source_dict[\"display_name\"] = display_name\n        if source:\n            # Handle case where source is a ChatOpenAI object\n            if hasattr(source, \"model_name\"):\n                source_dict[\"source\"] = source.model_name\n            elif hasattr(source, \"model\"):\n                source_dict[\"source\"] = str(source.model)\n            else:\n                source_dict[\"source\"] = str(source)\n        return Source(**source_dict)\n\n    async def message_response(self) -> Message:\n        # First convert the input to string if needed\n        text = self.convert_to_string()\n\n        # Get source properties\n        source, _, display_name, source_id = self.get_properties_from_source_component()\n\n        # Create or use existing Message object\n        if isinstance(self.input_value, Message) and not self.is_connected_to_chat_input():\n            message = self.input_value\n            # Update message properties\n            message.text = text\n            # Preserve existing session_id from the incoming message if it exists\n            existing_session_id = message.session_id\n        else:\n            message = Message(text=text)\n            existing_session_id = None\n\n        # Set message properties\n        message.sender = self.sender\n        message.sender_name = self.sender_name\n        # Preserve session_id from incoming message, or use component/graph session_id\n        message.session_id = (\n            self.session_id or existing_session_id or (self.graph.session_id if hasattr(self, \"graph\") else None) or \"\"\n        )\n        message.context_id = self.context_id\n        message.flow_id = self.graph.flow_id if hasattr(self, \"graph\") else None\n        message.properties.source = self._build_source(source_id, display_name, source)\n\n        # Store message if needed\n        if message.session_id and self.should_store_message:\n            stored_message = await self.send_message(message)\n            self.message.value = stored_message\n            message = stored_message\n\n        # Set accumulated token usage from all upstream LLM vertices.\n        # This must happen AFTER send_message() because streaming captures\n        # usage from chunks and would overwrite accumulated totals.\n        if hasattr(self, \"_vertex\") and self._vertex is not None:\n            accumulated_usage = self._vertex._accumulate_upstream_token_usage()  # noqa: SLF001\n            if accumulated_usage:\n                message.properties.usage = accumulated_usage\n                if self.should_store_message and message.get_id():\n                    message = await self._update_stored_message(message)\n                    await self._send_message_event(message, id_=message.get_id())\n\n        self.status = message\n        return message\n\n    def _serialize_data(self, data: Data) -> str:\n        \"\"\"Serialize Data object to JSON string.\"\"\"\n        # Convert data.data to JSON-serializable format\n        serializable_data = jsonable_encoder(data.data)\n        # Serialize with orjson, enabling pretty printing with indentation\n        json_bytes = orjson.dumps(serializable_data, option=orjson.OPT_INDENT_2)\n        # Convert bytes to string and wrap in Markdown code blocks\n        return \"```json\\n\" + json_bytes.decode(\"utf-8\") + \"\\n```\"\n\n    def _validate_input(self) -> None:\n        \"\"\"Validate the input data and raise ValueError if invalid.\"\"\"\n        if self.input_value is None:\n            msg = \"Input data cannot be None\"\n            raise ValueError(msg)\n        if isinstance(self.input_value, list) and not all(\n            isinstance(item, Message | Data | DataFrame | str) for item in self.input_value\n        ):\n            invalid_types = [\n                type(item).__name__\n                for item in self.input_value\n                if not isinstance(item, Message | Data | DataFrame | str)\n            ]\n            msg = f\"Expected Data or DataFrame or Message or str, got {invalid_types}\"\n            raise TypeError(msg)\n        if not isinstance(\n            self.input_value,\n            Message | Data | DataFrame | str | list | Generator | type(None),\n        ):\n            type_name = type(self.input_value).__name__\n            msg = f\"Expected Data or DataFrame or Message or str, Generator or None, got {type_name}\"\n            raise TypeError(msg)\n\n    def convert_to_string(self) -> str | Generator[Any, None, None]:\n        \"\"\"Convert input data to string with proper error handling.\"\"\"\n        self._validate_input()\n        if isinstance(self.input_value, list):\n            clean_data: bool = getattr(self, \"clean_data\", False)\n            return \"\\n\".join([safe_convert(item, clean_data=clean_data) for item in self.input_value])\n        if isinstance(self.input_value, Generator):\n            return self.input_value\n        return safe_convert(self.input_value)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_id",
+                "value": "",
+                "display_name": "Context ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The context ID of the chat. Adds an extra layer to the local memory.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "data_template": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "data_template",
+                "value": "{text}",
+                "display_name": "Data Template",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Template to convert Data to Text. If left empty, it will be dynamically set to the Data's text key.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "sender": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "Machine",
+                  "User"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender",
+                "value": "Machine",
+                "display_name": "Sender Type",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Type of sender.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "sender_name": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender_name",
+                "value": "AI",
+                "display_name": "Sender Name",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Name of the sender.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "session_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "session_id",
+                "value": "",
+                "display_name": "Session ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The session ID of the chat. If empty, the current session ID parameter will be used.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "should_store_message": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "should_store_message",
+                "value": false,
+                "display_name": "Store Messages",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Store the message in the history.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Display a chat message in the Playground.",
+            "icon": "MessagesSquare",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Result \u00b7 Review Research",
+            "documentation": "https://docs.langflow.org/chat-input-and-output",
+            "minimized": true,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Output Message",
+                "method": "message_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {},
+            "tool_mode": false
+          },
+          "type": "ChatOutput",
+          "id": "ChatOutput-review_research"
+        },
+        "id": "ChatOutput-review_research",
+        "type": "genericNode",
+        "position": {
+          "x": 1260,
+          "y": 0
+        },
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "mcp_request": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "mcp_request",
+                "value": "",
+                "display_name": "Optional request JSON",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Message",
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "artifact_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "artifact_id",
+                "value": "",
+                "display_name": "Proposed extraction artifact ID, optional",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Harness-selected targets; operator permissions stay outside public JSON.\"\"\"\nimport json\nfrom lfx.io import StrInput, DropdownInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.review_contracts import ReviewRequest\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\n\n\nclass ReviewFields(BaseComponent):\n    name = \"ReviewFields\"\n    display_name = \"Review Research Inputs\"\n    description = \"Pin exact graph and target-content revisions; select claims, proof parts or arguments to review. Additional prepared region IDs are optional; exact corpus/project scope and permissions are operator-owned.\"\n    nima_manifest = manifest_for_component(\"ReviewFields\")\n    inputs = [DropdownInput(name=\"mode\",display_name=\"Mode\",options=[\"preview\",\"argument_review\",\"proof_assessment\",\"project_assessment\",\"critique\"],value=\"preview\"),\n        StrInput(name=\"graph_revision_json\",display_name=\"Exact graph revision (JSON)\",value=\"null\"),\n        StrInput(name=\"targets_json\",display_name=\"Exact targets: ID, ref, statement, argument, domain, content_revision\",value=\"[]\"),\n        StrInput(name=\"artifact_id\",display_name=\"Proposed extraction artifact ID, optional\",value=\"\"),\n        StrInput(name=\"source_region_ids_json\",display_name=\"Additional prepared region IDs (JSON list)\",value=\"[]\"),\n        StrInput(name=\"operation_id\",display_name=\"Unique attempt ID\",value=\"\"),\n        StrInput(name=\"run_id\",display_name=\"Harness run ID, optional\",value=\"\"),\n        HandleInput(name=\"mcp_request\",display_name=\"Optional request JSON\",input_types=[\"Message\",\"Data\",\"JSON\"],required=False)]\n    outputs = [Output(name=\"request\",display_name=\"Validated review request\",method=\"request_data\",group_outputs=True),\n        Output(name=\"preview\",display_name=\"Request preview\",method=\"preview_message\",group_outputs=True)]\n\n    async def run(self):\n        override=native(getattr(self,\"mcp_request\",None))\n        if isinstance(override,str):\n            if len(override)>100000:raise ValueError(\"request exceeds input limit\")\n            override=strict_json_object(override) if override.strip() else {}\n        if override is None:override={}\n        if not isinstance(override,dict):raise ValueError(\"expected request object\")\n        payload=dict(mode=self.mode,graph_revision=json.loads(self.graph_revision_json),targets=json.loads(self.targets_json),\n            source_region_ids=json.loads(self.source_region_ids_json),artifact_id=self.artifact_id or None,\n            operation_id=self.operation_id or None,run_id=self.run_id or None)\n        return ReviewRequest.model_validate(payload|override).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "graph_revision_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "graph_revision_json",
+                "value": "null",
+                "display_name": "Exact graph revision (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "mode": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "preview",
+                  "argument_review",
+                  "proof_assessment",
+                  "project_assessment",
+                  "critique"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "mode",
+                "value": "preview",
+                "display_name": "Mode",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "operation_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_id",
+                "value": "",
+                "display_name": "Unique attempt ID",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "run_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "run_id",
+                "value": "",
+                "display_name": "Harness run ID, optional",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "source_region_ids_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "source_region_ids_json",
+                "value": "[]",
+                "display_name": "Additional prepared region IDs (JSON list)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "targets_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "targets_json",
+                "value": "[]",
+                "display_name": "Exact targets: ID, ref, statement, argument, domain, content_revision",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "Pin exact graph and target-content revisions; select claims, proof parts or arguments to review. Additional prepared region IDs are optional; exact corpus/project scope and permissions are operator-owned.",
+            "base_classes": [
+              "JSON",
+              "Message"
+            ],
+            "display_name": "Review Research Inputs",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "request",
+                "display_name": "Validated review request",
+                "method": "request_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Request preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "review_fields",
+              "contract_version": "1",
+              "source_sha256": "bc809bcda1e32a19b28f1b55d74a3fe7d083909cb4a776d53c2080cdab3ec797"
+            },
+            "tool_mode": false
+          },
+          "type": "ReviewFields",
+          "id": "ReviewFields-nima"
+        },
+        "id": "ReviewFields-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 420,
+          "y": 0
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "model": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "model",
+                "value": "",
+                "display_name": "Review language model (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "LanguageModel"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "payload": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "payload",
+                "value": "",
+                "display_name": "Validated review request",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "policy": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "policy",
+                "value": "",
+                "display_name": "Pinned private ontology",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "retrieval_policy": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "retrieval_policy",
+                "value": "",
+                "display_name": "Optional context retrieval policy",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "allow_audit_writes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_audit_writes",
+                "value": false,
+                "display_name": "Allow attempts and outcome artifacts (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_counterexamples": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_counterexamples",
+                "value": false,
+                "display_name": "Allow scoped isolated counterexample searches (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_model_calls": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model_calls",
+                "value": false,
+                "display_name": "Allow model calls (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_substantiation": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_substantiation",
+                "value": false,
+                "display_name": "Allow nested source substantiation (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Inspectable review agent with exact grounding and proposal-only publication.\"\"\"\nimport json\nfrom lfx.io import StrInput, BoolInput, IntInput, HandleInput\nfrom lfx.schema import Message, DataFrame\nfrom nima_semantica.review_contracts import ReviewRequest, ReviewContext\nfrom nima_semantica.review_tool import review_research\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.review_state import POLICY_DIGEST\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\nfrom nima_semantica.providers import ModelManifest, completion_envelope\nfrom nima_semantica.symbolic_transport import configured_symbolic_worker\nfrom nima_semantica.tool_contracts import ToolResult\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass ReviewResearch(BaseComponent):\n    name = \"ReviewResearch\"\n    display_name = \"Review Research \u00b7 Ontology-State Agent\"\n    description = \"Single ontology-state reviewer: exact proof/claim scope, evidence retrieval, represented dependency checks, authorized counterexample searches, matching substantiation and advisory assessments. The harness retains acceptance and scheduling.\"\n    nima_manifest = manifest_for_component(\"ReviewResearch\")\n    inputs = [\n        BoolInput(name=\"allow_counterexamples\",display_name=\"Allow scoped isolated counterexample searches (operator)\",value=False),\n        StrInput(name=\"counterexample_target_ids_json\",display_name=\"Authorized search target IDs (JSON list, operator)\",value=\"[]\"),\n        IntInput(name=\"max_counterexamples\",display_name=\"Maximum nested searches (operator)\",value=3),\n        IntInput(name=\"max_evaluations\",display_name=\"Maximum evaluations per search (operator)\",value=1000),\n        BoolInput(name=\"allow_substantiation\",display_name=\"Allow nested source substantiation (operator)\",value=False),\n        IntInput(name=\"max_substantiations\",display_name=\"Maximum nested substantiations (operator)\",value=2),handle(\"payload\",\"Validated review request\"),handle(\"policy\",\"Pinned private ontology\",required=False),\n        handle(\"retrieval_policy\",\"Optional context retrieval policy\",required=False),\n        StrInput(name=\"corpus_id\",display_name=\"Authorized corpus (operator)\",value=\"papers\"),\n        StrInput(name=\"project_id\",display_name=\"Authorized project (operator)\",value=\"research\"),\n        BoolInput(name=\"allow_audit_writes\",display_name=\"Allow attempts and outcome artifacts (operator)\",value=False),\n        BoolInput(name=\"allow_model_calls\",display_name=\"Allow model calls (operator)\",value=False),\n        IntInput(name=\"max_actions\",display_name=\"Agent action limit (operator)\",value=20),\n        IntInput(name=\"max_nodes\",display_name=\"Maximum snapshot nodes (operator)\",value=128),\n        IntInput(name=\"max_edges\",display_name=\"Maximum snapshot edges (operator)\",value=256),\n        IntInput(name=\"max_read_regions\",display_name=\"Maximum exact-read regions (operator)\",value=32),\n        StrInput(name=\"model_manifest_json\",display_name=\"Model identity JSON (operator)\",value=\"{}\",advanced=True),\n        HandleInput(name=\"model\",display_name=\"Review language model (operator)\",input_types=[\"LanguageModel\"],required=False)]\n\n    async def run(self):\n        policy = getattr(self,\"policy\",None)\n        if policy and _value(policy).get(\"policy_digest\") != POLICY_DIGEST:\n            raise ValueError(\"canvas policy differs from pinned controller policy\")\n        request = ReviewRequest.model_validate(_value(self.payload))\n        manifest = ModelManifest.model_validate_json(self.model_manifest_json) if self.model_manifest_json.strip() not in (\"\",\"{}\") else None\n        context = ReviewContext(corpus_id=self.corpus_id,project_id=self.project_id,\n            allow_audit_writes=self.allow_audit_writes,allow_model_calls=self.allow_model_calls,\n            allow_counterexamples=self.allow_counterexamples,counterexample_target_ids=json.loads(self.counterexample_target_ids_json),\n            max_counterexamples=self.max_counterexamples,max_evaluations=self.max_evaluations,\n            allow_substantiation=self.allow_substantiation,max_substantiations=self.max_substantiations,\n            max_actions=self.max_actions,max_nodes=self.max_nodes,max_edges=self.max_edges,max_read_regions=self.max_read_regions,\n            model_manifest=manifest, retrieval=MathRetrievalPolicy.model_validate(_value(self.retrieval_policy))\n                if getattr(self,\"retrieval_policy\",None) else MathRetrievalPolicy())\n        language_model = getattr(self,\"model\",None)\n        if request.mode != \"preview\" and context.allow_counterexamples:\n            try:\n                health = configured_symbolic_worker().run(\"print(1)\", 5)\n                if health.get(\"outcome\") != \"executed\" or health.get(\"stdout\", \"\").strip() != \"1\":\n                    raise RuntimeError(\"symbolic worker probe did not execute\")\n            except Exception:\n                return ToolResult(operation=\"Review Research\", status=\"unavailable\",\n                    diagnostics=({\"code\":\"symbolic_worker_unavailable\", \"message\":\"Configured isolated symbolic worker failed its execution probe.\"},)).model_dump(mode=\"json\")\n        def invoke(prompt):\n            messages = [*prompt[\"messages\"],{\"role\":\"user\",\"content\":\"Remaining actions: \"+str(prompt[\"remaining_actions\"])}]\n            response = language_model.bind_tools(prompt[\"tools\"],tool_choice=\"required\",parallel_tool_calls=False).invoke(messages)\n            if not response.usage_metadata:raise ValueError(\"model omitted usage metadata\")\n            calls = response.tool_calls\n            valid = len(calls)==1 and calls[0][\"name\"] in {t[\"function\"][\"name\"] for t in prompt[\"tools\"]} and not getattr(response,\"invalid_tool_calls\",[])\n            content = json.dumps({\"name\":calls[0][\"name\"],\"arguments\":calls[0][\"args\"]}) if valid else \"invalid tool envelope\"\n            return completion_envelope(content,manifest,response.usage_metadata,response.response_metadata)\n        with configured_store(required=False) as store:\n            return review_research(store,request,context,model=invoke if language_model is not None else None).model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)\n        for char in (\"`\",\"<\",\">\",\"&\"):text=text.replace(char,\"\\\\u\"+format(ord(char),\"04x\"))\n        return Message(text=\"```json\\n\"+text+\"\\n```\")\n\n    async def table_data(self) -> DataFrame:\n        return DataFrame((await self.result_data()).data.get(\"data\",{}).get(\"attempts\",[]))\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "corpus_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "corpus_id",
+                "value": "papers",
+                "display_name": "Authorized corpus (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "counterexample_target_ids_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "counterexample_target_ids_json",
+                "value": "[]",
+                "display_name": "Authorized search target IDs (JSON list, operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "max_actions": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_actions",
+                "value": 20,
+                "display_name": "Agent action limit (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_counterexamples": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_counterexamples",
+                "value": 3,
+                "display_name": "Maximum nested searches (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_edges": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_edges",
+                "value": 256,
+                "display_name": "Maximum snapshot edges (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_evaluations": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_evaluations",
+                "value": 1000,
+                "display_name": "Maximum evaluations per search (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_nodes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_nodes",
+                "value": 128,
+                "display_name": "Maximum snapshot nodes (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_read_regions": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_read_regions",
+                "value": 32,
+                "display_name": "Maximum exact-read regions (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_substantiations": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_substantiations",
+                "value": 2,
+                "display_name": "Maximum nested substantiations (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "model_manifest_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "model_manifest_json",
+                "value": "{}",
+                "display_name": "Model identity JSON (operator)",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "project_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "project_id",
+                "value": "research",
+                "display_name": "Authorized project (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "Single ontology-state reviewer: exact proof/claim scope, evidence retrieval, represented dependency checks, authorized counterexample searches, matching substantiation and advisory assessments. The harness retains acceptance and scheduling.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Review Research \u00b7 Ontology-State Agent",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "review_research",
+              "contract_version": "1",
+              "source_sha256": "a948c453dabe5273f6215d20ec1f70f298773c3fb213df9a3666615ac58688ce"
+            },
+            "tool_mode": false
+          },
+          "type": "ReviewResearch",
+          "id": "ReviewResearch-nima"
+        },
+        "id": "ReviewResearch-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 840,
+          "y": 0
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Controller-owned review state ontology, distinct from the output ontology.\"\"\"\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.review_state import PROFILE, RULES, POLICY_DIGEST\n\n\nclass ReviewOntology(BaseComponent):\n    name = \"ReviewOntology\"\n    display_name = \"Private Review Ontology and Rules\"\n    description = \"Controller-owned coverage, assessments, source reads and unresolved issues. Semantica propagates represented dependencies; private state is never the output research graph.\"\n    nima_manifest = manifest_for_component(\"ReviewOntology\")\n    inputs = []\n\n    async def run(self):\n        return {\"policy_digest\":POLICY_DIGEST,\"ontology\":PROFILE.model_dump(mode=\"json\"),\n            \"rules\":[r.model_dump(mode=\"json\") for r in RULES],\"publishable\":False,\n            \"review_semantics\":\"Exact quotations and ontology validity do not certify semantic fidelity.\"}\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Controller-owned coverage, assessments, source reads and unresolved issues. Semantica propagates represented dependencies; private state is never the output research graph.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Private Review Ontology and Rules",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "review_ontology",
+              "contract_version": "1",
+              "source_sha256": "18442c53e7ac79a62b71a17305df9452540de916e8dad62ede64623f48e0a32e"
+            },
+            "tool_mode": false
+          },
+          "type": "ReviewOntology",
+          "id": "ReviewOntology-nima"
+        },
+        "id": "ReviewOntology-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 420,
+          "y": 620
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "payload": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "payload",
+                "value": "",
+                "display_name": "Payload",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Read-only rendering of review state and pending project recording.\"\"\"\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.orchestration.langflow.values import _value\nfrom nima_semantica.component_contracts import manifest_for_component\n\n\nclass ReviewStateView(BaseComponent):\n    name = \"ReviewStateView\"\n    display_name = \"Private Review State, Coverage and Progress\"\n    description = \"Inspect private attempt revisions, assessment history, issues, receipts and the pending project progress proposal.\"\n    nima_manifest = manifest_for_component(\"ReviewStateView\")\n\n    async def run(self):\n        result = _value(self.payload)\n        data = result.get(\"data\",{})\n        return {\"status\":result[\"status\"],\"private_state\":data.get(\"reasoning_state\"),\n            \"assessment_history\":data.get(\"assessment_history\",[]),\"context\":data.get(\"context_packets\",[]),\n            \"tests\":data.get(\"tests\",[]),\"substantiations\":data.get(\"substantiations\",[]),\n            \"result\":data.get(\"result\"),\"project_progress\":data.get(\"project_progress\"),\n            \"receipt_ids\":result.get(\"receipt_ids\",[]),\"publishable\":False}\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Inspect private attempt revisions, assessment history, issues, receipts and the pending project progress proposal.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Private Review State, Coverage and Progress",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "review_state_view",
+              "contract_version": "1",
+              "source_sha256": "ed707dc23b65bd542ea39e932628cc5af2f32e4eaecc3701a2819176d09f7094"
+            },
+            "tool_mode": false
+          },
+          "type": "ReviewStateView",
+          "id": "ReviewStateView-nima"
+        },
+        "id": "ReviewStateView-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 1260,
+          "y": 620
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Operator-authorized method-context retrieval inside search planning.\"\"\"\nfrom lfx.io import BoolInput, StrInput\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\n\n\nclass ReviewRetrieval(BaseComponent):\n    name = \"ReviewRetrieval\"\n    display_name = \"Review Context Retrieval \u00b7 Operator Policy\"\n    description = \"Optional native corpus retrieval and exact reads for support and counterevidence. May add prepared evidence regions, never enlarge the selected graph targets.\"\n    nima_manifest = manifest_for_component(\"ReviewRetrieval\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Allow context retrieval (operator)\",value=False),\n        StrInput(name=\"projection_id\",display_name=\"Prepared projection ID (operator)\",value=\"\")]\n\n    async def run(self):\n        return MathRetrievalPolicy(enabled=self.enabled,projection_id=self.projection_id.strip() or None).model_dump(mode=\"json\")\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "enabled": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "enabled",
+                "value": false,
+                "display_name": "Allow context retrieval (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "projection_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "projection_id",
+                "value": "",
+                "display_name": "Prepared projection ID (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "Optional native corpus retrieval and exact reads for support and counterevidence. May add prepared evidence regions, never enlarge the selected graph targets.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Review Context Retrieval \u00b7 Operator Policy",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "review_retrieval",
+              "contract_version": "1",
+              "source_sha256": "0818e4cd7e8945b5df45f30355c127dcc94a1f4fbc03cb79571c17354ec8863b"
+            },
+            "tool_mode": false
+          },
+          "type": "ReviewRetrieval",
+          "id": "ReviewRetrieval-nima"
+        },
+        "id": "ReviewRetrieval-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 620
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "api_key": {
+                "load_from_db": true,
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "api_key",
+                "value": "NIMA_OPENROUTER_API_KEY",
+                "display_name": "OpenAI API Key",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [],
+                "dynamic": false,
+                "info": "The OpenAI API Key to use for the OpenAI model.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "password": true,
+                "type": "str",
+                "_input_type": "SecretStrInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from typing import Any\n\nfrom langchain_openai import ChatOpenAI\nfrom lfx.base.models.model import LCModelComponent\nfrom lfx.base.models.openai_constants import OPENAI_CHAT_MODEL_NAMES, OPENAI_REASONING_MODEL_NAMES\nfrom lfx.base.models.provider_ssrf import openai_compatible_client_kwargs\nfrom lfx.field_typing import LanguageModel\nfrom lfx.field_typing.range_spec import RangeSpec\nfrom lfx.inputs.inputs import BoolInput, DictInput, DropdownInput, IntInput, SecretStrInput, SliderInput, StrInput\nfrom lfx.log.logger import logger\nfrom lfx.utils.secrets import secret_value_to_str\n\nDEFAULT_OPENAI_API_BASE = \"https://api.openai.com/v1\"\n\n\nclass OpenAIModelComponent(LCModelComponent):\n    display_name = \"OpenAI\"\n    description = \"Generates text using OpenAI LLMs.\"\n    icon = \"OpenAI\"\n    name = \"OpenAIModel\"\n\n    inputs = [\n        *LCModelComponent.get_base_inputs(),\n        IntInput(\n            name=\"max_tokens\",\n            display_name=\"Max Tokens\",\n            advanced=True,\n            info=\"The maximum number of tokens to generate. Set to 0 for unlimited tokens.\",\n            range_spec=RangeSpec(min=0, max=128000),\n        ),\n        DictInput(\n            name=\"model_kwargs\",\n            display_name=\"Model Kwargs\",\n            advanced=True,\n            info=\"Additional keyword arguments to pass to the model.\",\n        ),\n        BoolInput(\n            name=\"json_mode\",\n            display_name=\"JSON Mode\",\n            advanced=True,\n            info=\"If True, it will output JSON regardless of passing a schema.\",\n        ),\n        DropdownInput(\n            name=\"model_name\",\n            display_name=\"Model Name\",\n            advanced=False,\n            options=OPENAI_CHAT_MODEL_NAMES + OPENAI_REASONING_MODEL_NAMES,\n            value=OPENAI_CHAT_MODEL_NAMES[0],\n            combobox=True,\n            real_time_refresh=True,\n        ),\n        StrInput(\n            name=\"openai_api_base\",\n            display_name=\"OpenAI API Base\",\n            advanced=True,\n            info=\"The base URL of the OpenAI API. \"\n            \"Defaults to https://api.openai.com/v1. \"\n            \"You can change this to use other APIs like JinaChat, LocalAI and Prem.\",\n        ),\n        SecretStrInput(\n            name=\"api_key\",\n            display_name=\"OpenAI API Key\",\n            info=\"The OpenAI API Key to use for the OpenAI model.\",\n            advanced=False,\n            value=\"OPENAI_API_KEY\",\n            required=True,\n        ),\n        SliderInput(\n            name=\"temperature\",\n            display_name=\"Temperature\",\n            value=0.1,\n            range_spec=RangeSpec(min=0, max=1, step=0.01),\n            show=True,\n        ),\n        IntInput(\n            name=\"seed\",\n            display_name=\"Seed\",\n            info=\"The seed controls the reproducibility of the job.\",\n            advanced=True,\n            value=1,\n        ),\n        IntInput(\n            name=\"max_retries\",\n            display_name=\"Max Retries\",\n            info=\"The maximum number of retries to make when generating.\",\n            advanced=True,\n            value=5,\n        ),\n        IntInput(\n            name=\"timeout\",\n            display_name=\"Timeout\",\n            info=\"The timeout for requests to OpenAI completion API.\",\n            advanced=True,\n            value=700,\n        ),\n    ]\n\n    def build_model(self) -> LanguageModel:  # type: ignore[type-var]\n        logger.debug(f\"Executing request with model: {self.model_name}\")\n        logger.debug(f\"API key type: {type(self.api_key)}, value: {'***' if self.api_key else None}\")\n        api_key_value = secret_value_to_str(self.api_key) if self.api_key else None\n        logger.debug(f\"Final api_key_value type: {type(api_key_value)}, value: {'***' if api_key_value else None}\")\n\n        # Handle model_kwargs and ensure api_key doesn't conflict\n        model_kwargs = self.model_kwargs or {}\n        # Remove api_key from model_kwargs if it exists to prevent conflicts\n        if \"api_key\" in model_kwargs:\n            logger.warning(\"api_key found in model_kwargs, removing to prevent conflicts\")\n            model_kwargs = dict(model_kwargs)  # Make a copy\n            del model_kwargs[\"api_key\"]\n\n        parameters = {\n            \"api_key\": api_key_value,\n            \"model_name\": self.model_name,\n            \"max_tokens\": self.max_tokens or None,\n            \"model_kwargs\": model_kwargs,\n            \"base_url\": self.openai_api_base or DEFAULT_OPENAI_API_BASE,\n            \"max_retries\": self.max_retries,\n            \"timeout\": self.timeout,\n        }\n\n        # openai_api_base is tenant-editable and the SDK sends the operator's stored API key to\n        # whatever host it names. Apply the connector SSRF policy and route a custom endpoint\n        # through DNS-pinned, redirect-free clients. No-op for the default OpenAI endpoint.\n        parameters.update(openai_compatible_client_kwargs(self.openai_api_base, default_url=DEFAULT_OPENAI_API_BASE))\n\n        # TODO: Revisit if/once parameters are supported for reasoning models\n        unsupported_params_for_reasoning_models = [\"temperature\", \"seed\"]\n\n        if self.model_name not in (*OPENAI_REASONING_MODEL_NAMES, \"openai/gpt-6-luna\"):\n            parameters[\"temperature\"] = self.temperature if self.temperature is not None else 0.1\n            parameters[\"seed\"] = self.seed\n        else:\n            params_str = \", \".join(unsupported_params_for_reasoning_models)\n            logger.debug(f\"{self.model_name} is a reasoning model, {params_str} are not configurable. Ignoring.\")\n\n        parameters[\"stream_usage\"] = True\n        output = ChatOpenAI(**parameters)\n        if self.json_mode:\n            output = output.bind(response_format={\"type\": \"json_object\"})\n\n        return output\n\n    def _get_exception_message(self, e: Exception):\n        \"\"\"Get a message from an OpenAI exception.\n\n        Args:\n            e (Exception): The exception to get the message from.\n\n        Returns:\n            str: The message from the exception.\n        \"\"\"\n        try:\n            from openai import BadRequestError, NotFoundError\n        except ImportError:\n            return None\n        if isinstance(e, NotFoundError):\n            body = getattr(e, \"body\", None) or {}\n            if isinstance(body, dict) and body.get(\"code\") == \"model_not_found\":\n                return (\n                    f\"Model '{self.model_name}' is not available for this OpenAI account. \"\n                    \"Your API tier may not have access yet \u2014 check \"\n                    \"https://platform.openai.com/settings/organization/limits \"\n                    \"or select a different model.\"\n                )\n        if isinstance(e, BadRequestError):\n            message = e.body.get(\"message\")\n            if message:\n                return message\n        return None\n\n    def update_build_config(self, build_config: dict, field_value: Any, field_name: str | None = None) -> dict:\n        if field_name in {\"base_url\", \"model_name\", \"api_key\"} and field_value in OPENAI_REASONING_MODEL_NAMES:\n            build_config[\"temperature\"][\"show\"] = False\n            build_config[\"seed\"][\"show\"] = False\n            # Hide system_message for o1 models - currently unsupported\n            if field_value.startswith(\"o1\") and \"system_message\" in build_config:\n                build_config[\"system_message\"][\"show\"] = False\n        if field_name in {\"base_url\", \"model_name\", \"api_key\"} and field_value in OPENAI_CHAT_MODEL_NAMES:\n            build_config[\"temperature\"][\"show\"] = True\n            build_config[\"seed\"][\"show\"] = True\n            if \"system_message\" in build_config:\n                build_config[\"system_message\"][\"show\"] = True\n        return build_config\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "input_value": {
+                "trace_as_input": true,
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": {
+                  "text_key": "text",
+                  "data": {
+                    "text": "",
+                    "files": [],
+                    "sender": null,
+                    "sender_name": null,
+                    "session_id": "",
+                    "context_id": "",
+                    "run_id": null,
+                    "timestamp": "2026-09-10 17:51:34.519696 UTC",
+                    "flow_id": null,
+                    "error": false,
+                    "edit": false,
+                    "properties": {
+                      "edited": false,
+                      "source": {
+                        "id": null,
+                        "display_name": null,
+                        "source": null
+                      },
+                      "allow_markdown": false,
+                      "state": "complete",
+                      "targets": []
+                    },
+                    "category": "message",
+                    "content_blocks": [],
+                    "duration": null,
+                    "session_metadata": null
+                  },
+                  "default_value": "",
+                  "files": [],
+                  "session_id": "",
+                  "context_id": "",
+                  "timestamp": "2026-09-10 17:51:34.519696 UTC",
+                  "error": false,
+                  "edit": false,
+                  "properties": {
+                    "edited": false,
+                    "source": {
+                      "id": null,
+                      "display_name": null,
+                      "source": null
+                    },
+                    "allow_markdown": false,
+                    "state": "complete",
+                    "targets": []
+                  },
+                  "category": "message",
+                  "content_blocks": [],
+                  "text": ""
+                },
+                "display_name": "Input",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageInput"
+              },
+              "json_mode": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "json_mode",
+                "value": false,
+                "display_name": "JSON Mode",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "If True, it will output JSON regardless of passing a schema.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "max_retries": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_retries",
+                "value": 0,
+                "display_name": "Max Retries",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "The maximum number of retries to make when generating.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_tokens": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "range_spec": {
+                  "step_type": "float",
+                  "min": 0.0,
+                  "max": 128000.0,
+                  "step": 0.1
+                },
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_tokens",
+                "value": 4096,
+                "display_name": "Max Tokens",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "The maximum number of tokens to generate. Set to 0 for unlimited tokens.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "model_kwargs": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "model_kwargs",
+                "value": {
+                  "reasoning": {
+                    "effort": "high"
+                  }
+                },
+                "display_name": "Generation controls \u2014 extra_body.max_tokens",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Ollama requires max_tokens in extra_body. The ordinary OpenAI max_tokens field becomes max_completion_tokens and is ignored by this Ollama version. Edit the explicit 4096 limit here.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "NestedDict",
+                "_input_type": "NestedDictInput"
+              },
+              "model_name": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "gemma4:31b"
+                ],
+                "options_metadata": [],
+                "combobox": true,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "model_name",
+                "value": "openai/gpt-6-luna",
+                "display_name": "Model Name",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "real_time_refresh": true,
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "openai_api_base": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "openai_api_base",
+                "value": "https://openrouter.ai/api/v1",
+                "display_name": "OpenAI API Base",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "The base URL of the OpenAI API. Defaults to https://api.openai.com/v1. You can change this to use other APIs like JinaChat, LocalAI and Prem.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "seed": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "seed",
+                "value": null,
+                "display_name": "Seed",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "The seed controls the reproducibility of the job.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "stream": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "stream",
+                "value": false,
+                "display_name": "Stream",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Stream the response from the model. Streaming works only in Chat.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "system_message": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "multiline": true,
+                "ai_enabled": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "system_message",
+                "value": "",
+                "display_name": "System Message",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "System message to pass to the model.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "copy_field": false,
+                "password": false,
+                "type": "str",
+                "_input_type": "MultilineInput"
+              },
+              "temperature": {
+                "tool_mode": false,
+                "min_label": "",
+                "max_label": "",
+                "min_label_icon": "",
+                "max_label_icon": "",
+                "slider_buttons": false,
+                "slider_buttons_options": [],
+                "slider_input": false,
+                "range_spec": {
+                  "step_type": "float",
+                  "min": 0.0,
+                  "max": 1.0,
+                  "step": 0.01
+                },
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "temperature",
+                "value": 0.0,
+                "display_name": "Temperature",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "slider",
+                "_input_type": "SliderInput"
+              },
+              "timeout": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "timeout",
+                "value": 600,
+                "display_name": "Timeout",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "The timeout for requests to OpenAI completion API.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              }
+            },
+            "description": "Native OpenAI component calling the same local Ollama model. No cloud connection. Bounded generation; no automatic repair.",
+            "icon": "OpenAI",
+            "base_classes": [
+              "LanguageModel",
+              "Message"
+            ],
+            "display_name": "Generate JSON \u00b7 OpenAI-compatible (local Ollama)",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "text_output",
+                "display_name": "Model Response",
+                "method": "text_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "LanguageModel"
+                ],
+                "selected": "LanguageModel",
+                "name": "model_output",
+                "display_name": "Language Model",
+                "method": "build_model",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "keywords": [
+                "model",
+                "llm",
+                "language model",
+                "large language model"
+              ]
+            },
+            "tool_mode": false
+          },
+          "type": "OpenAIModel",
+          "id": "OpenAIModel-review_research",
+          "selected_output": "model_output"
+        },
+        "id": "OpenAIModel-review_research",
+        "type": "genericNode",
+        "position": {
+          "x": 420,
+          "y": -620
+        },
+        "selected": false,
+        "dragging": false
+      }
+    ],
+    "edges": [
+      {
+        "id": "ChatInput-review_research-message-ReviewFields-nima-mcp_request",
+        "source": "ChatInput-review_research",
+        "target": "ReviewFields-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153ChatInput\u0153, \u0153id\u0153: \u0153ChatInput-review_research\u0153, \u0153name\u0153: \u0153message\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153mcp_request\u0153, \u0153id\u0153: \u0153ReviewFields-nima\u0153, \u0153inputTypes\u0153: [\u0153Message\u0153, \u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ChatInput",
+            "id": "ChatInput-review_research",
+            "name": "message",
+            "output_types": [
+              "Message"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "mcp_request",
+            "id": "ReviewFields-nima",
+            "inputTypes": [
+              "Message",
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "ReviewFields-nima-request-ReviewResearch-nima-payload",
+        "source": "ReviewFields-nima",
+        "target": "ReviewResearch-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153ReviewFields\u0153, \u0153id\u0153: \u0153ReviewFields-nima\u0153, \u0153name\u0153: \u0153request\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153ReviewResearch-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ReviewFields",
+            "id": "ReviewFields-nima",
+            "name": "request",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "payload",
+            "id": "ReviewResearch-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "ReviewOntology-nima-result-ReviewResearch-nima-policy",
+        "source": "ReviewOntology-nima",
+        "target": "ReviewResearch-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153ReviewOntology\u0153, \u0153id\u0153: \u0153ReviewOntology-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153policy\u0153, \u0153id\u0153: \u0153ReviewResearch-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ReviewOntology",
+            "id": "ReviewOntology-nima",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "policy",
+            "id": "ReviewResearch-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "ReviewRetrieval-nima-result-ReviewResearch-nima-retrieval_policy",
+        "source": "ReviewRetrieval-nima",
+        "target": "ReviewResearch-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153ReviewRetrieval\u0153, \u0153id\u0153: \u0153ReviewRetrieval-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153retrieval_policy\u0153, \u0153id\u0153: \u0153ReviewResearch-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ReviewRetrieval",
+            "id": "ReviewRetrieval-nima",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "retrieval_policy",
+            "id": "ReviewResearch-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "OpenAIModel-review_research-model_output-ReviewResearch-nima-model",
+        "source": "OpenAIModel-review_research",
+        "target": "ReviewResearch-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153OpenAIModel\u0153, \u0153id\u0153: \u0153OpenAIModel-review_research\u0153, \u0153name\u0153: \u0153model_output\u0153, \u0153output_types\u0153: [\u0153LanguageModel\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153model\u0153, \u0153id\u0153: \u0153ReviewResearch-nima\u0153, \u0153inputTypes\u0153: [\u0153LanguageModel\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "OpenAIModel",
+            "id": "OpenAIModel-review_research",
+            "name": "model_output",
+            "output_types": [
+              "LanguageModel"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "model",
+            "id": "ReviewResearch-nima",
+            "inputTypes": [
+              "LanguageModel"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "ReviewResearch-nima-result-ReviewStateView-nima-payload",
+        "source": "ReviewResearch-nima",
+        "target": "ReviewStateView-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153ReviewResearch\u0153, \u0153id\u0153: \u0153ReviewResearch-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153ReviewStateView-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ReviewResearch",
+            "id": "ReviewResearch-nima",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "payload",
+            "id": "ReviewStateView-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "ReviewResearch-nima-preview-ChatOutput-review_research-input_value",
+        "source": "ReviewResearch-nima",
+        "target": "ChatOutput-review_research",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153ReviewResearch\u0153, \u0153id\u0153: \u0153ReviewResearch-nima\u0153, \u0153name\u0153: \u0153preview\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153input_value\u0153, \u0153id\u0153: \u0153ChatOutput-review_research\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153, \u0153DataFrame\u0153, \u0153Table\u0153, \u0153Message\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ReviewResearch",
+            "id": "ReviewResearch-nima",
+            "name": "preview",
+            "output_types": [
+              "Message"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "input_value",
+            "id": "ChatOutput-review_research",
+            "inputTypes": [
+              "Data",
+              "JSON",
+              "DataFrame",
+              "Table",
+              "Message"
+            ],
+            "type": "other"
+          }
+        }
+      }
+    ],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 0.6
+    }
+  },
+  "nima_tool_manifest": {
+    "tool_id": "review_research",
+    "contract_version": "1",
+    "visual_approval": "pending",
+    "controller_version": "review-research-v1",
+    "policy_digest": "c905f6cd33b839d0549c9d873ca2f4c4e81c37d2c175607a27e40338915ad644",
+    "native_sources_sha256": {
+      "review_contracts": "f8bef3982cf8da6f6cc71c4055ef91e79169b6b84acd3235de6ece8bf413ffe6",
+      "review_state": "3f81e91d8eb7b331010a7f9e8c4b930f9b7ad2936772b70e6e5755d954a34f89",
+      "review_tool": "bd39b44d288c081ba47dc7c8aa979565b62016bfedbe4b7f95a8d93a49549d78",
+      "counterexample_tool": "7858feed0dcba421811818e5d923eaec97fd130317a4e9b082d962764cd29cf7",
+      "counterexample_contracts": "7e7262bb93bdc629bbf5bcba93306d8b1c90af9864c68220eda3c3b0ba951ee5",
+      "substantiation_tool": "7979696b8762053512c7f355b00a01f87f29e77245d99150c514a4350eebb2a6",
+      "substantiation_contracts": "be61db47c7970d5a05827745eb35c95a13da19c4f832159b2838cacbb637fc32",
+      "graph_analysis": "2aa032feda06ae667d7fd1032dc4f3934c2346fd778288ec23628cd63d93c6d8",
+      "claim_dependencies": "1890934999be033208cfd42ba5c68c4699662b0eeb4650f896725e039f8b7827",
+      "evidence_contracts": "123b56812fec1957487514b00217698199f47124371f57a1800be31760b0c2fe",
+      "math_retrieval": "85fbfd0f8d6ef4aaec36f025ac1a7c6adefe3d22aab66c8d55d7f04c6b7cdb0f",
+      "math_reasoning": "c7eca62e04e55ffb8256b160c755831687ca0348c9ad435ea50337bb356a4728",
+      "reasoning_state": "cf22253686c357a8954fd7ed54cae77d5dfaa2da249af60707586e89bf2eaf20",
+      "reasoning_kernel": "0932753d1ee9bdea4348441d384d13034cf3b011478d4e4eadf5674a82774df3"
+    },
+    "publication": "not_published_by_builder",
+    "components": {
+      "ReviewFields": {
+        "nima_component_id": "review_fields",
+        "contract_version": "1",
+        "source_sha256": "bc809bcda1e32a19b28f1b55d74a3fe7d083909cb4a776d53c2080cdab3ec797"
+      },
+      "ReviewResearch": {
+        "nima_component_id": "review_research",
+        "contract_version": "1",
+        "source_sha256": "a948c453dabe5273f6215d20ec1f70f298773c3fb213df9a3666615ac58688ce"
+      },
+      "ReviewOntology": {
+        "nima_component_id": "review_ontology",
+        "contract_version": "1",
+        "source_sha256": "18442c53e7ac79a62b71a17305df9452540de916e8dad62ede64623f48e0a32e"
+      },
+      "ReviewStateView": {
+        "nima_component_id": "review_state_view",
+        "contract_version": "1",
+        "source_sha256": "ed707dc23b65bd542ea39e932628cc5af2f32e4eaecc3701a2819176d09f7094"
+      },
+      "ReviewRetrieval": {
+        "nima_component_id": "review_retrieval",
+        "contract_version": "1",
+        "source_sha256": "0818e4cd7e8945b5df45f30355c127dcc94a1f4fbc03cb79571c17354ec8863b"
+      }
+    }
+  }
+}

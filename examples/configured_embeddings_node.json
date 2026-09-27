@@ -1,0 +1,107 @@
+{
+  "data": {
+    "node": {
+      "template": {
+        "_type": "Component",
+        "api_key": {
+          "load_from_db": true,
+          "override_skip": false,
+          "required": false,
+          "placeholder": "",
+          "show": true,
+          "name": "api_key",
+          "value": "",
+          "display_name": "Embedding API key",
+          "advanced": false,
+          "api_editable": false,
+          "input_types": [],
+          "dynamic": false,
+          "info": "",
+          "title_case": false,
+          "track_in_telemetry": false,
+          "password": true,
+          "type": "str",
+          "_input_type": "SecretStrInput"
+        },
+        "code": {
+          "type": "code",
+          "required": true,
+          "placeholder": "",
+          "list": false,
+          "show": true,
+          "multiline": true,
+          "value": "\"\"\"Pinned installation embedding provider, visible on the canvas.\"\"\"\nimport json\nfrom types import SimpleNamespace\nfrom langchain_core.embeddings import Embeddings\nfrom lfx.custom import Component\nfrom lfx.io import Output, StrInput, SecretStrInput\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.installation import EmbeddingProfile\nfrom nima_semantica.setup_services import embedding_provider\n\n\nclass ConfiguredEmbeddings(Component):\n    nima_manifest = manifest_for_component(\"ConfiguredEmbeddings\")\n    display_name = \"NIMA Configured Embeddings\"\n    name = \"ConfiguredEmbeddings\"\n    description = \"Exact model identity and dimensions from the installation profile. Credentials resolve from the installation's named Langflow Credential.\"\n    inputs = [StrInput(name=\"profile_json\", display_name=\"Embedding profile\", value=\"{}\"), SecretStrInput(name=\"api_key\", display_name=\"Embedding API key\", value=\"\", required=False)]\n    outputs = [Output(name=\"embeddings\", display_name=\"Embeddings\", method=\"build_embeddings\")]\n\n    def build_embeddings(self) -> Embeddings:\n        profile = EmbeddingProfile.model_validate_json(self.profile_json)\n        provider, manifest = embedding_provider(SimpleNamespace(embedding=profile), credential_value=self.api_key)\n        class Adapter(Embeddings):\n            def embed_documents(self, texts):\n                return provider.embed(\"configured\", texts)[0]\n            def embed_query(self, text):\n                return provider.embed_query(\"configured\", text)[0][0]\n        return Adapter()\n",
+          "fileTypes": [],
+          "file_path": "",
+          "password": false,
+          "name": "code",
+          "advanced": true,
+          "api_editable": false,
+          "dynamic": true,
+          "info": "",
+          "load_from_db": false,
+          "title_case": false
+        },
+        "profile_json": {
+          "tool_mode": false,
+          "trace_as_metadata": true,
+          "load_from_db": false,
+          "list": false,
+          "list_add_label": "Add More",
+          "override_skip": false,
+          "required": false,
+          "placeholder": "",
+          "show": true,
+          "name": "profile_json",
+          "value": "{}",
+          "display_name": "Embedding profile",
+          "advanced": false,
+          "api_editable": false,
+          "dynamic": false,
+          "info": "",
+          "title_case": false,
+          "track_in_telemetry": false,
+          "type": "str",
+          "_input_type": "StrInput"
+        }
+      },
+      "description": "Exact model identity and dimensions from the installation profile. Credentials resolve from the installation's named Langflow Credential.",
+      "base_classes": [
+        "Embeddings"
+      ],
+      "display_name": "NIMA Configured Embeddings",
+      "documentation": "",
+      "minimized": false,
+      "custom_fields": {},
+      "output_types": [],
+      "pinned": false,
+      "conditional_paths": [],
+      "frozen": false,
+      "outputs": [
+        {
+          "types": [
+            "Embeddings"
+          ],
+          "selected": "Embeddings",
+          "name": "embeddings",
+          "display_name": "Embeddings",
+          "method": "build_embeddings",
+          "value": "__UNDEFINED__",
+          "cache": true,
+          "allows_loop": false,
+          "group_outputs": false,
+          "tool_mode": true
+        }
+      ],
+      "field_order": [],
+      "beta": false,
+      "legacy": false,
+      "edited": false,
+      "metadata": {},
+      "tool_mode": false
+    },
+    "type": "ConfiguredEmbeddings",
+    "id": "ConfiguredEmbeddings-4W6le"
+  },
+  "id": "ConfiguredEmbeddings-4W6le"
+}

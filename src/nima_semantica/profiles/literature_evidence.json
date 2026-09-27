@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "name": "literature_evidence",
+  "version": "1.0.0",
+  "node_types": [
+    {
+      "name": "Claim",
+      "description": "A source-attributed mathematical statement.",
+      "role": "statement"
+    },
+    {
+      "name": "Obligation",
+      "description": "A premise or argument needed for a claim; never presumed discharged.",
+      "role": "obligation"
+    },
+    {
+      "name": "Definition",
+      "description": "A source definition with domain and scope.",
+      "role": "definition"
+    }
+  ],
+  "relation_types": [
+    {
+      "name": "requires",
+      "source_types": [
+        "Claim",
+        "Obligation"
+      ],
+      "target_types": [
+        "Obligation",
+        "Definition",
+        "Claim"
+      ],
+      "description": "A necessary condition or dependency.",
+      "necessary_dependency": true
+    },
+    {
+      "name": "supports",
+      "source_types": [
+        "Claim",
+        "Definition"
+      ],
+      "target_types": [
+        "Claim",
+        "Obligation"
+      ],
+      "description": "Proposed support, not established entailment.",
+      "necessary_dependency": false
+    }
+  ],
+  "predicates": [],
+  "instructions": "Extract attributed claims, definitions, supporting evidence and applicability obligations; preserve source provenance."
+}

@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "name": "community.inspect_graph",
+  "version": "0.1.0",
+  "canvas": "canvas.json",
+  "description": "Inspect a selected ontology graph using NIMA Analyze Graph.",
+  "capabilities": [
+    "allow_audit_writes"
+  ],
+  "input_schema": {
+    "$defs": {
+      "GraphRevision": {
+        "additionalProperties": false,
+        "description": "A view containing a corpus head and optional project head.",
+        "properties": {
+          "corpus_id": {
+            "description": "Stable logical identifier without whitespace.",
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "title": "Corpus Id",
+            "type": "string"
+          },
+          "corpus_revision": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Corpus Revision",
+            "type": "integer"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "description": "Stable logical identifier without whitespace.",
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^\\S+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Project Id"
+          },
+          "project_revision": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Project Revision"
+          }
+        },
+        "required": [
+          "corpus_id"
+        ],
+        "title": "GraphRevision",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "mode": {
+        "default": "preview",
+        "enum": [
+          "preview",
+          "strict",
+          "hypothesizing"
+        ],
+        "title": "Mode",
+        "type": "string"
+      },
+      "operation_id": {
+        "anyOf": [
+          {
+            "description": "Stable logical identifier without whitespace.",
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Operation Id"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "description": "Stable logical identifier without whitespace.",
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Run Id"
+      },
+      "graph_revision": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/GraphRevision"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "artifact_id": {
+        "anyOf": [
+          {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Artifact Id"
+      },
+      "target_record_id": {
+        "anyOf": [
+          {
+            "description": "Stable logical identifier without whitespace.",
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Target Record Id"
+      },
+      "parent_record_id": {
+        "anyOf": [
+          {
+            "description": "Stable logical identifier without whitespace.",
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Parent Record Id"
+      }
+    },
+    "title": "AnalyzeGraphRequest",
+    "type": "object"
+  },
+  "output_schema": {
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": 1,
+        "default": 1,
+        "title": "Schema Version",
+        "type": "integer"
+      },
+      "operation": {
+        "title": "Operation",
+        "type": "string"
+      },
+      "status": {
+        "enum": [
+          "complete",
+          "partial",
+          "failed",
+          "unavailable"
+        ],
+        "title": "Status",
+        "type": "string"
+      },
+      "data": {
+        "additionalProperties": true,
+        "title": "Data",
+        "type": "object"
+      },
+      "diagnostics": {
+        "default": [],
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Diagnostics",
+        "type": "array"
+      },
+      "receipt_ids": {
+        "default": [],
+        "items": {
+          "type": "string"
+        },
+        "title": "Receipt Ids",
+        "type": "array"
+      },
+      "artifacts": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "title": "Artifacts",
+        "type": "object"
+      },
+      "note": {
+        "default": "Completion is operational, not mathematical certification.",
+        "title": "Note",
+        "type": "string"
+      }
+    },
+    "required": [
+      "operation",
+      "status"
+    ],
+    "title": "ToolResult",
+    "type": "object"
+  }
+}

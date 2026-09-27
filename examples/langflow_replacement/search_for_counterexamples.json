@@ -1,0 +1,1872 @@
+{
+  "name": "Search for Counterexamples",
+  "is_component": false,
+  "endpoint_name": "nima-search-for-counterexamples",
+  "description": "Single counterexample agent with optional exact retrieval, private search state, fixed isolated integer search and independent witness validation. Explicit search limits and pending project progress. Execution disabled; visual approval pending.",
+  "data": {
+    "nodes": [
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "files": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "file_path": "",
+                "fileTypes": [
+                  "csv",
+                  "json",
+                  "pdf",
+                  "txt",
+                  "md",
+                  "mdx",
+                  "yaml",
+                  "yml",
+                  "xml",
+                  "html",
+                  "htm",
+                  "docx",
+                  "py",
+                  "sh",
+                  "sql",
+                  "js",
+                  "ts",
+                  "tsx",
+                  "jpg",
+                  "jpeg",
+                  "png",
+                  "bmp",
+                  "image"
+                ],
+                "temp_file": true,
+                "list": true,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "files",
+                "value": [],
+                "display_name": "Files",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Files to be sent with the message.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "file",
+                "_input_type": "FileInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from lfx.base.data.utils import IMG_FILE_TYPES, TEXT_FILE_TYPES\nfrom lfx.base.io.chat import ChatComponent\nfrom lfx.inputs.inputs import BoolInput\nfrom lfx.io import (\n    DropdownInput,\n    FileInput,\n    MessageTextInput,\n    MultilineInput,\n    Output,\n)\nfrom lfx.schema.image import get_file_paths\nfrom lfx.schema.message import Message\nfrom lfx.services.deps import get_settings_service\nfrom lfx.utils.constants import (\n    MESSAGE_SENDER_AI,\n    MESSAGE_SENDER_NAME_USER,\n    MESSAGE_SENDER_USER,\n)\nfrom lfx.utils.file_path_security import (\n    component_file_access_scopes,\n    enforce_local_file_access,\n    is_local_file_access_restricted,\n)\n\n\nclass ChatInput(ChatComponent):\n    display_name = \"Chat Input\"\n    description = \"Get chat inputs from the Playground.\"\n    documentation: str = \"https://docs.langflow.org/chat-input-and-output\"\n    icon = \"MessagesSquare\"\n    name = \"ChatInput\"\n    minimized = True\n\n    inputs = [\n        MultilineInput(\n            name=\"input_value\",\n            display_name=\"Input Text\",\n            value=\"\",\n            info=\"Message to be passed as input.\",\n            input_types=[],\n        ),\n        BoolInput(\n            name=\"should_store_message\",\n            display_name=\"Store Messages\",\n            info=\"Store the message in the history.\",\n            value=True,\n            advanced=True,\n        ),\n        DropdownInput(\n            name=\"sender\",\n            display_name=\"Sender Type\",\n            options=[MESSAGE_SENDER_AI, MESSAGE_SENDER_USER],\n            value=MESSAGE_SENDER_USER,\n            info=\"Type of sender.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"sender_name\",\n            display_name=\"Sender Name\",\n            info=\"Name of the sender.\",\n            value=MESSAGE_SENDER_NAME_USER,\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"session_id\",\n            display_name=\"Session ID\",\n            info=\"The session ID of the chat. If empty, the current session ID parameter will be used.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"context_id\",\n            display_name=\"Context ID\",\n            info=\"The context ID of the chat. Adds an extra layer to the local memory.\",\n            value=\"\",\n            advanced=True,\n        ),\n        FileInput(\n            name=\"files\",\n            display_name=\"Files\",\n            file_types=TEXT_FILE_TYPES + IMG_FILE_TYPES,\n            info=\"Files to be sent with the message.\",\n            advanced=True,\n            is_list=True,\n            temp_file=True,\n        ),\n    ]\n    outputs = [\n        Output(display_name=\"Chat Message\", name=\"message\", method=\"message_response\"),\n    ]\n\n    async def message_response(self) -> Message:\n        # Ensure files is a list and filter out empty/None values\n        files = self.files if self.files else []\n        if files and not isinstance(files, list):\n            files = [files]\n        # Filter out None/empty values\n        files = [f for f in files if f is not None and f != \"\"]\n\n        # Build endpoints inject caller-controlled file references directly into\n        # ChatInput. Resolve and validate local references before the Message can\n        # later read them while constructing model attachment content.\n        if files:\n            settings_service = get_settings_service()\n            storage_type = getattr(getattr(settings_service, \"settings\", None), \"storage_type\", \"local\")\n            # The storage factory falls back to local storage for unsupported\n            # values, so only the explicitly configured S3 backend may bypass\n            # filesystem containment.\n            if str(storage_type).lower() != \"s3\" and is_local_file_access_restricted():\n                scope_ids = list(component_file_access_scopes(self))\n                # Public executions replace graph.flow_id with a per-visitor\n                # virtual ID. Only the server-populated source provenance may\n                # restore the already-validated public attachment namespace.\n                source_flow_id = getattr(self.graph, \"source_flow_id\", None)\n                if source_flow_id:\n                    scope_ids.append(source_flow_id)\n                for file_path in get_file_paths(files):\n                    enforce_local_file_access(file_path, scope_ids=scope_ids)\n\n        session_id = self.session_id or self.graph.session_id or \"\"\n        message = await Message.create(\n            text=self.input_value,\n            sender=self.sender,\n            sender_name=self.sender_name,\n            session_id=session_id,\n            context_id=self.context_id,\n            files=files,\n        )\n        if session_id and isinstance(message, Message) and self.should_store_message:\n            stored_message = await self.send_message(\n                message,\n            )\n            self.message.value = stored_message\n            message = stored_message\n\n        self.status = message\n        return message\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_id",
+                "value": "",
+                "display_name": "Context ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The context ID of the chat. Adds an extra layer to the local memory.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "input_value": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "multiline": true,
+                "ai_enabled": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": "{\"mode\": \"preview\"}",
+                "display_name": "Input Text",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [],
+                "dynamic": false,
+                "info": "Message to be passed as input.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "copy_field": false,
+                "password": false,
+                "type": "str",
+                "_input_type": "MultilineInput"
+              },
+              "sender": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "Machine",
+                  "User"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender",
+                "value": "User",
+                "display_name": "Sender Type",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Type of sender.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "sender_name": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender_name",
+                "value": "User",
+                "display_name": "Sender Name",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Name of the sender.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "session_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "session_id",
+                "value": "",
+                "display_name": "Session ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The session ID of the chat. If empty, the current session ID parameter will be used.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "should_store_message": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "should_store_message",
+                "value": false,
+                "display_name": "Store Messages",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Store the message in the history.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Get chat inputs from the Playground.",
+            "icon": "MessagesSquare",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Request \u00b7 Counterexample Search",
+            "documentation": "https://docs.langflow.org/chat-input-and-output",
+            "minimized": true,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Chat Message",
+                "method": "message_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {},
+            "tool_mode": false
+          },
+          "type": "ChatInput",
+          "id": "ChatInput-counterexample",
+          "selected_output": "message"
+        },
+        "id": "ChatInput-counterexample",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "input_value": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": "",
+                "display_name": "Inputs",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON",
+                  "DataFrame",
+                  "Table",
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Message to be passed as output.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "clean_data": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "clean_data",
+                "value": true,
+                "display_name": "Basic Clean Data",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Whether to clean data before converting to string.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from collections.abc import Generator\nfrom typing import Any\n\nimport orjson\nfrom fastapi.encoders import jsonable_encoder\n\nfrom lfx.base.io.chat import ChatComponent\nfrom lfx.helpers.data import safe_convert\nfrom lfx.inputs.inputs import BoolInput, DropdownInput, HandleInput, MessageTextInput\nfrom lfx.schema.data import Data\nfrom lfx.schema.dataframe import DataFrame\nfrom lfx.schema.message import Message\nfrom lfx.schema.properties import Source\nfrom lfx.template.field.base import Output\nfrom lfx.utils.constants import (\n    MESSAGE_SENDER_AI,\n    MESSAGE_SENDER_NAME_AI,\n    MESSAGE_SENDER_USER,\n)\n\n\nclass ChatOutput(ChatComponent):\n    display_name = \"Chat Output\"\n    description = \"Display a chat message in the Playground.\"\n    documentation: str = \"https://docs.langflow.org/chat-input-and-output\"\n    icon = \"MessagesSquare\"\n    name = \"ChatOutput\"\n    minimized = True\n\n    inputs = [\n        HandleInput(\n            name=\"input_value\",\n            display_name=\"Inputs\",\n            info=\"Message to be passed as output.\",\n            input_types=[\"Data\", \"JSON\", \"DataFrame\", \"Table\", \"Message\"],\n            required=True,\n        ),\n        BoolInput(\n            name=\"should_store_message\",\n            display_name=\"Store Messages\",\n            info=\"Store the message in the history.\",\n            value=True,\n            advanced=True,\n        ),\n        DropdownInput(\n            name=\"sender\",\n            display_name=\"Sender Type\",\n            options=[MESSAGE_SENDER_AI, MESSAGE_SENDER_USER],\n            value=MESSAGE_SENDER_AI,\n            advanced=True,\n            info=\"Type of sender.\",\n        ),\n        MessageTextInput(\n            name=\"sender_name\",\n            display_name=\"Sender Name\",\n            info=\"Name of the sender.\",\n            value=MESSAGE_SENDER_NAME_AI,\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"session_id\",\n            display_name=\"Session ID\",\n            info=\"The session ID of the chat. If empty, the current session ID parameter will be used.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"context_id\",\n            display_name=\"Context ID\",\n            info=\"The context ID of the chat. Adds an extra layer to the local memory.\",\n            value=\"\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"data_template\",\n            display_name=\"Data Template\",\n            value=\"{text}\",\n            advanced=True,\n            info=\"Template to convert Data to Text. If left empty, it will be dynamically set to the Data's text key.\",\n        ),\n        BoolInput(\n            name=\"clean_data\",\n            display_name=\"Basic Clean Data\",\n            value=True,\n            advanced=True,\n            info=\"Whether to clean data before converting to string.\",\n        ),\n    ]\n    outputs = [\n        Output(\n            display_name=\"Output Message\",\n            name=\"message\",\n            method=\"message_response\",\n        ),\n    ]\n\n    def _build_source(self, id_: str | None, display_name: str | None, source: str | None) -> Source:\n        source_dict = {}\n        if id_:\n            source_dict[\"id\"] = id_\n        if display_name:\n            source_dict[\"display_name\"] = display_name\n        if source:\n            # Handle case where source is a ChatOpenAI object\n            if hasattr(source, \"model_name\"):\n                source_dict[\"source\"] = source.model_name\n            elif hasattr(source, \"model\"):\n                source_dict[\"source\"] = str(source.model)\n            else:\n                source_dict[\"source\"] = str(source)\n        return Source(**source_dict)\n\n    async def message_response(self) -> Message:\n        # First convert the input to string if needed\n        text = self.convert_to_string()\n\n        # Get source properties\n        source, _, display_name, source_id = self.get_properties_from_source_component()\n\n        # Create or use existing Message object\n        if isinstance(self.input_value, Message) and not self.is_connected_to_chat_input():\n            message = self.input_value\n            # Update message properties\n            message.text = text\n            # Preserve existing session_id from the incoming message if it exists\n            existing_session_id = message.session_id\n        else:\n            message = Message(text=text)\n            existing_session_id = None\n\n        # Set message properties\n        message.sender = self.sender\n        message.sender_name = self.sender_name\n        # Preserve session_id from incoming message, or use component/graph session_id\n        message.session_id = (\n            self.session_id or existing_session_id or (self.graph.session_id if hasattr(self, \"graph\") else None) or \"\"\n        )\n        message.context_id = self.context_id\n        message.flow_id = self.graph.flow_id if hasattr(self, \"graph\") else None\n        message.properties.source = self._build_source(source_id, display_name, source)\n\n        # Store message if needed\n        if message.session_id and self.should_store_message:\n            stored_message = await self.send_message(message)\n            self.message.value = stored_message\n            message = stored_message\n\n        # Set accumulated token usage from all upstream LLM vertices.\n        # This must happen AFTER send_message() because streaming captures\n        # usage from chunks and would overwrite accumulated totals.\n        if hasattr(self, \"_vertex\") and self._vertex is not None:\n            accumulated_usage = self._vertex._accumulate_upstream_token_usage()  # noqa: SLF001\n            if accumulated_usage:\n                message.properties.usage = accumulated_usage\n                if self.should_store_message and message.get_id():\n                    message = await self._update_stored_message(message)\n                    await self._send_message_event(message, id_=message.get_id())\n\n        self.status = message\n        return message\n\n    def _serialize_data(self, data: Data) -> str:\n        \"\"\"Serialize Data object to JSON string.\"\"\"\n        # Convert data.data to JSON-serializable format\n        serializable_data = jsonable_encoder(data.data)\n        # Serialize with orjson, enabling pretty printing with indentation\n        json_bytes = orjson.dumps(serializable_data, option=orjson.OPT_INDENT_2)\n        # Convert bytes to string and wrap in Markdown code blocks\n        return \"```json\\n\" + json_bytes.decode(\"utf-8\") + \"\\n```\"\n\n    def _validate_input(self) -> None:\n        \"\"\"Validate the input data and raise ValueError if invalid.\"\"\"\n        if self.input_value is None:\n            msg = \"Input data cannot be None\"\n            raise ValueError(msg)\n        if isinstance(self.input_value, list) and not all(\n            isinstance(item, Message | Data | DataFrame | str) for item in self.input_value\n        ):\n            invalid_types = [\n                type(item).__name__\n                for item in self.input_value\n                if not isinstance(item, Message | Data | DataFrame | str)\n            ]\n            msg = f\"Expected Data or DataFrame or Message or str, got {invalid_types}\"\n            raise TypeError(msg)\n        if not isinstance(\n            self.input_value,\n            Message | Data | DataFrame | str | list | Generator | type(None),\n        ):\n            type_name = type(self.input_value).__name__\n            msg = f\"Expected Data or DataFrame or Message or str, Generator or None, got {type_name}\"\n            raise TypeError(msg)\n\n    def convert_to_string(self) -> str | Generator[Any, None, None]:\n        \"\"\"Convert input data to string with proper error handling.\"\"\"\n        self._validate_input()\n        if isinstance(self.input_value, list):\n            clean_data: bool = getattr(self, \"clean_data\", False)\n            return \"\\n\".join([safe_convert(item, clean_data=clean_data) for item in self.input_value])\n        if isinstance(self.input_value, Generator):\n            return self.input_value\n        return safe_convert(self.input_value)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_id",
+                "value": "",
+                "display_name": "Context ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The context ID of the chat. Adds an extra layer to the local memory.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "data_template": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "data_template",
+                "value": "{text}",
+                "display_name": "Data Template",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Template to convert Data to Text. If left empty, it will be dynamically set to the Data's text key.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "sender": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "Machine",
+                  "User"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender",
+                "value": "Machine",
+                "display_name": "Sender Type",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Type of sender.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "sender_name": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender_name",
+                "value": "AI",
+                "display_name": "Sender Name",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Name of the sender.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "session_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "session_id",
+                "value": "",
+                "display_name": "Session ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The session ID of the chat. If empty, the current session ID parameter will be used.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "should_store_message": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "should_store_message",
+                "value": false,
+                "display_name": "Store Messages",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Store the message in the history.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Display a chat message in the Playground.",
+            "icon": "MessagesSquare",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Result \u00b7 Counterexample Search",
+            "documentation": "https://docs.langflow.org/chat-input-and-output",
+            "minimized": true,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Output Message",
+                "method": "message_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {},
+            "tool_mode": false
+          },
+          "type": "ChatOutput",
+          "id": "ChatOutput-counterexample"
+        },
+        "id": "ChatOutput-counterexample",
+        "type": "genericNode",
+        "position": {
+          "x": 1260,
+          "y": 0
+        },
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "mcp_request": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "mcp_request",
+                "value": "",
+                "display_name": "Optional request JSON",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Message",
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "assumptions_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "assumptions_json",
+                "value": "[]",
+                "display_name": "Assumptions as JSON list",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Visible public fields for one harness-selected claim or proof step.\"\"\"\nfrom lfx.io import StrInput, DropdownInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.counterexample_contracts import CounterexampleRequest\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\n\n\nclass CounterexampleFields(BaseComponent):\n    name = \"CounterexampleFields\"\n    display_name = \"Counterexample Search Inputs\"\n    description = \"Select a claim, assumptions, domain and quantifier. JSON also accepts an exact encoding, target/parent references, graph revision and source regions.\"\n    nima_manifest = manifest_for_component(\"CounterexampleFields\")\n    inputs = [DropdownInput(name=\"mode\", display_name=\"Mode\", options=[\"preview\",\"integer\",\"agent\"], value=\"preview\"),\n        StrInput(name=\"statement\", display_name=\"Exact claim or proof step\", value=\"For every integer x, x squared equals x.\"),\n        StrInput(name=\"domain\", display_name=\"Domain\", value=\"integers\"),\n        DropdownInput(name=\"quantifier\", display_name=\"Quantifier\", options=[\"forall\",\"exists\",\"mixed\"], value=\"forall\"),\n        StrInput(name=\"assumptions_json\", display_name=\"Assumptions as JSON list\", value=\"[]\"),\n        StrInput(name=\"encoding_json\", display_name=\"Integer encoding JSON, optional\", value=\"{}\", advanced=True),\n        StrInput(name=\"operation_id\", display_name=\"Unique attempt ID\", value=\"\"),\n        StrInput(name=\"run_id\", display_name=\"Harness run ID, optional\", value=\"\"),\n        HandleInput(name=\"mcp_request\", display_name=\"Optional request JSON\", input_types=[\"Message\",\"Data\",\"JSON\"], required=False)]\n    outputs = [Output(name=\"request\",display_name=\"Validated search request\",method=\"request_data\",group_outputs=True),\n        Output(name=\"preview\",display_name=\"Request preview\",method=\"preview_message\",group_outputs=True)]\n\n    async def run(self):\n        import json\n        override = native(getattr(self,\"mcp_request\",None))\n        if isinstance(override,str):\n            if len(override)>60000:raise ValueError(\"request exceeds input limit\")\n            override = strict_json_object(override) if override.strip() else {}\n        if override is None:override={}\n        if not isinstance(override,dict):raise ValueError(\"expected request object\")\n        payload = {k:getattr(self,k) for k in (\"mode\",\"statement\",\"domain\",\"quantifier\")}\n        payload.update(operation_id=self.operation_id or None,run_id=self.run_id or None,\n            assumptions=json.loads(self.assumptions_json),\n            encoding=strict_json_object(self.encoding_json) if self.encoding_json.strip() not in (\"\",\"{}\") else None)\n        return CounterexampleRequest.model_validate(payload|override).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "domain": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "domain",
+                "value": "integers",
+                "display_name": "Domain",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "encoding_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "encoding_json",
+                "value": "{}",
+                "display_name": "Integer encoding JSON, optional",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "mode": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "preview",
+                  "integer",
+                  "agent"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "mode",
+                "value": "preview",
+                "display_name": "Mode",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "operation_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_id",
+                "value": "",
+                "display_name": "Unique attempt ID",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "quantifier": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "forall",
+                  "exists",
+                  "mixed"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "quantifier",
+                "value": "forall",
+                "display_name": "Quantifier",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "run_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "run_id",
+                "value": "",
+                "display_name": "Harness run ID, optional",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "statement": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "statement",
+                "value": "For every integer x, x squared equals x.",
+                "display_name": "Exact claim or proof step",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "Select a claim, assumptions, domain and quantifier. JSON also accepts an exact encoding, target/parent references, graph revision and source regions.",
+            "base_classes": [
+              "JSON",
+              "Message"
+            ],
+            "display_name": "Counterexample Search Inputs",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "request",
+                "display_name": "Validated search request",
+                "method": "request_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Request preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "counterexample_fields",
+              "contract_version": "1",
+              "source_sha256": "d1e3499bfb7ef73b29862467d9801ee75b54de9897f506b4985e83eb04a47895"
+            },
+            "tool_mode": false
+          },
+          "type": "CounterexampleFields",
+          "id": "CounterexampleFields-nima"
+        },
+        "id": "CounterexampleFields-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 420,
+          "y": 0
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "model": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "model",
+                "value": "",
+                "display_name": "Search language model (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "LanguageModel"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "payload": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "payload",
+                "value": "",
+                "display_name": "Validated search request",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "policy": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "policy",
+                "value": "",
+                "display_name": "Pinned private ontology",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "retrieval_policy": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "retrieval_policy",
+                "value": "",
+                "display_name": "Optional context retrieval policy",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "worker": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "worker",
+                "value": "",
+                "display_name": "Isolated symbolic worker (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "SymbolicWorker"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "allow_audit_writes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_audit_writes",
+                "value": false,
+                "display_name": "Allow attempts and outcome artifacts (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_execution": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_execution",
+                "value": false,
+                "display_name": "Allow isolated search (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_model_calls": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model_calls",
+                "value": false,
+                "display_name": "Allow model calls (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Inspectable agent loop with typed search proposals and independent rechecks.\"\"\"\nimport json\nfrom lfx.io import StrInput, BoolInput, IntInput, HandleInput\nfrom lfx.schema import Message, DataFrame\nfrom nima_semantica.counterexample_contracts import CounterexampleRequest, CounterexampleContext\nfrom nima_semantica.counterexample_tool import search_counterexamples\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_reasoning import POLICY_DIGEST\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\nfrom nima_semantica.providers import ModelManifest, completion_envelope\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass SearchForCounterexamples(BaseComponent):\n    name = \"SearchForCounterexamples\"\n    display_name = \"Counterexample Search \u00b7 Private Graph Agent\"\n    description = \"Single agent: plan or revise an encoding, optionally retrieve context, search and submit. A fixed isolated kernel searches; independent exact checks validate witnesses. Scope and scientific limitations are explicit.\"\n    nima_manifest = manifest_for_component(\"SearchForCounterexamples\")\n    inputs = [handle(\"payload\",\"Validated search request\"),handle(\"policy\",\"Pinned private ontology\",required=False),\n        handle(\"retrieval_policy\",\"Optional context retrieval policy\",required=False),\n        StrInput(name=\"corpus_id\",display_name=\"Authorized corpus (operator)\",value=\"papers\"),\n        StrInput(name=\"project_id\",display_name=\"Authorized project (operator)\",value=\"research\"),\n        BoolInput(name=\"allow_execution\",display_name=\"Allow isolated search (operator)\",value=False),\n        BoolInput(name=\"allow_audit_writes\",display_name=\"Allow attempts and outcome artifacts (operator)\",value=False),\n        BoolInput(name=\"allow_model_calls\",display_name=\"Allow model calls (operator)\",value=False),\n        IntInput(name=\"max_actions\",display_name=\"Agent action limit (operator)\",value=10),\n        IntInput(name=\"max_evaluations\",display_name=\"Maximum points per search (operator)\",value=10000),\n        IntInput(name=\"timeout_seconds\",display_name=\"Worker timeout (operator)\",value=60),\n        StrInput(name=\"model_manifest_json\",display_name=\"Model identity JSON (operator)\",value=\"{}\",advanced=True),\n        HandleInput(name=\"model\",display_name=\"Search language model (operator)\",input_types=[\"LanguageModel\"],required=False),\n        HandleInput(name=\"worker\",display_name=\"Isolated symbolic worker (operator)\",input_types=[\"SymbolicWorker\"],required=False)]\n\n    async def run(self):\n        policy = getattr(self,\"policy\",None)\n        if policy and _value(policy).get(\"policy_digest\") != POLICY_DIGEST:\n            raise ValueError(\"canvas policy differs from pinned controller policy\")\n        request = CounterexampleRequest.model_validate(_value(self.payload))\n        manifest = ModelManifest.model_validate_json(self.model_manifest_json) if self.model_manifest_json.strip() not in (\"\",\"{}\") else None\n        context = CounterexampleContext(corpus_id=self.corpus_id,project_id=self.project_id,\n            allow_execution=self.allow_execution,allow_audit_writes=self.allow_audit_writes,allow_model_calls=self.allow_model_calls,\n            max_actions=self.max_actions,max_evaluations=self.max_evaluations,timeout_seconds=self.timeout_seconds,\n            model_manifest=manifest, retrieval=MathRetrievalPolicy.model_validate(_value(self.retrieval_policy))\n                if getattr(self,\"retrieval_policy\",None) else MathRetrievalPolicy())\n        language_model = getattr(self,\"model\",None)\n        def invoke(prompt):\n            messages = [*prompt[\"messages\"],{\"role\":\"user\",\"content\":\"Remaining actions: \"+str(prompt[\"remaining_actions\"])}]\n            response = language_model.bind_tools(prompt[\"tools\"],tool_choice=\"required\",parallel_tool_calls=False).invoke(messages)\n            if not response.usage_metadata:raise ValueError(\"model omitted usage metadata\")\n            calls = response.tool_calls\n            valid = len(calls)==1 and calls[0][\"name\"] in {t[\"function\"][\"name\"] for t in prompt[\"tools\"]} and not getattr(response,\"invalid_tool_calls\",[])\n            content = json.dumps({\"name\":calls[0][\"name\"],\"arguments\":calls[0][\"args\"]}) if valid else \"invalid tool envelope\"\n            return completion_envelope(content,manifest,response.usage_metadata,response.response_metadata)\n        with configured_store(required=False) as store:\n            return search_counterexamples(store,request,context,model=invoke if language_model is not None else None,\n                worker=getattr(self,\"worker\",None)).model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)\n        for char in (\"`\",\"<\",\">\",\"&\"):text=text.replace(char,\"\\\\u\"+format(ord(char),\"04x\"))\n        return Message(text=\"```json\\n\"+text+\"\\n```\")\n\n    async def table_data(self) -> DataFrame:\n        return DataFrame((await self.result_data()).data.get(\"data\",{}).get(\"attempts\",[]))\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "corpus_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "corpus_id",
+                "value": "papers",
+                "display_name": "Authorized corpus (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "max_actions": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_actions",
+                "value": 10,
+                "display_name": "Agent action limit (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_evaluations": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_evaluations",
+                "value": 10000,
+                "display_name": "Maximum points per search (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "model_manifest_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "model_manifest_json",
+                "value": "{}",
+                "display_name": "Model identity JSON (operator)",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "project_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "project_id",
+                "value": "research",
+                "display_name": "Authorized project (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "timeout_seconds": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "timeout_seconds",
+                "value": 60,
+                "display_name": "Worker timeout (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              }
+            },
+            "description": "Single agent: plan or revise an encoding, optionally retrieve context, search and submit. A fixed isolated kernel searches; independent exact checks validate witnesses. Scope and scientific limitations are explicit.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Counterexample Search \u00b7 Private Graph Agent",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "search_for_counterexamples",
+              "contract_version": "1",
+              "source_sha256": "578764ff3dcad45d0a2c5afdc3feeb024107d5fcda348e824e1ef0b422578b83"
+            },
+            "tool_mode": false
+          },
+          "type": "SearchForCounterexamples",
+          "id": "SearchForCounterexamples-nima"
+        },
+        "id": "SearchForCounterexamples-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 840,
+          "y": 0
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Shared mathematical representation with counterexample-specific obligations.\"\"\"\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_reasoning import PROFILE, RULES, POLICY_DIGEST\n\n\nclass CounterexampleOntology(BaseComponent):\n    name = \"CounterexampleOntology\"\n    display_name = \"Private Search Ontology and Rules\"\n    description = \"Inspect target, encoding, correspondence obligations, search observations and result dependencies. Semantica propagates represented constraints; source correspondence remains open.\"\n    nima_manifest = manifest_for_component(\"CounterexampleOntology\")\n    inputs = []\n\n    async def run(self):\n        return {\"policy_digest\":POLICY_DIGEST,\"ontology\":PROFILE.model_dump(mode=\"json\"),\n            \"rules\":[r.model_dump(mode=\"json\") for r in RULES],\"publishable\":False,\n            \"search_semantics\":\"A checked witness refutes its encoding; an unsuccessful finite search cannot prove a claim.\"}\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Inspect target, encoding, correspondence obligations, search observations and result dependencies. Semantica propagates represented constraints; source correspondence remains open.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Private Search Ontology and Rules",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "counterexample_ontology",
+              "contract_version": "1",
+              "source_sha256": "921894fd16bda8708ca179cd8a049b212a2857b24fecd0731d2b67d9c976295c"
+            },
+            "tool_mode": false
+          },
+          "type": "CounterexampleOntology",
+          "id": "CounterexampleOntology-nima"
+        },
+        "id": "CounterexampleOntology-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 420,
+          "y": 620
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "payload": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "payload",
+                "value": "",
+                "display_name": "Payload",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Read-only rendering of search state and pending project recording.\"\"\"\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.orchestration.langflow.values import _value\nfrom nima_semantica.component_contracts import manifest_for_component\n\n\nclass CounterexampleStateView(BaseComponent):\n    name = \"CounterexampleStateView\"\n    display_name = \"Private Search State, Coverage and Progress\"\n    description = \"Inspect encodings, attempts, witness checks, source context and the pending progress proposal. No project graph changes.\"\n    nima_manifest = manifest_for_component(\"CounterexampleStateView\")\n\n    async def run(self):\n        result = _value(self.payload)\n        data = result.get(\"data\",{})\n        return {\"status\":result[\"status\"],\"private_state\":data.get(\"reasoning_state\"),\n            \"searches\":data.get(\"searches\",[]),\"context\":data.get(\"context_packets\",[]),\n            \"result\":data.get(\"result\"),\"project_progress\":data.get(\"project_progress\"),\n            \"receipt_ids\":result.get(\"receipt_ids\",[]),\"publishable\":False}\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Inspect encodings, attempts, witness checks, source context and the pending progress proposal. No project graph changes.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Private Search State, Coverage and Progress",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "counterexample_state_view",
+              "contract_version": "1",
+              "source_sha256": "5d192b9d3ed983892828d6fcb08797dd982a3bef66ac78fa339d08fbfcc6e683"
+            },
+            "tool_mode": false
+          },
+          "type": "CounterexampleStateView",
+          "id": "CounterexampleStateView-nima"
+        },
+        "id": "CounterexampleStateView-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 1260,
+          "y": 620
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Operator-authorized method-context retrieval inside search planning.\"\"\"\nfrom lfx.io import BoolInput, StrInput\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\n\n\nclass CounterexampleRetrieval(BaseComponent):\n    name = \"CounterexampleRetrieval\"\n    display_name = \"Search Context Retrieval \u00b7 Operator Policy\"\n    description = \"Optional plan context uses scoped NIMA retrieval and exact source reads; passages remain method evidence, not verification.\"\n    nima_manifest = manifest_for_component(\"CounterexampleRetrieval\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Allow context retrieval (operator)\",value=False),\n        StrInput(name=\"projection_id\",display_name=\"Prepared projection ID (operator)\",value=\"\")]\n\n    async def run(self):\n        return MathRetrievalPolicy(enabled=self.enabled,projection_id=self.projection_id.strip() or None).model_dump(mode=\"json\")\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "enabled": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "enabled",
+                "value": false,
+                "display_name": "Allow context retrieval (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "projection_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "projection_id",
+                "value": "",
+                "display_name": "Prepared projection ID (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "Optional plan context uses scoped NIMA retrieval and exact source reads; passages remain method evidence, not verification.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Search Context Retrieval \u00b7 Operator Policy",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "counterexample_retrieval",
+              "contract_version": "1",
+              "source_sha256": "51b2565f012a9fc4ac726880b7e29d4ced51bbe00a57af217e27b008c107f53d"
+            },
+            "tool_mode": false
+          },
+          "type": "CounterexampleRetrieval",
+          "id": "CounterexampleRetrieval-nima"
+        },
+        "id": "CounterexampleRetrieval-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 620
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "ChatInput-counterexample-message-CounterexampleFields-nima-mcp_request",
+        "source": "ChatInput-counterexample",
+        "target": "CounterexampleFields-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153ChatInput\u0153, \u0153id\u0153: \u0153ChatInput-counterexample\u0153, \u0153name\u0153: \u0153message\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153mcp_request\u0153, \u0153id\u0153: \u0153CounterexampleFields-nima\u0153, \u0153inputTypes\u0153: [\u0153Message\u0153, \u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ChatInput",
+            "id": "ChatInput-counterexample",
+            "name": "message",
+            "output_types": [
+              "Message"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "mcp_request",
+            "id": "CounterexampleFields-nima",
+            "inputTypes": [
+              "Message",
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "CounterexampleFields-nima-request-SearchForCounterexamples-nima-payload",
+        "source": "CounterexampleFields-nima",
+        "target": "SearchForCounterexamples-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153CounterexampleFields\u0153, \u0153id\u0153: \u0153CounterexampleFields-nima\u0153, \u0153name\u0153: \u0153request\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153SearchForCounterexamples-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "CounterexampleFields",
+            "id": "CounterexampleFields-nima",
+            "name": "request",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "payload",
+            "id": "SearchForCounterexamples-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "CounterexampleOntology-nima-result-SearchForCounterexamples-nima-policy",
+        "source": "CounterexampleOntology-nima",
+        "target": "SearchForCounterexamples-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153CounterexampleOntology\u0153, \u0153id\u0153: \u0153CounterexampleOntology-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153policy\u0153, \u0153id\u0153: \u0153SearchForCounterexamples-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "CounterexampleOntology",
+            "id": "CounterexampleOntology-nima",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "policy",
+            "id": "SearchForCounterexamples-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "CounterexampleRetrieval-nima-result-SearchForCounterexamples-nima-retrieval_policy",
+        "source": "CounterexampleRetrieval-nima",
+        "target": "SearchForCounterexamples-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153CounterexampleRetrieval\u0153, \u0153id\u0153: \u0153CounterexampleRetrieval-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153retrieval_policy\u0153, \u0153id\u0153: \u0153SearchForCounterexamples-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "CounterexampleRetrieval",
+            "id": "CounterexampleRetrieval-nima",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "retrieval_policy",
+            "id": "SearchForCounterexamples-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "SearchForCounterexamples-nima-result-CounterexampleStateView-nima-payload",
+        "source": "SearchForCounterexamples-nima",
+        "target": "CounterexampleStateView-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153SearchForCounterexamples\u0153, \u0153id\u0153: \u0153SearchForCounterexamples-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153CounterexampleStateView-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SearchForCounterexamples",
+            "id": "SearchForCounterexamples-nima",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "payload",
+            "id": "CounterexampleStateView-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "SearchForCounterexamples-nima-preview-ChatOutput-counterexample-input_value",
+        "source": "SearchForCounterexamples-nima",
+        "target": "ChatOutput-counterexample",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153SearchForCounterexamples\u0153, \u0153id\u0153: \u0153SearchForCounterexamples-nima\u0153, \u0153name\u0153: \u0153preview\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153input_value\u0153, \u0153id\u0153: \u0153ChatOutput-counterexample\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153, \u0153DataFrame\u0153, \u0153Table\u0153, \u0153Message\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "SearchForCounterexamples",
+            "id": "SearchForCounterexamples-nima",
+            "name": "preview",
+            "output_types": [
+              "Message"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "input_value",
+            "id": "ChatOutput-counterexample",
+            "inputTypes": [
+              "Data",
+              "JSON",
+              "DataFrame",
+              "Table",
+              "Message"
+            ],
+            "type": "other"
+          }
+        }
+      }
+    ],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 0.6
+    }
+  },
+  "nima_tool_manifest": {
+    "tool_id": "search_for_counterexamples",
+    "contract_version": "1",
+    "visual_approval": "pending",
+    "controller_version": "search-counterexamples-v1",
+    "policy_digest": "ed58343e6bbe714b4c231e746e6532e2161d69c498606cdb2ff834484686e548",
+    "native_sources_sha256": {
+      "counterexample_contracts": "7e7262bb93bdc629bbf5bcba93306d8b1c90af9864c68220eda3c3b0ba951ee5",
+      "counterexample_kernel": "9003c967f9cdaa148c8d0ecc356bf912b5c8abc18710ac08ed356945957194bc",
+      "counterexample_tool": "7858feed0dcba421811818e5d923eaec97fd130317a4e9b082d962764cd29cf7",
+      "math_retrieval": "85fbfd0f8d6ef4aaec36f025ac1a7c6adefe3d22aab66c8d55d7f04c6b7cdb0f",
+      "math_reasoning": "c7eca62e04e55ffb8256b160c755831687ca0348c9ad435ea50337bb356a4728",
+      "reasoning_state": "cf22253686c357a8954fd7ed54cae77d5dfaa2da249af60707586e89bf2eaf20",
+      "reasoning_kernel": "0932753d1ee9bdea4348441d384d13034cf3b011478d4e4eadf5674a82774df3",
+      "verification": "2de2fb94fee7523ca2ac46c0c9f9381f6538c9d2571ec28a2b1ead3d9ec7ea5f",
+      "verification_service": "acb967f508d2b273f377e51b862a22f0fdc3d0b3bd3754547b02c7fdabe7257b",
+      "research_additions": "6ace1ee8208f14e611c3480ee418ebd46d144fdf0e69281b461404f5230d682c"
+    },
+    "publication": "not_published_by_builder",
+    "components": {
+      "CounterexampleFields": {
+        "nima_component_id": "counterexample_fields",
+        "contract_version": "1",
+        "source_sha256": "d1e3499bfb7ef73b29862467d9801ee75b54de9897f506b4985e83eb04a47895"
+      },
+      "SearchForCounterexamples": {
+        "nima_component_id": "search_for_counterexamples",
+        "contract_version": "1",
+        "source_sha256": "578764ff3dcad45d0a2c5afdc3feeb024107d5fcda348e824e1ef0b422578b83"
+      },
+      "CounterexampleOntology": {
+        "nima_component_id": "counterexample_ontology",
+        "contract_version": "1",
+        "source_sha256": "921894fd16bda8708ca179cd8a049b212a2857b24fecd0731d2b67d9c976295c"
+      },
+      "CounterexampleStateView": {
+        "nima_component_id": "counterexample_state_view",
+        "contract_version": "1",
+        "source_sha256": "5d192b9d3ed983892828d6fcb08797dd982a3bef66ac78fa339d08fbfcc6e683"
+      },
+      "CounterexampleRetrieval": {
+        "nima_component_id": "counterexample_retrieval",
+        "contract_version": "1",
+        "source_sha256": "51b2565f012a9fc4ac726880b7e29d4ced51bbe00a57af217e27b008c107f53d"
+      }
+    }
+  }
+}

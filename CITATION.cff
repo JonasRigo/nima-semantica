@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "Cite NIMA-Semantica and its Semantica dependency."
+title: NIMA-Semantica
+type: software
+version: 0.1.0
+repository-code: https://github.com/JonasRigo/nima-semantica
+doi: 10.5281/zenodo.22998905
+authors:
+  - family-names: Rigo
+    given-names: Jonas
+    affiliation: University of Regensburg
+    orcid: https://orcid.org/0000-0003-3906-7985
+license: MIT
+references:
+  - type: software
+    title: Semantica
+    version: 0.6.8
+    url: https://pypi.org/project/semantica/0.6.8/
+    authors:
+      - name: Semantica contributors

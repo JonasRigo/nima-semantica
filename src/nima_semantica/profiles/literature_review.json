@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "literature_review",
+  "version": "1.0.0",
+  "node_types": [
+    {"name": "Review", "description": "A source-attributed synthesis for a harness question; not a truth certificate.", "role": "statement"},
+    {"name": "Paper", "description": "A prepared paper identified by its source provenance.", "role": "source"},
+    {"name": "Entity", "description": "A concept, object or physical entity discussed in one or more papers.", "role": "definition"},
+    {"name": "Method", "description": "A method or approximation reported in a paper.", "role": "definition"},
+    {"name": "Claim", "description": "A statement attributed to a paper; not independently certified.", "role": "statement"},
+    {"name": "Gap", "description": "An unresolved coverage or evidential obligation.", "role": "obligation"}
+  ],
+  "relation_types": [
+    {"name": "reviews", "source_types": ["Review"], "target_types": ["Paper"], "description": "Review includes a prepared, source-attributed paper.", "necessary_dependency": false},
+    {"name": "discusses", "source_types": ["Paper", "Review"], "target_types": ["Entity", "Method", "Claim", "Gap"], "description": "Source or review discusses the target.", "necessary_dependency": false},
+    {"name": "asserts", "source_types": ["Paper"], "target_types": ["Claim"], "description": "Paper asserts the attributed claim.", "necessary_dependency": false},
+    {"name": "uses", "source_types": ["Paper"], "target_types": ["Method"], "description": "Paper reports use of the method.", "necessary_dependency": false},
+    {"name": "about", "source_types": ["Claim", "Method"], "target_types": ["Entity"], "description": "Claim or method concerns an entity.", "necessary_dependency": false},
+    {"name": "supports", "source_types": ["Claim"], "target_types": ["Claim"], "description": "Proposed support between attributed claims; entailment is not certified.", "necessary_dependency": false},
+    {"name": "contradicts", "source_types": ["Claim"], "target_types": ["Claim"], "description": "Apparent conflict requiring interpretation, not an adjudicated contradiction.", "necessary_dependency": false},
+    {"name": "qualifies", "source_types": ["Claim"], "target_types": ["Claim"], "description": "A source-reported qualification or limitation.", "necessary_dependency": false}
+  ],
+  "predicates": [],
+  "instructions": "Represent paper-attributed statements and shared entities separately. Every node and relation requires exact prepared-region evidence. An attributed claim remains proposed even after the review graph is committed."
+}

@@ -1,0 +1,117 @@
+\documentclass[11pt]{article}
+
+% SciPost-like concluded proof template for NIMA reports.
+% Replace article with the official SciPost class if it is available locally.
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{booktabs}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+
+\title{Title of the Mathematical Research Report}
+\author{Author names}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+State exactly what is proved, falsified, or left conditional. Name the main
+claim id, proof attempt ids, formal theorem names, and whether trusted imports
+or numerical certificates are used.
+\end{abstract}
+
+\section{Introduction}
+Explain the mathematical question, why the strengthened or impossible statement
+matters, and what changes relative to the starting conjecture or literature.
+
+\section{Related Work and Imported Theorems}
+Separate literature theorems, manuscript imports, numerical certificates, and
+new results. Every trusted import should appear in the trust ledger in
+Section~\ref{sec:trust-ledger}.
+
+\section{Main Results}
+State all systems, dimensions, maps, states, constants, and quantifiers.
+
+\begin{theorem}[Main theorem or counterexample]
+Precise statement.
+\end{theorem}
+
+\section{Proof Overview}
+Give the proof architecture before technical details. Match the outline to the
+NIMA DAG: claims, attempts, bridge gaps, and failed routes.
+
+\section{Proof}
+Give the complete proof step by step. Keep named lemmas aligned with NIMA
+claim ids or theorem-card ids when possible.
+
+\section{Experiments and Falsified Routes}
+Document numerical searches, failed sublemmas, seeds, dimensions, scripts,
+artifacts, and certificates. Explain exactly what each negative result rules
+out.
+
+\section{Formalization and Trust Ledger}
+\label{sec:trust-ledger}
+
+Inspect the exact NIMA session export and any Verify Lean receipts before filling this table.
+Generated scientific results are uncertified; record the actual scope of formal verification separately.
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Item & Value \\
+\midrule
+NIMA claim id & \texttt{clm\_...} \\
+Proof attempts & \texttt{att\_...} \\
+Lean theorem names & \texttt{Namespace.theoremName} \\
+Lean axiom class counts & \texttt{\{...\}} \\
+Trusted literature imports & \texttt{LiteratureImports....} \\
+Trusted manuscript imports & \texttt{ManuscriptGapAxioms....} \\
+Numerical certificates & \texttt{ncert\_...} \\
+Open bridge gaps & \texttt{fgap\_...} \\
+Known failed routes & \texttt{att\_...}, \texttt{obs\_...} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Errors or Corrections in Source Papers}
+List any source-paper errors, ambiguous constants, missing hypotheses, OCR
+issues, or notation conflicts identified during the proof.
+
+\section{Conclusion}
+State what is now possible, what is impossible, and what remains conditional or
+open.
+
+\appendix
+
+\section{Notation, Shorthands, Neologisms, and Symbols}
+This appendix is mandatory. Define every project-local shorthand and every term
+whose meaning is not standard in the cited literature. Include witness names,
+bridge names, imported theorem aliases, entropy shorthands, norm conventions,
+and all symbols used in the main theorem.
+
+\begin{description}[leftmargin=2.5cm,style=nextline]
+\item[Example shorthand] Precise definition and where it is first used.
+\item[Example symbol] Domain, codomain, hypotheses, and convention.
+\end{description}
+
+\section{NIMA Packet Extract}
+Include the relevant packet summary, source spans, theorem cards, formalization
+gaps, and dependency edges.
+
+\section{Lean Axiom Audit}
+Include the raw or summarized \texttt{\#print axioms} output and its
+recorded verification status.
+
+\section{Additional Numerical Certificates}
+Include reproducibility commands, seeds, dimensions, hashes, and interval
+bounds.
+
+\end{document}

@@ -1,0 +1,7 @@
+include setup.py release-resources.json CITATION.cff README.md LICENSE THIRD_PARTY_NOTICES.md .gitignore
+include deploy/release_policy.py
+prune article
+prune .nima
+prune benchmarks
+prune graphify-out
+exclude TOOL_BLUEPRINT.md TOOL_BLUEPRINT.html CODE_TODO.md TOOL_BENCH.md Milestone.md IMPLEMENTATION_PLAN.md DEFERRED_WORK.json AGENTS.md release-fixtures.json

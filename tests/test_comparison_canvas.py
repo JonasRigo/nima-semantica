@@ -1,0 +1,91 @@
+"""Installed Langflow graph and model binding acceptance, using offline responses."""
+import asyncio
+import hashlib
+import json
+from pathlib import Path
+import sys
+import pytest
+
+pytest.importorskip("lfx")
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/"deploy"))
+from build_compare_research_objects import build
+from build_tool_guide import load_component
+from flow_io import validate_edges
+from test_source_canvas import configured
+from test_comparison_tool import region,actions,request
+from test_claim_dependencies import seed,ref
+
+CANVAS=ROOT/"examples/langflow_replacement/compare_research_objects.json"
+
+
+def execute(payload):
+    from lfx.graph import Graph
+    graph=Graph.from_payload(json.loads(CANVAS.read_text())["data"])
+    async def run():
+        await asyncio.wait_for(graph.arun(inputs=[{"input_value":json.dumps(payload)}],outputs=["ChatOutput-comparison"]),30)
+        component=graph.get_vertex("CompareResearchObjects-nima").custom_component
+        result,preview=await asyncio.gather(component.result_data(),component.preview_message())
+        assert json.loads(preview.text[8:-4])==result.data
+        return result.data
+    return asyncio.run(run())
+
+
+def test_snapshot_and_operator_authority():
+    flow=json.loads(CANVAS.read_text());assert flow==build();validate_edges(flow)
+    for node in flow["data"]["nodes"]:
+        name=node["data"]["type"];template=node["data"]["node"]["template"]
+        if name not in ("ChatInput","ChatOutput"):
+            source=(ROOT/"deploy/langflow_components/nima_tools"/(name+".py")).read_text()
+            assert template["code"]["value"]==source
+            assert node["data"]["node"]["metadata"]["source_sha256"]==hashlib.sha256(source.encode()).hexdigest()
+        for key in ("corpus_id","project_id","allow_audit_writes","allow_model_calls","max_actions","model_manifest_json","enabled","projection_id"):
+            if key in template:assert not template[key].get("input_types") and not template[key].get("tool_mode")
+
+
+def test_unconfigured_preview(monkeypatch):
+    monkeypatch.delenv("NIMA_STORE_ROOT",raising=False)
+    assert execute({})["data"]["executed"] is False
+
+
+def test_disabled_execution_no_writes(configured):
+    from nima_semantica.storage import GraphStore
+    store=GraphStore(configured);before=store.revision;revision=store.graph_revision("papers","research").model_dump(mode="json");store.close()
+    assert execute({"mode":"mathematical_objects","operation_id":"denied","graph_revision":revision,"objects":[{"object_id":"a","graph_ref":ref("a").model_dump(mode="json")},{"object_id":"b","graph_ref":ref("b").model_dump(mode="json")}],"criteria":[{"criterion_id":"logic","description":"Compare"}]})["status"]=="failed"
+    store=GraphStore(configured);assert store.revision==before;store.close()
+
+
+@pytest.mark.parametrize("extra",[{"allow_audit_writes":True},{"corpus_id":"private"},{"model":"evil"},{"max_actions":100}])
+def test_public_override_denied(configured,extra):
+    with pytest.raises(Exception):execute(extra)
+
+
+def test_connected_model_uses_native_actions_and_cached_outputs(configured):
+    from types import SimpleNamespace
+    from model_fixture import MANIFEST
+    from nima_semantica.storage import GraphStore
+    store=GraphStore(configured);seed(store);r=region(store);req=request(store,r);store.close()
+    sequence=iter(actions(r));bound=[]
+    class Model:
+        def bind_tools(self,tools,**options):bound.append((tools,options));return self
+        def invoke(self,messages):
+            action=next(sequence)
+            return SimpleNamespace(tool_calls=[{"name":action["name"],"args":action["arguments"]}],invalid_tool_calls=[],
+                usage_metadata={"input_tokens":10,"output_tokens":20},response_metadata={"finish_reason":"tool_calls"})
+    component=load_component("CompareResearchObjects")().set(payload=req.model_dump(mode="json"),model=Model(),
+        model_manifest_json=MANIFEST.model_dump_json(),allow_audit_writes=True,allow_model_calls=True)
+    async def run():
+        result,preview,table=await asyncio.gather(component.result_data(),component.preview_message(),component.table_data())
+        assert result.data["status"]=="partial",result.data
+        assert len(table)>3 and json.loads(preview.text[8:-4])==result.data
+        view=load_component("ComparisonStateView")().set(payload=result)
+        assert (await view.result_data()).data["publishable"] is False
+    asyncio.run(run())
+    assert len(bound)==4
+    assert all(opts=={"tool_choice":"required","parallel_tool_calls":False} for _,opts in bound)
+    assert "retrieve_context" not in [t["function"]["name"] for t in bound[0][0]]
+
+
+def test_policy_mismatch_rejected_before_execution(configured):
+    component=load_component("CompareResearchObjects")().set(payload={},policy={"policy_digest":"foreign"})
+    with pytest.raises(ValueError,match="policy differs"):asyncio.run(component.result_data())

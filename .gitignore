@@ -1,0 +1,51 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.env
+.env.*
+!.env.example
+.nima/
+# Project-local installations; portable sources are versioned under skills/.
+/.agents/
+/.codex/
+/opencode.json
+/opencode.json.nima-harness.bak
+graphify-out/
+.graphify_*
+/:memory:.ses
+/references/*
+!/references/Graph_Extraction_Strcutured_Output.json
+!/references/ontology.py
+!/references/structured_output_model.py
+article/Literature/
+AGENTS.md
+Milestone.md
+SAD.md
+TODO.md
+CODE_TODO.md
+LANGFLOW_COMPONENT_AUDIT.md
+TOOL_BENCH.md
+benchmarks
+# Live Deep Research stores can contain acquired publisher PDFs; publish only audit metadata.
+benchmarks/deep_research/passes_v2/live_v1_paid/*/store/
+benchmarks/deep_research/passes_v9/live_v1_paid_r2/*/store/
+benchmarks/deep_research/passes_v10/live_v1_paid_r1/*/store/
+benchmarks/deep_research/passes_v11/live_v1_paid_r1/*/store/
+benchmarks/deep_research/passes_v11/live_v1_paid_r1/*/model-*-request.json
+benchmarks/deep_research/passes_v11/live_v1_paid_r1/*/model-*-response.json
+
+# Unpublished manuscript stays local; the release contains the user handbook.
+/article/
+
+# Private development history and publication preparation
+/TOOL_BLUEPRINT.md
+/TOOL_BLUEPRINT.html
+/IMPLEMENTATION_PLAN.md
+/DEFERRED_WORK.json
+/release-fixtures.json
+/docs/CLEAN_HOST_TEST.md
+/TOOL_BLUEPRINT_files/

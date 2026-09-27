@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nima-semantica"
+version = "0.1.0"
+authors = [{name = "Jonas Rigo"}]
+description = "Local, auditable mathematical research on Semantica"
+requires-python = ">=3.11,<3.14"
+readme = "README.md"
+license = "MIT AND Apache-2.0"
+license-files = ["LICENSE", "licenses/*.txt", "THIRD_PARTY_NOTICES.md"]
+dependencies = ["jsonschema>=4.22,<5", "semantica==0.6.8", "pydantic>=2.10,<3", "PyYAML>=6,<7", "httpx>=0.28,<0.29", "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "sympy>=1.13,<1.15"]
+
+[project.urls]
+Repository = "https://github.com/JonasRigo/nima-semantica"
+Documentation = "https://github.com/JonasRigo/nima-semantica/blob/main/docs/README.md"
+Issues = "https://github.com/JonasRigo/nima-semantica/issues"
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.27.1,<2"]
+langflow = ["langflow==1.12.0", "langflow-base==1.12.0", "lfx==1.12.0", "lfx-arxiv>=0.1.5,<1.0.0", "beautifulsoup4>=4.12,<5"]
+pdf = ["docling==2.122.0", "docling-core==2.92.0", "transformers==5.15.1", "torch>=2.13,<2.14", "torchvision>=0.28,<0.29", "onnxruntime==1.29.0", "packaging>=24,<27"]
+test = ["pytest>=8,<10", "pytest-asyncio>=0.24"]
+all = ["nima-semantica[langflow,pdf,mcp]"]
+
+[project.scripts]
+nima = "nima_semantica.cli:main"
+nima-math-mcp = "nima_semantica.math_mcp:main"
+nima-proof-mcp = "nima_semantica.proof_mcp:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"nima_semantica.pdf" = ["model_manifest.json"]
+"nima_semantica.profiles" = ["*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: requires installed optional services", "live: uses explicitly configured Langflow providers"]

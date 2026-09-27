@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "name": "claim_obligation",
+  "version": "1.1.0",
+  "required_node_types": ["Claim", "Obligation"],
+  "required_relation_types": ["requires"],
+  "node_types": [
+    {
+      "name": "Claim",
+      "description": "A source-attributed mathematical statement.",
+      "role": "statement"
+    },
+    {
+      "name": "Obligation",
+      "description": "A premise or argument needed for a claim; never presumed discharged.",
+      "role": "obligation"
+    },
+    {
+      "name": "Definition",
+      "description": "A source definition with domain and scope.",
+      "role": "definition"
+    }
+  ],
+  "relation_types": [
+    {
+      "name": "requires",
+      "source_types": [
+        "Claim",
+        "Obligation"
+      ],
+      "target_types": [
+        "Obligation",
+        "Definition",
+        "Claim"
+      ],
+      "description": "A necessary condition or dependency.",
+      "necessary_dependency": true
+    },
+    {
+      "name": "supports",
+      "source_types": [
+        "Claim",
+        "Definition"
+      ],
+      "target_types": [
+        "Claim",
+        "Obligation"
+      ],
+      "description": "Proposed support, not established entailment.",
+      "necessary_dependency": false
+    }
+  ],
+  "predicates": [],
+  "instructions": "Discover claim components and their missing mathematical requirements; do not substitute status bookkeeping for mathematical proof."
+}

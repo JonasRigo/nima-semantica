@@ -1,0 +1,1628 @@
+{
+  "name": "Trace Claim Dependencies",
+  "is_component": false,
+  "endpoint_name": "nima-trace-claim-dependencies",
+  "description": "Deterministic revision-bound claim dependency traversal. Exact paths, cycle witnesses, structural leaves, conditional relations, outstanding obligations and explicit limits. No LLM or scientific graph writes. Preview default; visual approval pending.",
+  "data": {
+    "nodes": [
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "files": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "file_path": "",
+                "fileTypes": [
+                  "csv",
+                  "json",
+                  "pdf",
+                  "txt",
+                  "md",
+                  "mdx",
+                  "yaml",
+                  "yml",
+                  "xml",
+                  "html",
+                  "htm",
+                  "docx",
+                  "py",
+                  "sh",
+                  "sql",
+                  "js",
+                  "ts",
+                  "tsx",
+                  "jpg",
+                  "jpeg",
+                  "png",
+                  "bmp",
+                  "image"
+                ],
+                "temp_file": true,
+                "list": true,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "files",
+                "value": [],
+                "display_name": "Files",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Files to be sent with the message.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "file",
+                "_input_type": "FileInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from lfx.base.data.utils import IMG_FILE_TYPES, TEXT_FILE_TYPES\nfrom lfx.base.io.chat import ChatComponent\nfrom lfx.inputs.inputs import BoolInput\nfrom lfx.io import (\n    DropdownInput,\n    FileInput,\n    MessageTextInput,\n    MultilineInput,\n    Output,\n)\nfrom lfx.schema.image import get_file_paths\nfrom lfx.schema.message import Message\nfrom lfx.services.deps import get_settings_service\nfrom lfx.utils.constants import (\n    MESSAGE_SENDER_AI,\n    MESSAGE_SENDER_NAME_USER,\n    MESSAGE_SENDER_USER,\n)\nfrom lfx.utils.file_path_security import (\n    component_file_access_scopes,\n    enforce_local_file_access,\n    is_local_file_access_restricted,\n)\n\n\nclass ChatInput(ChatComponent):\n    display_name = \"Chat Input\"\n    description = \"Get chat inputs from the Playground.\"\n    documentation: str = \"https://docs.langflow.org/chat-input-and-output\"\n    icon = \"MessagesSquare\"\n    name = \"ChatInput\"\n    minimized = True\n\n    inputs = [\n        MultilineInput(\n            name=\"input_value\",\n            display_name=\"Input Text\",\n            value=\"\",\n            info=\"Message to be passed as input.\",\n            input_types=[],\n        ),\n        BoolInput(\n            name=\"should_store_message\",\n            display_name=\"Store Messages\",\n            info=\"Store the message in the history.\",\n            value=True,\n            advanced=True,\n        ),\n        DropdownInput(\n            name=\"sender\",\n            display_name=\"Sender Type\",\n            options=[MESSAGE_SENDER_AI, MESSAGE_SENDER_USER],\n            value=MESSAGE_SENDER_USER,\n            info=\"Type of sender.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"sender_name\",\n            display_name=\"Sender Name\",\n            info=\"Name of the sender.\",\n            value=MESSAGE_SENDER_NAME_USER,\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"session_id\",\n            display_name=\"Session ID\",\n            info=\"The session ID of the chat. If empty, the current session ID parameter will be used.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"context_id\",\n            display_name=\"Context ID\",\n            info=\"The context ID of the chat. Adds an extra layer to the local memory.\",\n            value=\"\",\n            advanced=True,\n        ),\n        FileInput(\n            name=\"files\",\n            display_name=\"Files\",\n            file_types=TEXT_FILE_TYPES + IMG_FILE_TYPES,\n            info=\"Files to be sent with the message.\",\n            advanced=True,\n            is_list=True,\n            temp_file=True,\n        ),\n    ]\n    outputs = [\n        Output(display_name=\"Chat Message\", name=\"message\", method=\"message_response\"),\n    ]\n\n    async def message_response(self) -> Message:\n        # Ensure files is a list and filter out empty/None values\n        files = self.files if self.files else []\n        if files and not isinstance(files, list):\n            files = [files]\n        # Filter out None/empty values\n        files = [f for f in files if f is not None and f != \"\"]\n\n        # Build endpoints inject caller-controlled file references directly into\n        # ChatInput. Resolve and validate local references before the Message can\n        # later read them while constructing model attachment content.\n        if files:\n            settings_service = get_settings_service()\n            storage_type = getattr(getattr(settings_service, \"settings\", None), \"storage_type\", \"local\")\n            # The storage factory falls back to local storage for unsupported\n            # values, so only the explicitly configured S3 backend may bypass\n            # filesystem containment.\n            if str(storage_type).lower() != \"s3\" and is_local_file_access_restricted():\n                scope_ids = list(component_file_access_scopes(self))\n                # Public executions replace graph.flow_id with a per-visitor\n                # virtual ID. Only the server-populated source provenance may\n                # restore the already-validated public attachment namespace.\n                source_flow_id = getattr(self.graph, \"source_flow_id\", None)\n                if source_flow_id:\n                    scope_ids.append(source_flow_id)\n                for file_path in get_file_paths(files):\n                    enforce_local_file_access(file_path, scope_ids=scope_ids)\n\n        session_id = self.session_id or self.graph.session_id or \"\"\n        message = await Message.create(\n            text=self.input_value,\n            sender=self.sender,\n            sender_name=self.sender_name,\n            session_id=session_id,\n            context_id=self.context_id,\n            files=files,\n        )\n        if session_id and isinstance(message, Message) and self.should_store_message:\n            stored_message = await self.send_message(\n                message,\n            )\n            self.message.value = stored_message\n            message = stored_message\n\n        self.status = message\n        return message\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_id",
+                "value": "",
+                "display_name": "Context ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The context ID of the chat. Adds an extra layer to the local memory.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "input_value": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "multiline": true,
+                "ai_enabled": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": "{\"mode\": \"preview\"}",
+                "display_name": "Input Text",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [],
+                "dynamic": false,
+                "info": "Message to be passed as input.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "copy_field": false,
+                "password": false,
+                "type": "str",
+                "_input_type": "MultilineInput"
+              },
+              "sender": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "Machine",
+                  "User"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender",
+                "value": "User",
+                "display_name": "Sender Type",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Type of sender.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "sender_name": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender_name",
+                "value": "User",
+                "display_name": "Sender Name",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Name of the sender.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "session_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "session_id",
+                "value": "",
+                "display_name": "Session ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The session ID of the chat. If empty, the current session ID parameter will be used.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "should_store_message": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "should_store_message",
+                "value": false,
+                "display_name": "Store Messages",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Store the message in the history.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Get chat inputs from the Playground.",
+            "icon": "MessagesSquare",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Request · Trace Claim Dependencies",
+            "documentation": "https://docs.langflow.org/chat-input-and-output",
+            "minimized": true,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Chat Message",
+                "method": "message_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {},
+            "tool_mode": false
+          },
+          "type": "ChatInput",
+          "id": "ChatInput-dependencytrace",
+          "selected_output": "message"
+        },
+        "id": "ChatInput-dependencytrace",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "input_value": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": "",
+                "display_name": "Inputs",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON",
+                  "DataFrame",
+                  "Table",
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Message to be passed as output.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "clean_data": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "clean_data",
+                "value": true,
+                "display_name": "Basic Clean Data",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Whether to clean data before converting to string.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from collections.abc import Generator\nfrom typing import Any\n\nimport orjson\nfrom fastapi.encoders import jsonable_encoder\n\nfrom lfx.base.io.chat import ChatComponent\nfrom lfx.helpers.data import safe_convert\nfrom lfx.inputs.inputs import BoolInput, DropdownInput, HandleInput, MessageTextInput\nfrom lfx.schema.data import Data\nfrom lfx.schema.dataframe import DataFrame\nfrom lfx.schema.message import Message\nfrom lfx.schema.properties import Source\nfrom lfx.template.field.base import Output\nfrom lfx.utils.constants import (\n    MESSAGE_SENDER_AI,\n    MESSAGE_SENDER_NAME_AI,\n    MESSAGE_SENDER_USER,\n)\n\n\nclass ChatOutput(ChatComponent):\n    display_name = \"Chat Output\"\n    description = \"Display a chat message in the Playground.\"\n    documentation: str = \"https://docs.langflow.org/chat-input-and-output\"\n    icon = \"MessagesSquare\"\n    name = \"ChatOutput\"\n    minimized = True\n\n    inputs = [\n        HandleInput(\n            name=\"input_value\",\n            display_name=\"Inputs\",\n            info=\"Message to be passed as output.\",\n            input_types=[\"Data\", \"JSON\", \"DataFrame\", \"Table\", \"Message\"],\n            required=True,\n        ),\n        BoolInput(\n            name=\"should_store_message\",\n            display_name=\"Store Messages\",\n            info=\"Store the message in the history.\",\n            value=True,\n            advanced=True,\n        ),\n        DropdownInput(\n            name=\"sender\",\n            display_name=\"Sender Type\",\n            options=[MESSAGE_SENDER_AI, MESSAGE_SENDER_USER],\n            value=MESSAGE_SENDER_AI,\n            advanced=True,\n            info=\"Type of sender.\",\n        ),\n        MessageTextInput(\n            name=\"sender_name\",\n            display_name=\"Sender Name\",\n            info=\"Name of the sender.\",\n            value=MESSAGE_SENDER_NAME_AI,\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"session_id\",\n            display_name=\"Session ID\",\n            info=\"The session ID of the chat. If empty, the current session ID parameter will be used.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"context_id\",\n            display_name=\"Context ID\",\n            info=\"The context ID of the chat. Adds an extra layer to the local memory.\",\n            value=\"\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"data_template\",\n            display_name=\"Data Template\",\n            value=\"{text}\",\n            advanced=True,\n            info=\"Template to convert Data to Text. If left empty, it will be dynamically set to the Data's text key.\",\n        ),\n        BoolInput(\n            name=\"clean_data\",\n            display_name=\"Basic Clean Data\",\n            value=True,\n            advanced=True,\n            info=\"Whether to clean data before converting to string.\",\n        ),\n    ]\n    outputs = [\n        Output(\n            display_name=\"Output Message\",\n            name=\"message\",\n            method=\"message_response\",\n        ),\n    ]\n\n    def _build_source(self, id_: str | None, display_name: str | None, source: str | None) -> Source:\n        source_dict = {}\n        if id_:\n            source_dict[\"id\"] = id_\n        if display_name:\n            source_dict[\"display_name\"] = display_name\n        if source:\n            # Handle case where source is a ChatOpenAI object\n            if hasattr(source, \"model_name\"):\n                source_dict[\"source\"] = source.model_name\n            elif hasattr(source, \"model\"):\n                source_dict[\"source\"] = str(source.model)\n            else:\n                source_dict[\"source\"] = str(source)\n        return Source(**source_dict)\n\n    async def message_response(self) -> Message:\n        # First convert the input to string if needed\n        text = self.convert_to_string()\n\n        # Get source properties\n        source, _, display_name, source_id = self.get_properties_from_source_component()\n\n        # Create or use existing Message object\n        if isinstance(self.input_value, Message) and not self.is_connected_to_chat_input():\n            message = self.input_value\n            # Update message properties\n            message.text = text\n            # Preserve existing session_id from the incoming message if it exists\n            existing_session_id = message.session_id\n        else:\n            message = Message(text=text)\n            existing_session_id = None\n\n        # Set message properties\n        message.sender = self.sender\n        message.sender_name = self.sender_name\n        # Preserve session_id from incoming message, or use component/graph session_id\n        message.session_id = (\n            self.session_id or existing_session_id or (self.graph.session_id if hasattr(self, \"graph\") else None) or \"\"\n        )\n        message.context_id = self.context_id\n        message.flow_id = self.graph.flow_id if hasattr(self, \"graph\") else None\n        message.properties.source = self._build_source(source_id, display_name, source)\n\n        # Store message if needed\n        if message.session_id and self.should_store_message:\n            stored_message = await self.send_message(message)\n            self.message.value = stored_message\n            message = stored_message\n\n        # Set accumulated token usage from all upstream LLM vertices.\n        # This must happen AFTER send_message() because streaming captures\n        # usage from chunks and would overwrite accumulated totals.\n        if hasattr(self, \"_vertex\") and self._vertex is not None:\n            accumulated_usage = self._vertex._accumulate_upstream_token_usage()  # noqa: SLF001\n            if accumulated_usage:\n                message.properties.usage = accumulated_usage\n                if self.should_store_message and message.get_id():\n                    message = await self._update_stored_message(message)\n                    await self._send_message_event(message, id_=message.get_id())\n\n        self.status = message\n        return message\n\n    def _serialize_data(self, data: Data) -> str:\n        \"\"\"Serialize Data object to JSON string.\"\"\"\n        # Convert data.data to JSON-serializable format\n        serializable_data = jsonable_encoder(data.data)\n        # Serialize with orjson, enabling pretty printing with indentation\n        json_bytes = orjson.dumps(serializable_data, option=orjson.OPT_INDENT_2)\n        # Convert bytes to string and wrap in Markdown code blocks\n        return \"```json\\n\" + json_bytes.decode(\"utf-8\") + \"\\n```\"\n\n    def _validate_input(self) -> None:\n        \"\"\"Validate the input data and raise ValueError if invalid.\"\"\"\n        if self.input_value is None:\n            msg = \"Input data cannot be None\"\n            raise ValueError(msg)\n        if isinstance(self.input_value, list) and not all(\n            isinstance(item, Message | Data | DataFrame | str) for item in self.input_value\n        ):\n            invalid_types = [\n                type(item).__name__\n                for item in self.input_value\n                if not isinstance(item, Message | Data | DataFrame | str)\n            ]\n            msg = f\"Expected Data or DataFrame or Message or str, got {invalid_types}\"\n            raise TypeError(msg)\n        if not isinstance(\n            self.input_value,\n            Message | Data | DataFrame | str | list | Generator | type(None),\n        ):\n            type_name = type(self.input_value).__name__\n            msg = f\"Expected Data or DataFrame or Message or str, Generator or None, got {type_name}\"\n            raise TypeError(msg)\n\n    def convert_to_string(self) -> str | Generator[Any, None, None]:\n        \"\"\"Convert input data to string with proper error handling.\"\"\"\n        self._validate_input()\n        if isinstance(self.input_value, list):\n            clean_data: bool = getattr(self, \"clean_data\", False)\n            return \"\\n\".join([safe_convert(item, clean_data=clean_data) for item in self.input_value])\n        if isinstance(self.input_value, Generator):\n            return self.input_value\n        return safe_convert(self.input_value)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_id",
+                "value": "",
+                "display_name": "Context ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The context ID of the chat. Adds an extra layer to the local memory.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "data_template": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "data_template",
+                "value": "{text}",
+                "display_name": "Data Template",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Template to convert Data to Text. If left empty, it will be dynamically set to the Data's text key.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "sender": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "Machine",
+                  "User"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender",
+                "value": "Machine",
+                "display_name": "Sender Type",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Type of sender.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "sender_name": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender_name",
+                "value": "AI",
+                "display_name": "Sender Name",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Name of the sender.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "session_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "session_id",
+                "value": "",
+                "display_name": "Session ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The session ID of the chat. If empty, the current session ID parameter will be used.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "should_store_message": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "should_store_message",
+                "value": false,
+                "display_name": "Store Messages",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Store the message in the history.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Display a chat message in the Playground.",
+            "icon": "MessagesSquare",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Result · Trace Claim Dependencies",
+            "documentation": "https://docs.langflow.org/chat-input-and-output",
+            "minimized": true,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Output Message",
+                "method": "message_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {},
+            "tool_mode": false
+          },
+          "type": "ChatOutput",
+          "id": "ChatOutput-dependencytrace"
+        },
+        "id": "ChatOutput-dependencytrace",
+        "type": "genericNode",
+        "position": {
+          "x": 1260,
+          "y": 0
+        },
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "mcp_request": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "mcp_request",
+                "value": "",
+                "display_name": "Optional request JSON",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Message",
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "artifact_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "artifact_id",
+                "value": "",
+                "display_name": "Proposed graph artifact ID, optional",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "claim_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "claim_json",
+                "value": "{}",
+                "display_name": "Claim identity (corpus_id, project_id, local_id)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Harness-selected claim and revision; traversal limits remain operator-owned.\"\"\"\nfrom lfx.io import StrInput,BoolInput,DropdownInput,HandleInput,Output\nfrom lfx.schema import Data\nfrom nima_semantica.claim_dependencies import TraceDependenciesRequest\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\n\n\nclass DependencyTraceFields(BaseComponent):\n    name=\"DependencyTraceFields\"\n    display_name=\"Trace Dependencies · Claim and Revision\"\n    description=\"Select a claim or local proof node by full graph identity and pin its graph revision. Optionally trace a registered Deep Extraction candidate. JSON also accepts target/parent progress-record links.\"\n    nima_manifest=manifest_for_component(\"DependencyTraceFields\")\n    inputs=[DropdownInput(name=\"mode\",display_name=\"Mode\",options=[\"preview\",\"trace\"],value=\"preview\"),\n        StrInput(name=\"claim_json\",display_name=\"Claim identity (corpus_id, project_id, local_id)\",value=\"{}\"),\n        StrInput(name=\"graph_revision_json\",display_name=\"Exact graph revision (JSON)\",value=\"{}\"),\n        StrInput(name=\"artifact_id\",display_name=\"Proposed graph artifact ID, optional\",value=\"\"),\n        BoolInput(name=\"include_proposed\",display_name=\"Include proposed dependencies as conditional\",value=True),\n        StrInput(name=\"operation_id\",display_name=\"Unique attempt ID\",value=\"\"),\n        StrInput(name=\"run_id\",display_name=\"Harness run ID, optional\",value=\"\"),\n        HandleInput(name=\"mcp_request\",display_name=\"Optional request JSON\",input_types=[\"Message\",\"Data\",\"JSON\"],required=False)]\n    outputs=[Output(name=\"request\",display_name=\"Validated trace request\",method=\"request_data\",group_outputs=True),\n        Output(name=\"preview\",display_name=\"Request preview\",method=\"preview_message\",group_outputs=True)]\n\n    async def run(self):\n        override=native(getattr(self,\"mcp_request\",None))\n        if isinstance(override,str):\n            if len(override)>60000:raise ValueError(\"request exceeds input limit\")\n            override=strict_json_object(override) if override.strip() else {}\n        if override is None:override={}\n        if not isinstance(override,dict):raise ValueError(\"expected JSON object\")\n        payload={\"mode\":self.mode,\"operation_id\":self.operation_id or None,\"run_id\":self.run_id or None,\n            \"claim\":strict_json_object(self.claim_json) or None,\"graph_revision\":strict_json_object(self.graph_revision_json) or None,\n            \"artifact_id\":self.artifact_id or None,\"include_proposed\":self.include_proposed}\n        return TraceDependenciesRequest.model_validate(payload|override).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "graph_revision_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "graph_revision_json",
+                "value": "{}",
+                "display_name": "Exact graph revision (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "include_proposed": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "include_proposed",
+                "value": true,
+                "display_name": "Include proposed dependencies as conditional",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "mode": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "preview",
+                  "trace"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "mode",
+                "value": "preview",
+                "display_name": "Mode",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "operation_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_id",
+                "value": "",
+                "display_name": "Unique attempt ID",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "run_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "run_id",
+                "value": "",
+                "display_name": "Harness run ID, optional",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "Select a claim or local proof node by full graph identity and pin its graph revision. Optionally trace a registered Deep Extraction candidate. JSON also accepts target/parent progress-record links.",
+            "base_classes": [
+              "JSON",
+              "Message"
+            ],
+            "display_name": "Trace Dependencies · Claim and Revision",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "request",
+                "display_name": "Validated trace request",
+                "method": "request_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Request preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "dependency_trace_fields",
+              "contract_version": "1",
+              "source_sha256": "64b2abc69f5d2a9c4aba10eddf1c7ab87bc3a6b2c9fb814140f55472f230f837"
+            },
+            "tool_mode": false
+          },
+          "type": "DependencyTraceFields",
+          "id": "DependencyTraceFields-nima"
+        },
+        "id": "DependencyTraceFields-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 420,
+          "y": 0
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "payload": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "payload",
+                "value": "",
+                "display_name": "Pinned claim trace request",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "policy": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "policy",
+                "value": "",
+                "display_name": "Inspectable traversal policy",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "allow_audit_writes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_audit_writes",
+                "value": false,
+                "display_name": "Allow receipts and outcome artifacts (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Inspectable native traversal; no model, proof checker or scientific graph writes.\"\"\"\nimport json\nfrom lfx.io import StrInput,BoolInput,IntInput\nfrom lfx.schema import Message,DataFrame\nfrom nima_semantica.claim_dependencies import TraceDependenciesRequest,TraceDependenciesContext,trace_claim_dependencies,POLICY_DIGEST\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent,handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass TraceClaimDependencies(BaseComponent):\n    name=\"TraceClaimDependencies\"\n    display_name=\"Trace Claim Dependencies · Bounded Traversal\"\n    description=\"Validate the pinned graph/candidate, follow declared necessary dependencies, and return exact paths, conditional edges, cycle witnesses, structural leaves, obligations and explicit cutoffs. Audit persistence only; no entailment or graph admission.\"\n    nima_manifest=manifest_for_component(\"TraceClaimDependencies\")\n    inputs=[handle(\"payload\",\"Pinned claim trace request\"),handle(\"policy\",\"Inspectable traversal policy\",required=False),\n        StrInput(name=\"corpus_id\",display_name=\"Authorized corpus (operator)\",value=\"papers\"),\n        StrInput(name=\"project_id\",display_name=\"Authorized project; blank for corpus (operator)\",value=\"research\"),\n        BoolInput(name=\"allow_audit_writes\",display_name=\"Allow receipts and outcome artifacts (operator)\",value=False),\n        IntInput(name=\"max_nodes\",display_name=\"Maximum input nodes (operator)\",value=256),\n        IntInput(name=\"max_edges\",display_name=\"Maximum input edges (operator)\",value=512),\n        IntInput(name=\"max_visited_nodes\",display_name=\"Maximum visited nodes (operator)\",value=128),\n        IntInput(name=\"max_traversed_edges\",display_name=\"Maximum traversed edges (operator)\",value=256),\n        IntInput(name=\"max_depth\",display_name=\"Maximum path depth (operator)\",value=32),\n        IntInput(name=\"max_paths\",display_name=\"Maximum returned paths (operator)\",value=128),\n        IntInput(name=\"max_steps\",display_name=\"Maximum traversal steps (operator)\",value=10000),\n        IntInput(name=\"timeout_seconds\",display_name=\"Traversal timeout (operator)\",value=30)]\n\n    async def run(self):\n        if getattr(self,\"policy\",None) and _value(self.policy).get(\"policy_digest\")!=POLICY_DIGEST:\n            raise ValueError(\"canvas policy differs from native policy\")\n        request=TraceDependenciesRequest.model_validate(_value(self.payload))\n        context=TraceDependenciesContext(corpus_id=self.corpus_id,project_id=self.project_id.strip() or None,\n            allow_audit_writes=self.allow_audit_writes,**{k:getattr(self,k) for k in\n                (\"max_nodes\",\"max_edges\",\"max_visited_nodes\",\"max_traversed_edges\",\"max_depth\",\"max_paths\",\"max_steps\",\"timeout_seconds\")})\n        with configured_store(required=False) as store:\n            return trace_claim_dependencies(store,request,context).model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)\n        for char in (\"`\",\"<\",\">\",\"&\"):text=text.replace(char,\"\\\\u\"+format(ord(char),\"04x\"))\n        return Message(text=\"```json\\n\"+text+\"\\n```\")\n\n    async def table_data(self) -> DataFrame:\n        return DataFrame((await self.result_data()).data.get(\"data\",{}).get(\"trace\",{}).get(\"paths\",[]))\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "corpus_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "corpus_id",
+                "value": "papers",
+                "display_name": "Authorized corpus (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "max_depth": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_depth",
+                "value": 32,
+                "display_name": "Maximum path depth (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_edges": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_edges",
+                "value": 512,
+                "display_name": "Maximum input edges (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_nodes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_nodes",
+                "value": 256,
+                "display_name": "Maximum input nodes (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_paths": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_paths",
+                "value": 128,
+                "display_name": "Maximum returned paths (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_steps": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_steps",
+                "value": 10000,
+                "display_name": "Maximum traversal steps (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_traversed_edges": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_traversed_edges",
+                "value": 256,
+                "display_name": "Maximum traversed edges (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_visited_nodes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_visited_nodes",
+                "value": 128,
+                "display_name": "Maximum visited nodes (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "project_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "project_id",
+                "value": "research",
+                "display_name": "Authorized project; blank for corpus (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "timeout_seconds": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "timeout_seconds",
+                "value": 30,
+                "display_name": "Traversal timeout (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              }
+            },
+            "description": "Validate the pinned graph/candidate, follow declared necessary dependencies, and return exact paths, conditional edges, cycle witnesses, structural leaves, obligations and explicit cutoffs. Audit persistence only; no entailment or graph admission.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Trace Claim Dependencies · Bounded Traversal",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "trace_claim_dependencies",
+              "contract_version": "1",
+              "source_sha256": "eda525ee1855c8c17be64b935028a58b6b8205fb237bde1b02193e8aef968b5c"
+            },
+            "tool_mode": false
+          },
+          "type": "TraceClaimDependencies",
+          "id": "TraceClaimDependencies-nima"
+        },
+        "id": "TraceClaimDependencies-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 840,
+          "y": 0
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "payload": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "payload",
+                "value": "",
+                "display_name": "Payload",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Read-only inspection of paths, exact edge evidence, limits and progress.\"\"\"\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.orchestration.langflow.values import _value\nfrom nima_semantica.component_contracts import manifest_for_component\n\n\nclass DependencyTraceView(BaseComponent):\n    name=\"DependencyTraceView\"\n    display_name=\"Dependency Paths, Cycles, Leaves and Progress\"\n    description=\"Inspect exact node/edge identities and evidence, distinct routes, cycle witnesses, outstanding recorded obligations and traversal frontiers. Pending progress is not a scientific graph commit.\"\n    nima_manifest=manifest_for_component(\"DependencyTraceView\")\n\n    async def run(self):\n        result=_value(self.payload)\n        return {\"status\":result[\"status\"],\"data\":result.get(\"data\",{}),\"artifacts\":result.get(\"artifacts\",{}),\n            \"receipt_ids\":result.get(\"receipt_ids\",[]),\"scientific_admission\":False}\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Inspect exact node/edge identities and evidence, distinct routes, cycle witnesses, outstanding recorded obligations and traversal frontiers. Pending progress is not a scientific graph commit.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Dependency Paths, Cycles, Leaves and Progress",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "dependency_trace_view",
+              "contract_version": "1",
+              "source_sha256": "28202647ed4eea03af7c8057033031bbecc109aabaefba8a82cb22be12272c80"
+            },
+            "tool_mode": false
+          },
+          "type": "DependencyTraceView",
+          "id": "DependencyTraceView-nima"
+        },
+        "id": "DependencyTraceView-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 1260,
+          "y": 620
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Visible direction, relation eligibility and cutoff semantics.\"\"\"\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.claim_dependencies import POLICY,POLICY_DIGEST\n\n\nclass DependencyTracePolicy(BaseComponent):\n    name=\"DependencyTracePolicy\"\n    display_name=\"Dependency Direction and Traversal Policy\"\n    description=\"Source requires target, only for saved-ontology necessary_dependency relations. Proposed routes remain conditional; filtered/cut branches never imply missing support or completed proof leaves.\"\n    nima_manifest=manifest_for_component(\"DependencyTracePolicy\")\n    inputs=[]\n\n    async def run(self):\n        return {\"policy_digest\":POLICY_DIGEST,\"policy\":POLICY,\"scientific_admission\":False}\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Source requires target, only for saved-ontology necessary_dependency relations. Proposed routes remain conditional; filtered/cut branches never imply missing support or completed proof leaves.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Dependency Direction and Traversal Policy",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "dependency_trace_policy",
+              "contract_version": "1",
+              "source_sha256": "7f26cca42411474a76d75f49f74da54fe0ad082375624fa13cb701374e4db151"
+            },
+            "tool_mode": false
+          },
+          "type": "DependencyTracePolicy",
+          "id": "DependencyTracePolicy-nima"
+        },
+        "id": "DependencyTracePolicy-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 420,
+          "y": 620
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "ChatInput-dependencytrace-message-DependencyTraceFields-nima-mcp_request",
+        "source": "ChatInput-dependencytrace",
+        "target": "DependencyTraceFields-nima",
+        "sourceHandle": "{œdataTypeœ: œChatInputœ, œidœ: œChatInput-dependencytraceœ, œnameœ: œmessageœ, œoutput_typesœ: [œMessageœ]}",
+        "targetHandle": "{œfieldNameœ: œmcp_requestœ, œidœ: œDependencyTraceFields-nimaœ, œinputTypesœ: [œMessageœ, œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ChatInput",
+            "id": "ChatInput-dependencytrace",
+            "name": "message",
+            "output_types": [
+              "Message"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "mcp_request",
+            "id": "DependencyTraceFields-nima",
+            "inputTypes": [
+              "Message",
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "DependencyTraceFields-nima-request-TraceClaimDependencies-nima-payload",
+        "source": "DependencyTraceFields-nima",
+        "target": "TraceClaimDependencies-nima",
+        "sourceHandle": "{œdataTypeœ: œDependencyTraceFieldsœ, œidœ: œDependencyTraceFields-nimaœ, œnameœ: œrequestœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œpayloadœ, œidœ: œTraceClaimDependencies-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "DependencyTraceFields",
+            "id": "DependencyTraceFields-nima",
+            "name": "request",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "payload",
+            "id": "TraceClaimDependencies-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "TraceClaimDependencies-nima-result-DependencyTraceView-nima-payload",
+        "source": "TraceClaimDependencies-nima",
+        "target": "DependencyTraceView-nima",
+        "sourceHandle": "{œdataTypeœ: œTraceClaimDependenciesœ, œidœ: œTraceClaimDependencies-nimaœ, œnameœ: œresultœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œpayloadœ, œidœ: œDependencyTraceView-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "TraceClaimDependencies",
+            "id": "TraceClaimDependencies-nima",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "payload",
+            "id": "DependencyTraceView-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "DependencyTracePolicy-nima-result-TraceClaimDependencies-nima-policy",
+        "source": "DependencyTracePolicy-nima",
+        "target": "TraceClaimDependencies-nima",
+        "sourceHandle": "{œdataTypeœ: œDependencyTracePolicyœ, œidœ: œDependencyTracePolicy-nimaœ, œnameœ: œresultœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œpolicyœ, œidœ: œTraceClaimDependencies-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "DependencyTracePolicy",
+            "id": "DependencyTracePolicy-nima",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "policy",
+            "id": "TraceClaimDependencies-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "TraceClaimDependencies-nima-preview-ChatOutput-dependencytrace-input_value",
+        "source": "TraceClaimDependencies-nima",
+        "target": "ChatOutput-dependencytrace",
+        "sourceHandle": "{œdataTypeœ: œTraceClaimDependenciesœ, œidœ: œTraceClaimDependencies-nimaœ, œnameœ: œpreviewœ, œoutput_typesœ: [œMessageœ]}",
+        "targetHandle": "{œfieldNameœ: œinput_valueœ, œidœ: œChatOutput-dependencytraceœ, œinputTypesœ: [œDataœ, œJSONœ, œDataFrameœ, œTableœ, œMessageœ], œtypeœ: œotherœ}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "TraceClaimDependencies",
+            "id": "TraceClaimDependencies-nima",
+            "name": "preview",
+            "output_types": [
+              "Message"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "input_value",
+            "id": "ChatOutput-dependencytrace",
+            "inputTypes": [
+              "Data",
+              "JSON",
+              "DataFrame",
+              "Table",
+              "Message"
+            ],
+            "type": "other"
+          }
+        }
+      }
+    ],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 0.6
+    }
+  },
+  "nima_tool_manifest": {
+    "tool_id": "trace_claim_dependencies",
+    "contract_version": "1",
+    "visual_approval": "pending",
+    "controller_version": "trace-claim-dependencies-v1",
+    "native_sources_sha256": {
+      "claim_dependencies": "1890934999be033208cfd42ba5c68c4699662b0eeb4650f896725e039f8b7827",
+      "graph_analysis": "2aa032feda06ae667d7fd1032dc4f3934c2346fd778288ec23628cd63d93c6d8",
+      "graph_service": "8866d63819c0ed53a70bcb849fd8661ba7d6e61e6c3b63c3cf4424232aad32b5",
+      "ontology_services": "cbb29b8d9660142931bfd15888b2ffb536817375cd865f9bd65aa2c2cda61ffd",
+      "evidence_contracts": "123b56812fec1957487514b00217698199f47124371f57a1800be31760b0c2fe"
+    },
+    "publication": "not_published_by_builder",
+    "components": {
+      "DependencyTraceFields": {
+        "nima_component_id": "dependency_trace_fields",
+        "contract_version": "1",
+        "source_sha256": "64b2abc69f5d2a9c4aba10eddf1c7ab87bc3a6b2c9fb814140f55472f230f837"
+      },
+      "TraceClaimDependencies": {
+        "nima_component_id": "trace_claim_dependencies",
+        "contract_version": "1",
+        "source_sha256": "eda525ee1855c8c17be64b935028a58b6b8205fb237bde1b02193e8aef968b5c"
+      },
+      "DependencyTraceView": {
+        "nima_component_id": "dependency_trace_view",
+        "contract_version": "1",
+        "source_sha256": "28202647ed4eea03af7c8057033031bbecc109aabaefba8a82cb22be12272c80"
+      },
+      "DependencyTracePolicy": {
+        "nima_component_id": "dependency_trace_policy",
+        "contract_version": "1",
+        "source_sha256": "7f26cca42411474a76d75f49f74da54fe0ad082375624fa13cb701374e4db151"
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+# Independent CPU-only parser environment; no nima-agi or Semantica dependency.
+docling==2.122.0
+docling-core==2.92.0
+transformers==5.15.1
+torch==2.13.0+cpu
+torchvision==0.28.0+cpu
+pypdfium2==5.13.0
+onnxruntime==1.29.0
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+httpx>=0.28,<0.29
+packaging>=24,<27

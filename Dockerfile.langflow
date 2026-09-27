@@ -1,0 +1,25 @@
+# Native Langflow tool flows and graph components need the application dependencies.
+# Keep Python within the application's supported range; the upstream Langflow
+# image can ship Python 3.14 even when its Langflow version is pinned.
+FROM python:3.13-slim
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+RUN python -m venv /app/.venv
+ENV PATH="/app/.venv/bin:${PATH}"
+RUN pip install --no-cache-dir uv
+COPY pyproject.toml constraints-tested.txt /opt/nima-dependencies/
+RUN python -c "import tomllib; from pathlib import Path; p=tomllib.loads(Path('/opt/nima-dependencies/pyproject.toml').read_text())['project']; Path('/tmp/nima-requirements.txt').write_text('\n'.join(p['dependencies'] + p['optional-dependencies']['langflow']))" \
+    && uv pip install --python /app/.venv/bin/python -c /opt/nima-dependencies/constraints-tested.txt -r /tmp/nima-requirements.txt
+COPY .gitignore pyproject.toml setup.py release-resources.json CITATION.cff README.md LICENSE THIRD_PARTY_NOTICES.md /opt/nima-semantica/
+COPY skills /opt/nima-semantica/skills
+COPY docs /opt/nima-semantica/docs
+COPY examples /opt/nima-semantica/examples
+COPY deploy /opt/nima-semantica/deploy
+COPY references /opt/nima-semantica/references
+COPY licenses /opt/nima-semantica/licenses
+COPY src /opt/nima-semantica/src
+RUN /app/.venv/bin/python -m pip install --no-cache-dir --no-deps /opt/nima-semantica
+ENV PYTHONPATH=/opt/nima-semantica/src
+RUN /app/.venv/bin/python -c "from nima_semantica.orchestration.langflow.stages import GuideFields, ToolGuide; assert GuideFields().name and ToolGuide().name"
+WORKDIR /app
+EXPOSE 7860
+CMD ["langflow", "run", "--host", "0.0.0.0", "--port", "7860"]

@@ -1,0 +1,2318 @@
+{
+  "name": "Draft Lean",
+  "is_component": false,
+  "endpoint_name": "nima-draft-lean",
+  "description": "Local formalization OSA: exact target and environment, corpus retrieval, optional LeanSearch, local declaration resolution, isolated Verify Lean and source repair. Execution disabled.",
+  "data": {
+    "nodes": [
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "files": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "file_path": "",
+                "fileTypes": [
+                  "csv",
+                  "json",
+                  "pdf",
+                  "txt",
+                  "md",
+                  "mdx",
+                  "yaml",
+                  "yml",
+                  "xml",
+                  "html",
+                  "htm",
+                  "docx",
+                  "py",
+                  "sh",
+                  "sql",
+                  "js",
+                  "ts",
+                  "tsx",
+                  "jpg",
+                  "jpeg",
+                  "png",
+                  "bmp",
+                  "image"
+                ],
+                "temp_file": true,
+                "list": true,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "files",
+                "value": [],
+                "display_name": "Files",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Files to be sent with the message.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "file",
+                "_input_type": "FileInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from lfx.base.data.utils import IMG_FILE_TYPES, TEXT_FILE_TYPES\nfrom lfx.base.io.chat import ChatComponent\nfrom lfx.inputs.inputs import BoolInput\nfrom lfx.io import (\n    DropdownInput,\n    FileInput,\n    MessageTextInput,\n    MultilineInput,\n    Output,\n)\nfrom lfx.schema.image import get_file_paths\nfrom lfx.schema.message import Message\nfrom lfx.services.deps import get_settings_service\nfrom lfx.utils.constants import (\n    MESSAGE_SENDER_AI,\n    MESSAGE_SENDER_NAME_USER,\n    MESSAGE_SENDER_USER,\n)\nfrom lfx.utils.file_path_security import (\n    component_file_access_scopes,\n    enforce_local_file_access,\n    is_local_file_access_restricted,\n)\n\n\nclass ChatInput(ChatComponent):\n    display_name = \"Chat Input\"\n    description = \"Get chat inputs from the Playground.\"\n    documentation: str = \"https://docs.langflow.org/chat-input-and-output\"\n    icon = \"MessagesSquare\"\n    name = \"ChatInput\"\n    minimized = True\n\n    inputs = [\n        MultilineInput(\n            name=\"input_value\",\n            display_name=\"Input Text\",\n            value=\"\",\n            info=\"Message to be passed as input.\",\n            input_types=[],\n        ),\n        BoolInput(\n            name=\"should_store_message\",\n            display_name=\"Store Messages\",\n            info=\"Store the message in the history.\",\n            value=True,\n            advanced=True,\n        ),\n        DropdownInput(\n            name=\"sender\",\n            display_name=\"Sender Type\",\n            options=[MESSAGE_SENDER_AI, MESSAGE_SENDER_USER],\n            value=MESSAGE_SENDER_USER,\n            info=\"Type of sender.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"sender_name\",\n            display_name=\"Sender Name\",\n            info=\"Name of the sender.\",\n            value=MESSAGE_SENDER_NAME_USER,\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"session_id\",\n            display_name=\"Session ID\",\n            info=\"The session ID of the chat. If empty, the current session ID parameter will be used.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"context_id\",\n            display_name=\"Context ID\",\n            info=\"The context ID of the chat. Adds an extra layer to the local memory.\",\n            value=\"\",\n            advanced=True,\n        ),\n        FileInput(\n            name=\"files\",\n            display_name=\"Files\",\n            file_types=TEXT_FILE_TYPES + IMG_FILE_TYPES,\n            info=\"Files to be sent with the message.\",\n            advanced=True,\n            is_list=True,\n            temp_file=True,\n        ),\n    ]\n    outputs = [\n        Output(display_name=\"Chat Message\", name=\"message\", method=\"message_response\"),\n    ]\n\n    async def message_response(self) -> Message:\n        # Ensure files is a list and filter out empty/None values\n        files = self.files if self.files else []\n        if files and not isinstance(files, list):\n            files = [files]\n        # Filter out None/empty values\n        files = [f for f in files if f is not None and f != \"\"]\n\n        # Build endpoints inject caller-controlled file references directly into\n        # ChatInput. Resolve and validate local references before the Message can\n        # later read them while constructing model attachment content.\n        if files:\n            settings_service = get_settings_service()\n            storage_type = getattr(getattr(settings_service, \"settings\", None), \"storage_type\", \"local\")\n            # The storage factory falls back to local storage for unsupported\n            # values, so only the explicitly configured S3 backend may bypass\n            # filesystem containment.\n            if str(storage_type).lower() != \"s3\" and is_local_file_access_restricted():\n                scope_ids = list(component_file_access_scopes(self))\n                # Public executions replace graph.flow_id with a per-visitor\n                # virtual ID. Only the server-populated source provenance may\n                # restore the already-validated public attachment namespace.\n                source_flow_id = getattr(self.graph, \"source_flow_id\", None)\n                if source_flow_id:\n                    scope_ids.append(source_flow_id)\n                for file_path in get_file_paths(files):\n                    enforce_local_file_access(file_path, scope_ids=scope_ids)\n\n        session_id = self.session_id or self.graph.session_id or \"\"\n        message = await Message.create(\n            text=self.input_value,\n            sender=self.sender,\n            sender_name=self.sender_name,\n            session_id=session_id,\n            context_id=self.context_id,\n            files=files,\n        )\n        if session_id and isinstance(message, Message) and self.should_store_message:\n            stored_message = await self.send_message(\n                message,\n            )\n            self.message.value = stored_message\n            message = stored_message\n\n        self.status = message\n        return message\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_id",
+                "value": "",
+                "display_name": "Context ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The context ID of the chat. Adds an extra layer to the local memory.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "input_value": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "multiline": true,
+                "ai_enabled": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": "{\"mode\": \"preview\"}",
+                "display_name": "Input Text",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [],
+                "dynamic": false,
+                "info": "Message to be passed as input.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "copy_field": false,
+                "password": false,
+                "type": "str",
+                "_input_type": "MultilineInput"
+              },
+              "sender": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "Machine",
+                  "User"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender",
+                "value": "User",
+                "display_name": "Sender Type",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Type of sender.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "sender_name": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender_name",
+                "value": "User",
+                "display_name": "Sender Name",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Name of the sender.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "session_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "session_id",
+                "value": "",
+                "display_name": "Session ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The session ID of the chat. If empty, the current session ID parameter will be used.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "should_store_message": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "should_store_message",
+                "value": false,
+                "display_name": "Store Messages",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Store the message in the history.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Get chat inputs from the Playground.",
+            "icon": "MessagesSquare",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Request \u00b7 Draft Lean",
+            "documentation": "https://docs.langflow.org/chat-input-and-output",
+            "minimized": true,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Chat Message",
+                "method": "message_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {},
+            "tool_mode": false
+          },
+          "type": "ChatInput",
+          "id": "ChatInput-draft_lean",
+          "selected_output": "message"
+        },
+        "id": "ChatInput-draft_lean",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "input_value": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "input_value",
+                "value": "",
+                "display_name": "Inputs",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON",
+                  "DataFrame",
+                  "Table",
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Message to be passed as output.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "clean_data": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "clean_data",
+                "value": true,
+                "display_name": "Basic Clean Data",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Whether to clean data before converting to string.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "from collections.abc import Generator\nfrom typing import Any\n\nimport orjson\nfrom fastapi.encoders import jsonable_encoder\n\nfrom lfx.base.io.chat import ChatComponent\nfrom lfx.helpers.data import safe_convert\nfrom lfx.inputs.inputs import BoolInput, DropdownInput, HandleInput, MessageTextInput\nfrom lfx.schema.data import Data\nfrom lfx.schema.dataframe import DataFrame\nfrom lfx.schema.message import Message\nfrom lfx.schema.properties import Source\nfrom lfx.template.field.base import Output\nfrom lfx.utils.constants import (\n    MESSAGE_SENDER_AI,\n    MESSAGE_SENDER_NAME_AI,\n    MESSAGE_SENDER_USER,\n)\n\n\nclass ChatOutput(ChatComponent):\n    display_name = \"Chat Output\"\n    description = \"Display a chat message in the Playground.\"\n    documentation: str = \"https://docs.langflow.org/chat-input-and-output\"\n    icon = \"MessagesSquare\"\n    name = \"ChatOutput\"\n    minimized = True\n\n    inputs = [\n        HandleInput(\n            name=\"input_value\",\n            display_name=\"Inputs\",\n            info=\"Message to be passed as output.\",\n            input_types=[\"Data\", \"JSON\", \"DataFrame\", \"Table\", \"Message\"],\n            required=True,\n        ),\n        BoolInput(\n            name=\"should_store_message\",\n            display_name=\"Store Messages\",\n            info=\"Store the message in the history.\",\n            value=True,\n            advanced=True,\n        ),\n        DropdownInput(\n            name=\"sender\",\n            display_name=\"Sender Type\",\n            options=[MESSAGE_SENDER_AI, MESSAGE_SENDER_USER],\n            value=MESSAGE_SENDER_AI,\n            advanced=True,\n            info=\"Type of sender.\",\n        ),\n        MessageTextInput(\n            name=\"sender_name\",\n            display_name=\"Sender Name\",\n            info=\"Name of the sender.\",\n            value=MESSAGE_SENDER_NAME_AI,\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"session_id\",\n            display_name=\"Session ID\",\n            info=\"The session ID of the chat. If empty, the current session ID parameter will be used.\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"context_id\",\n            display_name=\"Context ID\",\n            info=\"The context ID of the chat. Adds an extra layer to the local memory.\",\n            value=\"\",\n            advanced=True,\n        ),\n        MessageTextInput(\n            name=\"data_template\",\n            display_name=\"Data Template\",\n            value=\"{text}\",\n            advanced=True,\n            info=\"Template to convert Data to Text. If left empty, it will be dynamically set to the Data's text key.\",\n        ),\n        BoolInput(\n            name=\"clean_data\",\n            display_name=\"Basic Clean Data\",\n            value=True,\n            advanced=True,\n            info=\"Whether to clean data before converting to string.\",\n        ),\n    ]\n    outputs = [\n        Output(\n            display_name=\"Output Message\",\n            name=\"message\",\n            method=\"message_response\",\n        ),\n    ]\n\n    def _build_source(self, id_: str | None, display_name: str | None, source: str | None) -> Source:\n        source_dict = {}\n        if id_:\n            source_dict[\"id\"] = id_\n        if display_name:\n            source_dict[\"display_name\"] = display_name\n        if source:\n            # Handle case where source is a ChatOpenAI object\n            if hasattr(source, \"model_name\"):\n                source_dict[\"source\"] = source.model_name\n            elif hasattr(source, \"model\"):\n                source_dict[\"source\"] = str(source.model)\n            else:\n                source_dict[\"source\"] = str(source)\n        return Source(**source_dict)\n\n    async def message_response(self) -> Message:\n        # First convert the input to string if needed\n        text = self.convert_to_string()\n\n        # Get source properties\n        source, _, display_name, source_id = self.get_properties_from_source_component()\n\n        # Create or use existing Message object\n        if isinstance(self.input_value, Message) and not self.is_connected_to_chat_input():\n            message = self.input_value\n            # Update message properties\n            message.text = text\n            # Preserve existing session_id from the incoming message if it exists\n            existing_session_id = message.session_id\n        else:\n            message = Message(text=text)\n            existing_session_id = None\n\n        # Set message properties\n        message.sender = self.sender\n        message.sender_name = self.sender_name\n        # Preserve session_id from incoming message, or use component/graph session_id\n        message.session_id = (\n            self.session_id or existing_session_id or (self.graph.session_id if hasattr(self, \"graph\") else None) or \"\"\n        )\n        message.context_id = self.context_id\n        message.flow_id = self.graph.flow_id if hasattr(self, \"graph\") else None\n        message.properties.source = self._build_source(source_id, display_name, source)\n\n        # Store message if needed\n        if message.session_id and self.should_store_message:\n            stored_message = await self.send_message(message)\n            self.message.value = stored_message\n            message = stored_message\n\n        # Set accumulated token usage from all upstream LLM vertices.\n        # This must happen AFTER send_message() because streaming captures\n        # usage from chunks and would overwrite accumulated totals.\n        if hasattr(self, \"_vertex\") and self._vertex is not None:\n            accumulated_usage = self._vertex._accumulate_upstream_token_usage()  # noqa: SLF001\n            if accumulated_usage:\n                message.properties.usage = accumulated_usage\n                if self.should_store_message and message.get_id():\n                    message = await self._update_stored_message(message)\n                    await self._send_message_event(message, id_=message.get_id())\n\n        self.status = message\n        return message\n\n    def _serialize_data(self, data: Data) -> str:\n        \"\"\"Serialize Data object to JSON string.\"\"\"\n        # Convert data.data to JSON-serializable format\n        serializable_data = jsonable_encoder(data.data)\n        # Serialize with orjson, enabling pretty printing with indentation\n        json_bytes = orjson.dumps(serializable_data, option=orjson.OPT_INDENT_2)\n        # Convert bytes to string and wrap in Markdown code blocks\n        return \"```json\\n\" + json_bytes.decode(\"utf-8\") + \"\\n```\"\n\n    def _validate_input(self) -> None:\n        \"\"\"Validate the input data and raise ValueError if invalid.\"\"\"\n        if self.input_value is None:\n            msg = \"Input data cannot be None\"\n            raise ValueError(msg)\n        if isinstance(self.input_value, list) and not all(\n            isinstance(item, Message | Data | DataFrame | str) for item in self.input_value\n        ):\n            invalid_types = [\n                type(item).__name__\n                for item in self.input_value\n                if not isinstance(item, Message | Data | DataFrame | str)\n            ]\n            msg = f\"Expected Data or DataFrame or Message or str, got {invalid_types}\"\n            raise TypeError(msg)\n        if not isinstance(\n            self.input_value,\n            Message | Data | DataFrame | str | list | Generator | type(None),\n        ):\n            type_name = type(self.input_value).__name__\n            msg = f\"Expected Data or DataFrame or Message or str, Generator or None, got {type_name}\"\n            raise TypeError(msg)\n\n    def convert_to_string(self) -> str | Generator[Any, None, None]:\n        \"\"\"Convert input data to string with proper error handling.\"\"\"\n        self._validate_input()\n        if isinstance(self.input_value, list):\n            clean_data: bool = getattr(self, \"clean_data\", False)\n            return \"\\n\".join([safe_convert(item, clean_data=clean_data) for item in self.input_value])\n        if isinstance(self.input_value, Generator):\n            return self.input_value\n        return safe_convert(self.input_value)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "context_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "context_id",
+                "value": "",
+                "display_name": "Context ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The context ID of the chat. Adds an extra layer to the local memory.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "data_template": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "data_template",
+                "value": "{text}",
+                "display_name": "Data Template",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Template to convert Data to Text. If left empty, it will be dynamically set to the Data's text key.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "sender": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "Machine",
+                  "User"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender",
+                "value": "Machine",
+                "display_name": "Sender Type",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Type of sender.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "sender_name": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "sender_name",
+                "value": "AI",
+                "display_name": "Sender Name",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "Name of the sender.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "session_id": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "session_id",
+                "value": "",
+                "display_name": "Session ID",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "The session ID of the chat. If empty, the current session ID parameter will be used.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
+              },
+              "should_store_message": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "should_store_message",
+                "value": false,
+                "display_name": "Store Messages",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "Store the message in the history.",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "Display a chat message in the Playground.",
+            "icon": "MessagesSquare",
+            "base_classes": [
+              "Message"
+            ],
+            "display_name": "Result \u00b7 Draft Lean",
+            "documentation": "https://docs.langflow.org/chat-input-and-output",
+            "minimized": true,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "message",
+                "display_name": "Output Message",
+                "method": "message_response",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": false,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {},
+            "tool_mode": false
+          },
+          "type": "ChatOutput",
+          "id": "ChatOutput-draft_lean"
+        },
+        "id": "ChatOutput-draft_lean",
+        "type": "genericNode",
+        "position": {
+          "x": 1260,
+          "y": 0
+        },
+        "selected": false,
+        "dragging": false
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "mcp_request": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "mcp_request",
+                "value": "",
+                "display_name": "Optional request JSON",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Message",
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "artifact_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "artifact_id",
+                "value": "",
+                "display_name": "Proposed extraction artifact ID, optional",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Harness-selected targets; operator permissions stay outside public JSON.\"\"\"\nimport json\nfrom lfx.io import StrInput, DropdownInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.lean_draft_contracts import DraftLeanRequest\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\n\n\nclass DraftLeanFields(BaseComponent):\n    name = \"DraftLeanFields\"\n    display_name = \"Draft Lean Inputs\"\n    description = \"Pin exact graph and target-content revisions; select the exact local proof task to develop. Additional prepared region IDs are optional; exact corpus/project scope and permissions are operator-owned.\"\n    nima_manifest = manifest_for_component(\"DraftLeanFields\")\n    inputs = [DropdownInput(name=\"mode\",display_name=\"Mode\",options=[\"preview\",\"draft\",\"repair\"],value=\"preview\"),\n        StrInput(name=\"graph_revision_json\",display_name=\"Exact graph revision (JSON)\",value=\"null\"),\n        StrInput(name=\"target_json\",display_name=\"Exact local target JSON (including content_revision)\",value=\"null\"),\n        StrInput(name=\"environment_digest\",display_name=\"Pinned environment digest\",value=\"\"),\n        StrInput(name=\"targets_json\",display_name=\"Exact declaration names (JSON list)\",value='[\"target\"]'),\n        StrInput(name=\"expected_type_fingerprints_json\",display_name=\"Expected alpha-normalized type fingerprints (JSON)\",value=\"{}\"),\n        StrInput(name=\"artifact_id\",display_name=\"Proposed extraction artifact ID, optional\",value=\"\"),\n        StrInput(name=\"source_region_ids_json\",display_name=\"Additional prepared region IDs (JSON list)\",value=\"[]\"),\n        StrInput(name=\"operation_id\",display_name=\"Unique attempt ID\",value=\"\"),\n        StrInput(name=\"run_id\",display_name=\"Harness run ID, optional\",value=\"\"),\n        HandleInput(name=\"mcp_request\",display_name=\"Optional request JSON\",input_types=[\"Message\",\"Data\",\"JSON\"],required=False)]\n    outputs = [Output(name=\"request\",display_name=\"Validated proof request\",method=\"request_data\",group_outputs=True),\n        Output(name=\"preview\",display_name=\"Request preview\",method=\"preview_message\",group_outputs=True)]\n\n    async def run(self):\n        override=native(getattr(self,\"mcp_request\",None))\n        if isinstance(override,str):\n            if len(override)>250000:raise ValueError(\"request exceeds input limit\")\n            override=strict_json_object(override) if override.strip() else {}\n        if override is None:override={}\n        if not isinstance(override,dict):raise ValueError(\"expected request object\")\n        payload=dict(mode=self.mode,graph_revision=json.loads(self.graph_revision_json),target=json.loads(self.target_json),environment_digest=self.environment_digest or None,\n            targets=json.loads(self.targets_json),expected_declaration_type_fingerprints=json.loads(self.expected_type_fingerprints_json),\n            source_region_ids=json.loads(self.source_region_ids_json),artifact_id=self.artifact_id or None,\n            operation_id=self.operation_id or None,run_id=self.run_id or None)\n        return DraftLeanRequest.model_validate(payload|override).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "environment_digest": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "environment_digest",
+                "value": "",
+                "display_name": "Pinned environment digest",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "expected_type_fingerprints_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "expected_type_fingerprints_json",
+                "value": "{}",
+                "display_name": "Expected alpha-normalized type fingerprints (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "graph_revision_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "graph_revision_json",
+                "value": "null",
+                "display_name": "Exact graph revision (JSON)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "mode": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "preview",
+                  "draft",
+                  "repair"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "mode",
+                "value": "preview",
+                "display_name": "Mode",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
+              "operation_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "operation_id",
+                "value": "",
+                "display_name": "Unique attempt ID",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "run_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "run_id",
+                "value": "",
+                "display_name": "Harness run ID, optional",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "source_region_ids_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "source_region_ids_json",
+                "value": "[]",
+                "display_name": "Additional prepared region IDs (JSON list)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "target_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "target_json",
+                "value": "null",
+                "display_name": "Exact local target JSON (including content_revision)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "targets_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "targets_json",
+                "value": "[\"target\"]",
+                "display_name": "Exact declaration names (JSON list)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "Pin exact graph and target-content revisions; select the exact local proof task to develop. Additional prepared region IDs are optional; exact corpus/project scope and permissions are operator-owned.",
+            "base_classes": [
+              "JSON",
+              "Message"
+            ],
+            "display_name": "Draft Lean Inputs",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "request",
+                "display_name": "Validated proof request",
+                "method": "request_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Request preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "draft_lean_fields",
+              "contract_version": "2",
+              "source_sha256": "627ee3f3ba2d9e6cbdc9a880b752ae64f88119dd2297e8970516861900732aeb"
+            },
+            "tool_mode": false
+          },
+          "type": "DraftLeanFields",
+          "id": "DraftLeanFields-nima"
+        },
+        "id": "DraftLeanFields-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 420,
+          "y": 0
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "backend": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "backend",
+                "value": "",
+                "display_name": "Verify Lean capability (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "DraftLeanBackend"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "lean_search": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "lean_search",
+                "value": "",
+                "display_name": "LeanSearch capability (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Tool"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "model": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "model",
+                "value": "",
+                "display_name": "Proof language model (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "LanguageModel"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "payload": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "payload",
+                "value": "",
+                "display_name": "Validated proof request",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "policy": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "policy",
+                "value": "",
+                "display_name": "Pinned private ontology",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "retrieval_policy": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "retrieval_policy",
+                "value": "",
+                "display_name": "Optional context retrieval policy",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "allow_audit_writes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_audit_writes",
+                "value": false,
+                "display_name": "Allow attempts and outcome artifacts (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_model_calls": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_model_calls",
+                "value": false,
+                "display_name": "Allow model calls (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Inspectable proof agent with exact grounding and proposal-only publication.\"\"\"\nimport json\nfrom lfx.io import StrInput, BoolInput, IntInput, HandleInput\nfrom lfx.schema import Message, DataFrame\nfrom nima_semantica.lean_draft_contracts import DraftLeanRequest, DraftLeanContext\nfrom nima_semantica.lean_draft_tool import draft_lean\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.lean_draft_state import POLICY_DIGEST\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\nfrom nima_semantica.lean_search import LeanSearchPolicy\nfrom nima_semantica.providers import ModelManifest, completion_envelope\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass DraftLean(BaseComponent):\n    name = \"DraftLean\"\n    display_name = \"Draft Lean \u00b7 Ontology-State Agent\"\n    description = \"Formalize or repair a harness-selected local target. Private source revisions, corpus retrieval, LeanSearch, local declaration resolution and exact isolated verification. No automatic correspondence certification or parent completion.\"\n    nima_manifest = manifest_for_component(\"DraftLean\")\n    inputs = [\n        HandleInput(name=\"backend\",display_name=\"Verify Lean capability (operator)\",input_types=[\"DraftLeanBackend\"],required=False),\n        HandleInput(name=\"lean_search\",display_name=\"LeanSearch capability (operator)\",input_types=[\"Tool\"],required=False),\n        IntInput(name=\"max_verifications\",display_name=\"Maximum source checks (operator)\",value=6),\n        IntInput(name=\"max_resolutions\",display_name=\"Maximum local lookups (operator)\",value=6),handle(\"payload\",\"Validated proof request\"),handle(\"policy\",\"Pinned private ontology\",required=False),\n        handle(\"retrieval_policy\",\"Optional context retrieval policy\",required=False),\n        StrInput(name=\"corpus_id\",display_name=\"Authorized corpus (operator)\",value=\"papers\"),\n        StrInput(name=\"project_id\",display_name=\"Authorized project (operator)\",value=\"research\"),\n        BoolInput(name=\"allow_audit_writes\",display_name=\"Allow attempts and outcome artifacts (operator)\",value=False),\n        BoolInput(name=\"allow_model_calls\",display_name=\"Allow model calls (operator)\",value=False),\n        IntInput(name=\"max_actions\",display_name=\"Agent action limit (operator)\",value=20),\n        IntInput(name=\"max_nodes\",display_name=\"Maximum snapshot nodes (operator)\",value=128),\n        IntInput(name=\"max_edges\",display_name=\"Maximum snapshot edges (operator)\",value=256),\n        IntInput(name=\"max_read_regions\",display_name=\"Maximum exact-read regions (operator)\",value=32),\n        StrInput(name=\"model_manifest_json\",display_name=\"Model identity JSON (operator)\",value=\"{}\",advanced=True),\n        HandleInput(name=\"model\",display_name=\"Proof language model (operator)\",input_types=[\"LanguageModel\"],required=False)]\n\n    async def run(self):\n        policy = getattr(self,\"policy\",None)\n        if policy and _value(policy).get(\"policy_digest\") != POLICY_DIGEST:\n            raise ValueError(\"canvas policy differs from pinned controller policy\")\n        request = DraftLeanRequest.model_validate(_value(self.payload))\n        manifest = ModelManifest.model_validate_json(self.model_manifest_json) if self.model_manifest_json.strip() not in (\"\",\"{}\") else None\n        backend = getattr(self,\"backend\",None) or None\n        discovery = getattr(self,\"lean_search\",None) or None\n        context = DraftLeanContext(corpus_id=self.corpus_id,project_id=self.project_id,\n            allow_audit_writes=self.allow_audit_writes,allow_model_calls=self.allow_model_calls,\n            allow_execution=bool(backend and backend.enabled),max_verifications=self.max_verifications,max_resolutions=self.max_resolutions,\n            lean_search=LeanSearchPolicy.model_validate(discovery.metadata[\"nima_lean_search\"]) if discovery is not None else LeanSearchPolicy(),\n            max_actions=self.max_actions,max_nodes=self.max_nodes,max_edges=self.max_edges,max_read_regions=self.max_read_regions,\n            model_manifest=manifest, retrieval=MathRetrievalPolicy.model_validate(_value(self.retrieval_policy))\n                if getattr(self,\"retrieval_policy\",None) else MathRetrievalPolicy())\n        language_model = getattr(self,\"model\",None)\n        def invoke(prompt):\n            messages = [*prompt[\"messages\"],{\"role\":\"user\",\"content\":\"Remaining actions: \"+str(prompt[\"remaining_actions\"])}]\n            response = language_model.bind_tools(prompt[\"tools\"],tool_choice=\"required\",parallel_tool_calls=False).invoke(messages)\n            if not response.usage_metadata:raise ValueError(\"model omitted usage metadata\")\n            calls = response.tool_calls\n            valid = len(calls)==1 and calls[0][\"name\"] in {t[\"function\"][\"name\"] for t in prompt[\"tools\"]} and not getattr(response,\"invalid_tool_calls\",[])\n            content = json.dumps({\"name\":calls[0][\"name\"],\"arguments\":calls[0][\"args\"]}) if valid else \"invalid tool envelope\"\n            return completion_envelope(content,manifest,response.usage_metadata,response.response_metadata)\n        with configured_store(required=False) as store:\n            options = {}\n            if backend is not None and request.mode != \"preview\" and context.allow_model_calls and context.allow_audit_writes:\n                options.update(verifier_factory=backend.load_verifier,verification=backend.verify_exact)\n            if discovery is not None:\n                options[\"discovery\"] = lambda policy,action: discovery.invoke(action.model_dump(mode=\"json\"))\n            return draft_lean(store,request,context,model=invoke if language_model is not None else None,**options).model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)\n        for char in (\"`\",\"<\",\">\",\"&\"):text=text.replace(char,\"\\\\u\"+format(ord(char),\"04x\"))\n        return Message(text=\"```json\\n\"+text+\"\\n```\")\n\n    async def table_data(self) -> DataFrame:\n        return DataFrame((await self.result_data()).data.get(\"data\",{}).get(\"attempts\",[]))\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "corpus_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "corpus_id",
+                "value": "papers",
+                "display_name": "Authorized corpus (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "max_actions": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_actions",
+                "value": 20,
+                "display_name": "Agent action limit (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_edges": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_edges",
+                "value": 256,
+                "display_name": "Maximum snapshot edges (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_nodes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_nodes",
+                "value": 128,
+                "display_name": "Maximum snapshot nodes (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_read_regions": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_read_regions",
+                "value": 32,
+                "display_name": "Maximum exact-read regions (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_resolutions": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_resolutions",
+                "value": 6,
+                "display_name": "Maximum local lookups (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "max_verifications": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_verifications",
+                "value": 6,
+                "display_name": "Maximum source checks (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              },
+              "model_manifest_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "model_manifest_json",
+                "value": "{}",
+                "display_name": "Model identity JSON (operator)",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "project_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "project_id",
+                "value": "research",
+                "display_name": "Authorized project (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "Formalize or repair a harness-selected local target. Private source revisions, corpus retrieval, LeanSearch, local declaration resolution and exact isolated verification. No automatic correspondence certification or parent completion.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Draft Lean \u00b7 Ontology-State Agent",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "draft_lean",
+              "contract_version": "2",
+              "source_sha256": "944e1a3a81103fdd04428f6a404872f8b2d7f51577e5438ad3032249adbe192f"
+            },
+            "tool_mode": false
+          },
+          "type": "DraftLean",
+          "id": "DraftLean-nima"
+        },
+        "id": "DraftLean-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 840,
+          "y": 0
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Controller-owned proof state ontology, distinct from the output ontology.\"\"\"\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.lean_draft_state import PROFILE, POLICY_DIGEST\nfrom nima_semantica.math_reasoning import RULES\n\n\nclass LeanDraftOntology(BaseComponent):\n    name = \"LeanDraftOntology\"\n    display_name = \"Private Formalization Ontology and Rules\"\n    description = \"Controller-owned formal target, environment, exact source revisions, declaration resolutions, verifier checks and correspondence obligations. Semantica propagates represented dependencies; private state is never the output research graph.\"\n    nima_manifest = manifest_for_component(\"LeanDraftOntology\")\n    inputs = []\n\n    async def run(self):\n        return {\"policy_digest\":POLICY_DIGEST,\"ontology\":PROFILE.model_dump(mode=\"json\"),\n            \"rules\":[r.model_dump(mode=\"json\") for r in RULES],\"publishable\":False,\n            \"proof_semantics\":\"Controller-bound exact-evidence handles and ontology validity do not certify semantic fidelity.\"}\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Controller-owned formal target, environment, exact source revisions, declaration resolutions, verifier checks and correspondence obligations. Semantica propagates represented dependencies; private state is never the output research graph.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Private Formalization Ontology and Rules",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "lean_draft_ontology",
+              "contract_version": "2",
+              "source_sha256": "48c3d0a98d24ae170235cc4b356279cf99527135a4c8c86682022e11a10a058c"
+            },
+            "tool_mode": false
+          },
+          "type": "LeanDraftOntology",
+          "id": "LeanDraftOntology-nima"
+        },
+        "id": "LeanDraftOntology-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 420,
+          "y": 620
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "payload": {
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": true,
+                "placeholder": "",
+                "show": true,
+                "name": "payload",
+                "value": "",
+                "display_name": "Payload",
+                "advanced": false,
+                "api_editable": false,
+                "input_types": [
+                  "Data",
+                  "JSON"
+                ],
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "other",
+                "_input_type": "HandleInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Read-only rendering of proof state and pending project recording.\"\"\"\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.orchestration.langflow.values import _value\nfrom nima_semantica.component_contracts import manifest_for_component\n\n\nclass LeanDraftStateView(BaseComponent):\n    name = \"LeanDraftStateView\"\n    display_name = \"Lean Revisions, Diagnostics and Progress\"\n    description = \"Inspect private attempt revisions, argument revision history, issues, receipts and the pending project progress proposal.\"\n    nima_manifest = manifest_for_component(\"LeanDraftStateView\")\n\n    async def run(self):\n        result = _value(self.payload)\n        data = result.get(\"data\",{})\n        return {\"status\":result[\"status\"],\"private_state\":data.get(\"reasoning_state\"),\n            \"source_history\":data.get(\"source_history\",[]),\"context\":data.get(\"context_packets\",[]),\n            \"verifications\":data.get(\"verifications\",[]),\"resolutions\":data.get(\"resolutions\",{}),\"discoveries\":data.get(\"discoveries\",[]),\n            \"result\":data.get(\"result\"),\"project_progress\":data.get(\"project_progress\"),\n            \"receipt_ids\":result.get(\"receipt_ids\",[]),\"publishable\":False}\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              }
+            },
+            "description": "Inspect private attempt revisions, argument revision history, issues, receipts and the pending project progress proposal.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Lean Revisions, Diagnostics and Progress",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "lean_draft_state_view",
+              "contract_version": "2",
+              "source_sha256": "3b777f8c0e7b7c61754e8d5afeb52fffab13d4e4f324be4a1b7f59e8c6ff85c7"
+            },
+            "tool_mode": false
+          },
+          "type": "LeanDraftStateView",
+          "id": "LeanDraftStateView-nima"
+        },
+        "id": "LeanDraftStateView-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 1260,
+          "y": 620
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Operator-authorized method-context retrieval inside search planning.\"\"\"\nfrom lfx.io import BoolInput, StrInput\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\n\n\nclass LeanDraftRetrieval(BaseComponent):\n    name = \"LeanDraftRetrieval\"\n    display_name = \"Lean Context Retrieval \u00b7 Operator Policy\"\n    description = \"Optional native corpus retrieval and exact reads for support and counterevidence. May add prepared evidence regions, never enlarge the selected graph targets.\"\n    nima_manifest = manifest_for_component(\"LeanDraftRetrieval\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Allow context retrieval (operator)\",value=False),\n        StrInput(name=\"projection_id\",display_name=\"Prepared projection ID (operator)\",value=\"\")]\n\n    async def run(self):\n        return MathRetrievalPolicy(enabled=self.enabled,projection_id=self.projection_id.strip() or None).model_dump(mode=\"json\")\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "enabled": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "enabled",
+                "value": false,
+                "display_name": "Allow context retrieval (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "projection_id": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "projection_id",
+                "value": "",
+                "display_name": "Prepared projection ID (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              }
+            },
+            "description": "Optional native corpus retrieval and exact reads for support and counterevidence. May add prepared evidence regions, never enlarge the selected graph targets.",
+            "base_classes": [
+              "JSON",
+              "Message",
+              "Table"
+            ],
+            "display_name": "Lean Context Retrieval \u00b7 Operator Policy",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "JSON"
+                ],
+                "selected": "JSON",
+                "name": "result",
+                "display_name": "JSON",
+                "method": "result_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Message"
+                ],
+                "selected": "Message",
+                "name": "preview",
+                "display_name": "Readable preview",
+                "method": "preview_message",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              },
+              {
+                "types": [
+                  "Table"
+                ],
+                "selected": "Table",
+                "name": "table",
+                "display_name": "Table",
+                "method": "table_data",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "lean_draft_retrieval",
+              "contract_version": "2",
+              "source_sha256": "b6b7d3412a7173df01370d34932e631f99efe238cd03f1dac68b808495008e70"
+            },
+            "tool_mode": false
+          },
+          "type": "LeanDraftRetrieval",
+          "id": "LeanDraftRetrieval-nima"
+        },
+        "id": "LeanDraftRetrieval-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 620
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "allow_query_disclosure": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_query_disclosure",
+                "value": false,
+                "display_name": "Approve external query disclosure (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Optional on-demand LeanSearch; provider candidates are not locally verified.\"\"\"\nfrom lfx.custom import Component\nfrom lfx.io import BoolInput, StrInput, IntInput, Output\nfrom lfx.base.tools.base import Tool\nfrom langchain_core.tools import StructuredTool\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.lean_search import LeanSearchPolicy, SearchLean, search_lean\n\n\nclass LeanSearch(Component):\n    name = \"LeanSearch\"\n    display_name = \"LeanSearch \u00b7 Declaration Discovery\"\n    description = \"Optional external library search, gated by explicit query-disclosure approval. Candidates must be resolved in the pinned local environment. Building the capability sends no request.\"\n    nima_manifest = manifest_for_component(\"LeanSearch\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Enable LeanSearch (operator)\",value=False),\n        BoolInput(name=\"allow_query_disclosure\",display_name=\"Approve external query disclosure (operator)\",value=False),\n        StrInput(name=\"endpoint\",display_name=\"Approved endpoint (operator)\",value=\"https://leansearch.net/search\"),\n        StrInput(name=\"index_revision\",display_name=\"Provider index revision (operator)\",value=\"provider-unpinned\"),\n        IntInput(name=\"max_results\",display_name=\"Maximum candidates (operator)\",value=5)]\n    outputs = [Output(name=\"tool\",display_name=\"LeanSearch capability\",method=\"build_tool\",group_outputs=True)]\n\n    async def build_tool(self) -> Tool:\n        policy=LeanSearchPolicy(enabled=self.enabled,allow_query_disclosure=self.allow_query_disclosure,\n            endpoint=self.endpoint,index_revision=self.index_revision,max_results=self.max_results)\n        def discover(query: str):return search_lean(policy,SearchLean(query=query))\n        return StructuredTool.from_function(func=discover,name=\"search_lean\",description=self.description,\n            args_schema=SearchLean,metadata={\"nima_lean_search\":policy.model_dump(mode=\"json\")})\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "enabled": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "enabled",
+                "value": false,
+                "display_name": "Enable LeanSearch (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "endpoint": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "endpoint",
+                "value": "https://leansearch.net/search",
+                "display_name": "Approved endpoint (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "index_revision": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "index_revision",
+                "value": "provider-unpinned",
+                "display_name": "Provider index revision (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "max_results": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_results",
+                "value": 5,
+                "display_name": "Maximum candidates (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
+              }
+            },
+            "description": "Optional external library search, gated by explicit query-disclosure approval. Candidates must be resolved in the pinned local environment. Building the capability sends no request.",
+            "base_classes": [
+              "Tool"
+            ],
+            "display_name": "LeanSearch \u00b7 Declaration Discovery",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "Tool"
+                ],
+                "selected": "Tool",
+                "name": "tool",
+                "display_name": "LeanSearch capability",
+                "method": "build_tool",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "lean_search",
+              "contract_version": "2",
+              "source_sha256": "a00574e6caf355d3ff7b27d2ee9107a354bfe04c2740e2d785b8e3c2a1a3a521"
+            },
+            "tool_mode": false
+          },
+          "type": "LeanSearch",
+          "id": "LeanSearch-nima"
+        },
+        "id": "LeanSearch-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 0,
+          "y": 1150
+        }
+      },
+      {
+        "data": {
+          "node": {
+            "template": {
+              "_type": "Component",
+              "code": {
+                "type": "code",
+                "required": true,
+                "placeholder": "",
+                "list": false,
+                "show": true,
+                "multiline": true,
+                "value": "\"\"\"Inspectable lazy capability: exact-source checks and generated lookup probes.\"\"\"\nfrom lfx.custom import Component\nfrom lfx.io import BoolInput, Output\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.lean_draft_backend import DraftLeanBackend\nfrom nima_semantica.lean_transport import configured_lean_verifier\nfrom nima_semantica.verify_lean_tool import verify_lean\n\n\nclass LeanDraftVerification(Component):\n    name = \"LeanDraftVerification\"\n    display_name = \"Verify Lean \u00b7 Exact Source and Local Resolution\"\n    description = \"On-demand isolated Verify Lean for current source revisions and controller-generated declaration probes. Pinned environment, kernel replay, axiom inspection and durable receipts. Building this capability executes nothing.\"\n    nima_manifest = manifest_for_component(\"LeanDraftVerification\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Allow isolated Lean execution (operator)\",value=False)]\n    outputs = [Output(name=\"backend\",display_name=\"Pinned verification capability\",method=\"build_backend\",group_outputs=True)]\n\n    async def build_backend(self) -> DraftLeanBackend:\n        enabled = bool(self.enabled)\n        def verify_exact(store, request, context, *, verifier):\n            if not enabled:raise ValueError(\"Lean execution is not authorized\")\n            return verify_lean(store,request,context,verifier=verifier)\n        return DraftLeanBackend(enabled,configured_lean_verifier,verify_exact)\n",
+                "fileTypes": [],
+                "file_path": "",
+                "password": false,
+                "name": "code",
+                "advanced": true,
+                "api_editable": false,
+                "dynamic": true,
+                "info": "",
+                "load_from_db": false,
+                "title_case": false
+              },
+              "enabled": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "enabled",
+                "value": false,
+                "display_name": "Allow isolated Lean execution (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              }
+            },
+            "description": "On-demand isolated Verify Lean for current source revisions and controller-generated declaration probes. Pinned environment, kernel replay, axiom inspection and durable receipts. Building this capability executes nothing.",
+            "base_classes": [
+              "DraftLeanBackend"
+            ],
+            "display_name": "Verify Lean \u00b7 Exact Source and Local Resolution",
+            "documentation": "",
+            "minimized": false,
+            "custom_fields": {},
+            "output_types": [],
+            "pinned": false,
+            "conditional_paths": [],
+            "frozen": false,
+            "outputs": [
+              {
+                "types": [
+                  "DraftLeanBackend"
+                ],
+                "selected": "DraftLeanBackend",
+                "name": "backend",
+                "display_name": "Pinned verification capability",
+                "method": "build_backend",
+                "value": "__UNDEFINED__",
+                "cache": true,
+                "allows_loop": false,
+                "group_outputs": true,
+                "tool_mode": true
+              }
+            ],
+            "field_order": [],
+            "beta": false,
+            "legacy": false,
+            "edited": false,
+            "metadata": {
+              "nima_component_id": "lean_draft_verification",
+              "contract_version": "2",
+              "source_sha256": "a53afba08d5c0e357ab06523685bb1081442d1df77489ac3498d334e0bd82fb8"
+            },
+            "tool_mode": false
+          },
+          "type": "LeanDraftVerification",
+          "id": "LeanDraftVerification-nima"
+        },
+        "id": "LeanDraftVerification-nima",
+        "type": "genericNode",
+        "position": {
+          "x": 840,
+          "y": 1150
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "ChatInput-draft_lean-message-DraftLeanFields-nima-mcp_request",
+        "source": "ChatInput-draft_lean",
+        "target": "DraftLeanFields-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153ChatInput\u0153, \u0153id\u0153: \u0153ChatInput-draft_lean\u0153, \u0153name\u0153: \u0153message\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153mcp_request\u0153, \u0153id\u0153: \u0153DraftLeanFields-nima\u0153, \u0153inputTypes\u0153: [\u0153Message\u0153, \u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "ChatInput",
+            "id": "ChatInput-draft_lean",
+            "name": "message",
+            "output_types": [
+              "Message"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "mcp_request",
+            "id": "DraftLeanFields-nima",
+            "inputTypes": [
+              "Message",
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "DraftLeanFields-nima-request-DraftLean-nima-payload",
+        "source": "DraftLeanFields-nima",
+        "target": "DraftLean-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153DraftLeanFields\u0153, \u0153id\u0153: \u0153DraftLeanFields-nima\u0153, \u0153name\u0153: \u0153request\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "DraftLeanFields",
+            "id": "DraftLeanFields-nima",
+            "name": "request",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "payload",
+            "id": "DraftLean-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "LeanDraftOntology-nima-result-DraftLean-nima-policy",
+        "source": "LeanDraftOntology-nima",
+        "target": "DraftLean-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153LeanDraftOntology\u0153, \u0153id\u0153: \u0153LeanDraftOntology-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153policy\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "LeanDraftOntology",
+            "id": "LeanDraftOntology-nima",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "policy",
+            "id": "DraftLean-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "LeanDraftRetrieval-nima-result-DraftLean-nima-retrieval_policy",
+        "source": "LeanDraftRetrieval-nima",
+        "target": "DraftLean-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153LeanDraftRetrieval\u0153, \u0153id\u0153: \u0153LeanDraftRetrieval-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153retrieval_policy\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "LeanDraftRetrieval",
+            "id": "LeanDraftRetrieval-nima",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "retrieval_policy",
+            "id": "DraftLean-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "LeanSearch-nima-tool-DraftLean-nima-lean_search",
+        "source": "LeanSearch-nima",
+        "target": "DraftLean-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153LeanSearch\u0153, \u0153id\u0153: \u0153LeanSearch-nima\u0153, \u0153name\u0153: \u0153tool\u0153, \u0153output_types\u0153: [\u0153Tool\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153lean_search\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153inputTypes\u0153: [\u0153Tool\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "LeanSearch",
+            "id": "LeanSearch-nima",
+            "name": "tool",
+            "output_types": [
+              "Tool"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "lean_search",
+            "id": "DraftLean-nima",
+            "inputTypes": [
+              "Tool"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "LeanDraftVerification-nima-backend-DraftLean-nima-backend",
+        "source": "LeanDraftVerification-nima",
+        "target": "DraftLean-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153LeanDraftVerification\u0153, \u0153id\u0153: \u0153LeanDraftVerification-nima\u0153, \u0153name\u0153: \u0153backend\u0153, \u0153output_types\u0153: [\u0153DraftLeanBackend\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153backend\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153inputTypes\u0153: [\u0153DraftLeanBackend\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "LeanDraftVerification",
+            "id": "LeanDraftVerification-nima",
+            "name": "backend",
+            "output_types": [
+              "DraftLeanBackend"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "backend",
+            "id": "DraftLean-nima",
+            "inputTypes": [
+              "DraftLeanBackend"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "DraftLean-nima-result-LeanDraftStateView-nima-payload",
+        "source": "DraftLean-nima",
+        "target": "LeanDraftStateView-nima",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153DraftLean\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153LeanDraftStateView-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "DraftLean",
+            "id": "DraftLean-nima",
+            "name": "result",
+            "output_types": [
+              "JSON"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "payload",
+            "id": "LeanDraftStateView-nima",
+            "inputTypes": [
+              "Data",
+              "JSON"
+            ],
+            "type": "other"
+          }
+        }
+      },
+      {
+        "id": "DraftLean-nima-preview-ChatOutput-draft_lean-input_value",
+        "source": "DraftLean-nima",
+        "target": "ChatOutput-draft_lean",
+        "sourceHandle": "{\u0153dataType\u0153: \u0153DraftLean\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153name\u0153: \u0153preview\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
+        "targetHandle": "{\u0153fieldName\u0153: \u0153input_value\u0153, \u0153id\u0153: \u0153ChatOutput-draft_lean\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153, \u0153DataFrame\u0153, \u0153Table\u0153, \u0153Message\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "data": {
+          "sourceHandle": {
+            "dataType": "DraftLean",
+            "id": "DraftLean-nima",
+            "name": "preview",
+            "output_types": [
+              "Message"
+            ]
+          },
+          "targetHandle": {
+            "fieldName": "input_value",
+            "id": "ChatOutput-draft_lean",
+            "inputTypes": [
+              "Data",
+              "JSON",
+              "DataFrame",
+              "Table",
+              "Message"
+            ],
+            "type": "other"
+          }
+        }
+      }
+    ],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 0.6
+    }
+  },
+  "nima_tool_manifest": {
+    "tool_id": "draft_lean",
+    "contract_version": "2",
+    "visual_approval": "pending",
+    "controller_version": "draft-lean-v2",
+    "policy_digest": "71576b70b04b204a26f00e08fa8a80b00e363efecc71cb55fb6886f0f28da5b5",
+    "native_sources_sha256": {
+      "lean_draft_contracts": "9482fd6d8cae97b7fe81c34f14e1d7714519e5c98b678ca2d83f2357577393ba",
+      "lean_draft_state": "8cbc1a198ea13ac776106072b0a6e7f9fc95cba1a0264f8f24dfaf96381df22d",
+      "lean_draft_tool": "aa93165c9108c112e6d744e4e2241aead879bb6fbb04c8436734e4d19afc08c4",
+      "lean_search": "e51a0b91f21c14010ebcd76c8d96a33a8da859c25d257388ba5e48869755a5f9",
+      "lean_draft_backend": "a83144b8eb72ef0139b718bc825760b4df01ee694393d7121413675dedaaed21",
+      "verify_lean_tool": "a696bfb3cee9851e72bf5a7251bd0eb6ba96938f7420cfe2eefe2d19b3a25f91",
+      "lean_verification_service": "c24bdcb0fa6e87c4a03464da3cd4d0909db5e3e02586e200af1725b377612b08",
+      "lean_project": "4f2a530d167e9938b5a4cce1ffa01ef699f3aa0a9346fb2160103c0d39d35927",
+      "proof_contracts": "63ae5f2b9ca97ab8e0d2d3bba449b1e10facc46353391163b5f55c8705ed7f35",
+      "proof_state": "4f1785bdbb12bec8400481ed798a0771de7fe023092070f151780dcc0aa7213b",
+      "proof_support": "e3681e68ab167b14aea9d9783cc4dd03eda6128d6174e20abc6d69dd0a66bcb5",
+      "review_tool": "bd39b44d288c081ba47dc7c8aa979565b62016bfedbe4b7f95a8d93a49549d78",
+      "graph_analysis": "2aa032feda06ae667d7fd1032dc4f3934c2346fd778288ec23628cd63d93c6d8",
+      "evidence_contracts": "123b56812fec1957487514b00217698199f47124371f57a1800be31760b0c2fe",
+      "math_retrieval": "85fbfd0f8d6ef4aaec36f025ac1a7c6adefe3d22aab66c8d55d7f04c6b7cdb0f",
+      "math_reasoning": "c7eca62e04e55ffb8256b160c755831687ca0348c9ad435ea50337bb356a4728",
+      "reasoning_state": "cf22253686c357a8954fd7ed54cae77d5dfaa2da249af60707586e89bf2eaf20",
+      "reasoning_kernel": "0932753d1ee9bdea4348441d384d13034cf3b011478d4e4eadf5674a82774df3"
+    },
+    "publication": "not_published_by_builder",
+    "components": {
+      "DraftLeanFields": {
+        "nima_component_id": "draft_lean_fields",
+        "contract_version": "2",
+        "source_sha256": "627ee3f3ba2d9e6cbdc9a880b752ae64f88119dd2297e8970516861900732aeb"
+      },
+      "DraftLean": {
+        "nima_component_id": "draft_lean",
+        "contract_version": "2",
+        "source_sha256": "944e1a3a81103fdd04428f6a404872f8b2d7f51577e5438ad3032249adbe192f"
+      },
+      "LeanDraftOntology": {
+        "nima_component_id": "lean_draft_ontology",
+        "contract_version": "2",
+        "source_sha256": "48c3d0a98d24ae170235cc4b356279cf99527135a4c8c86682022e11a10a058c"
+      },
+      "LeanDraftStateView": {
+        "nima_component_id": "lean_draft_state_view",
+        "contract_version": "2",
+        "source_sha256": "3b777f8c0e7b7c61754e8d5afeb52fffab13d4e4f324be4a1b7f59e8c6ff85c7"
+      },
+      "LeanDraftRetrieval": {
+        "nima_component_id": "lean_draft_retrieval",
+        "contract_version": "2",
+        "source_sha256": "b6b7d3412a7173df01370d34932e631f99efe238cd03f1dac68b808495008e70"
+      },
+      "LeanSearch": {
+        "nima_component_id": "lean_search",
+        "contract_version": "2",
+        "source_sha256": "a00574e6caf355d3ff7b27d2ee9107a354bfe04c2740e2d785b8e3c2a1a3a521"
+      },
+      "LeanDraftVerification": {
+        "nima_component_id": "lean_draft_verification",
+        "contract_version": "2",
+        "source_sha256": "a53afba08d5c0e357ab06523685bb1081442d1df77489ac3498d334e0bd82fb8"
+      }
+    }
+  }
+}

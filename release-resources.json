@@ -5,6 +5,7 @@
     "CITATION.cff",
     "LICENSE",
     "README.md",
+    "docs/RELEASE_NOTES_v0.1.1.md",
     "THIRD_PARTY_NOTICES.md",
     "constraints-tested.txt",
     "deploy/build_adapter_example.py",

@@ -1,6 +1,6 @@
 # v0.1.1 platform qualification
 
-Status: release candidate under verification; full-stack approval is pending.
+Status: qualified for v0.1.1 under the tested configurations below. All 12 hosted CI jobs passed; the operator authorized release on 2026-09-28.
 
 The release targets Ubuntu/Linux and macOS Apple silicon, with native Python 3.11–3.13. macOS runs Langflow natively in a dedicated Python 3.11 environment and uses Docker Desktop for PDF, symbolic and Lean workers. Other Linux distributions must supply the documented prerequisites; they are not verified merely because Ubuntu passes. Intel Macs and Rosetta are outside the macOS support claim.
 
@@ -8,15 +8,24 @@ The release targets Ubuntu/Linux and macOS Apple silicon, with native Python 3.1
 
 | Check | Required configuration | Status |
 | --- | --- | --- |
-| Native library and CLI | Ubuntu 24.04, Python 3.11–3.13 | ARM64/Python 3.12 container: 1,344 passed, 73 skipped; hosted matrix pending |
+| Native library and CLI | Ubuntu 24.04, Python 3.11–3.13 | Hosted x86-64 matrix passed; ARM64/Python 3.12 container: 1,344 passed, 73 skipped |
 | Native library and CLI | macOS ARM64, Python 3.11–3.13 | Latest core 3.12/3.13: 1,341 passed, 74 skipped each; full 3.11 integration suite below |
 | Shipped Langflow workflows | Linux and native macOS, pinned Langflow 1.12.0 | Native suite: 1,564 passed, 47 skipped, 1 expected failure; 21 published API checks and MCP discovery/call passed |
 | Full managed deployment | macOS ARM64 and Docker Desktop | Provisioning and all doctor checks passed; native restart and repeat publication passed |
 | PDF model assets and normalization | Pinned Python 3.11 worker | Asset integrity, real normalization and cache replay passed |
 | Lean verification and adversarial isolation | Lean 4.32.1, Linux ARM64 worker | 45 adversarial tests passed; authenticated service and published workflow passed |
-| Wheel and source archive | Clean installation outside source tree | Wheel built from sdist; all 262 resources matched; final installed-wheel suite: 1,564 passed, 47 skipped, 1 expected failure; dependency check passed |
+| Wheel and source archive | Clean installation outside source tree | Wheel built from sdist; packaged resources matched; installed-wheel suite: 1,564 passed, 47 skipped, 1 expected failure; dependency check passed |
 
-Hosted CI is configured for Ubuntu 24.04 and native macOS 15/26 across Python 3.11–3.13, plus native Langflow checks on each OS. It has not been executed for these uncommitted changes. The labels follow the [GitHub runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Hosted native macOS checks do not establish Docker Desktop integration coverage; the full managed-stack campaign must run on an Apple silicon Mac with Docker Desktop.
+Hosted CI passed for Ubuntu 24.04 and native macOS 15/26 across Python 3.11–3.13, plus native Langflow checks on each OS. [Qualification run 36455316152](https://github.com/JonasRigo/nima-semantica/actions/runs/36455316152) tested implementation commit `4839b8c3c7eaf8ad6bf35b675eb46b09611b13b0`. The final release adds qualification documentation and metadata without changing that tested implementation. The labels follow the [GitHub runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners). Hosted native macOS checks do not establish Docker Desktop integration coverage; the separate Apple-silicon full-stack campaign supplies that evidence.
+
+| Hosted job group | Passed per job | Skipped per job | Expected failures |
+| --- | ---: | ---: | ---: |
+| Ubuntu core, Python 3.11/3.12/3.13 | 1,337 | 80 | 0 |
+| macOS 15/26 core, Python 3.11/3.12/3.13 | 1,313 | 104 | 0 |
+| Ubuntu Langflow, Python 3.11 | 1,558 | 53 | 1 |
+| macOS 15/26 Langflow, Python 3.11 | 1,534 | 77 | 1 |
+
+CI reports were reviewed for every skip. Core jobs omit optional Langflow/native-provider packages; hosted macOS also omits Docker-dependent symbolic checks. Direct Lean/bwrap, explicitly gated remote workers and the legacy Lean-image integration are absent from the default CI environment. Local live-service, Docker Desktop and adversarial-worker results supplement those skips; no skipped check is counted as a pass. JUnit reports are attached to the qualification run.
 
 ## Compatibility changes
 
@@ -43,7 +52,7 @@ All 21 maintained workflows were published privately and exercised through the n
 
 Additional blockers fixed during this phase: missing OpenCV system libraries in the PDF image, incompatible `lfx-openai==0.1.5` against LFX 1.12.0 (pin 0.1.4, validated for imports and dependency metadata), asynchronous launchd shutdown/re-registration, and stale workflow source hashes. The expected test failure is the pre-existing reference-loop scheduling issue, not a maintained toolbox flow. Remaining native skips include direct Linux/toolchain-specific tests; these do not replace the separate worker qualification.
 
-A preliminary wheel/resource check passed before the latest topology edits; rebuild and recheck both release artifacts and regenerate the release manifest after final fixes. Nothing has been tagged or published.
+At this earlier checkpoint, preliminary wheel/resource checks had passed but final artifact rebuilding and manifest regeneration remained. Those steps were subsequently completed as recorded below.
 
 ### Provider-flexibility follow-up
 
@@ -72,6 +81,6 @@ Live deep research exposed a model-generated relation outside the review ontolog
 
 The corrected live deep-research run completed with three regional passes, ten coverage facets, a provisional review graph and explicit uncovered questions. Coverage remained partial and graph admission remained `not_eligible_until_prepared`, as required for fast provisional reading. Its logs additionally exposed an arXiv HTML adapter header mismatch against pinned LFX: direct URL-component calls require a list of key/value rows, not a DataFrame. The adapter and its regression assertion now use that format.
 
-The corrected pinned URL reader fetched real arXiv HTML successfully. After both fixes, the final installed-wheel suite passed 1,564 tests (47 documented skips, one expected failure); only this qualification-report text changed afterward. Rebuilt artifacts retain identical tested Python code and workflow resources.
+The corrected pinned URL reader fetched real arXiv HTML successfully. After both fixes, the installed-wheel suite passed 1,564 tests (47 documented skips, one expected failure). Subsequent release edits are limited to documentation, citation date, resource inventory and release manifest. Rebuilt artifacts retain identical tested Python code and workflow resources.
 
-Hosted Ubuntu x86-64 and macOS 15/26 matrix execution is still pending. No commit, push, tag or publication has been performed by this campaign.
+The experimental branch was committed and pushed as `4839b8c`, and all hosted matrix jobs passed. The operator subsequently authorized merging, tagging and publishing v0.1.1. See the [release notes](RELEASE_NOTES_v0.1.1.md) for installation, support boundaries and follow-up work.

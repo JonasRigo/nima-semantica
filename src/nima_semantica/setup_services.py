@@ -1,4 +1,4 @@
-"""Explicit local Linux provisioning and configured embedding transport."""
+"""Explicit platform provisioning and configured embedding transport."""
 from __future__ import annotations
 
 import hashlib
@@ -13,6 +13,7 @@ import sys
 import httpx
 
 from .installation import assets, write_json
+from . import __version__
 
 
 def probe_embedding(model, base_url="http://127.0.0.1:11434"):
@@ -37,7 +38,7 @@ def embedding_provider(config, *, credential_value=None):
     class Provider:
         def embed(self, ignored, texts):
             headers = {}
-            if profile.provider != "ollama":
+            if profile.provider != "ollama" and profile.credential:
                 token = credential_value or os.environ.get(profile.credential)
                 if not token:
                     raise ValueError("Embedding credential environment variable is missing")
@@ -62,8 +63,11 @@ def embedding_provider(config, *, credential_value=None):
 
 
 def provision(config, config_path, *, pdf=False, lean=False):
+    if sys.platform == "darwin":
+        from .setup_macos import provision_macos
+        return provision_macos(config, config_path, pdf=pdf, lean=lean)
     if sys.platform != "linux":
-        raise ValueError("Managed provisioning currently supports Linux")
+        raise ValueError("Managed provisioning supports Ubuntu/Linux and macOS Apple silicon")
     for command in ("docker", "systemctl", "bwrap", "prlimit"):
         if not shutil.which(command):
             raise ValueError(f"Install prerequisite {command} before provisioning")
@@ -101,7 +105,7 @@ def provision(config, config_path, *, pdf=False, lean=False):
         shutil.copy2(resource_root / relative, target)
     (context / "Dockerfile").write_text("FROM python:3.13-slim\nRUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*\nRUN pip install torch==2.13.0+cpu --index-url https://download.pytorch.org/whl/cpu\nCOPY application /opt/nima-app\nRUN pip install -c /opt/nima-app/constraints-tested.txt '/opt/nima-app[langflow,mcp]'\nCMD [\"langflow\",\"run\",\"--host\",\"127.0.0.1\",\"--port\",\"7860\"]\n")
     fingerprint = hashlib.sha256(b"".join(str(p.relative_to(context)).encode() + p.read_bytes() for p in sorted(context.rglob("*")) if p.is_file())).hexdigest()
-    run("langflow-image", ["docker", "build", "-t", "nima-langflow:0.1.0", str(context)], fingerprint=fingerprint)
+    run("langflow-image", ["docker", "build", "-t", f"nima-langflow:{__version__}", str(context)], fingerprint=fingerprint)
     sympy_context = work / "symbolic-build"; sympy_context.mkdir(exist_ok=True)
     symbolic_dockerfile = (assets() / "deploy/sympy.Dockerfile").read_text()
     (sympy_context / "Dockerfile").write_text(symbolic_dockerfile)
@@ -148,9 +152,9 @@ def provision(config, config_path, *, pdf=False, lean=False):
     from urllib.parse import urlsplit
     allowed_hosts = {urlsplit(profile.base_url).hostname for profile in [config.llm, *config.overrides.values()]}
     if config.embedding:
-        allowed_hosts.add(urlsplit(config.embedding.container_url).hostname)
+        allowed_hosts.add(urlsplit(config.embedding.container_url or config.embedding.base_url).hostname)
     allowed_hosts.discard(None)
-    compose = {"services": {"langflow": {"image": "nima-langflow:0.1.0", "network_mode": "host",
+    compose = {"services": {"langflow": {"image": f"nima-langflow:{__version__}", "network_mode": "host",
         "environment": {"LANGFLOW_AUTO_LOGIN": "true", "LANGFLOW_SKIP_AUTH_AUTO_LOGIN": "true", "DO_NOT_TRACK": "true",
             "LANGFLOW_SSRF_ALLOWED_HOSTS": ",".join(sorted(allowed_hosts)),
             "LANGFLOW_CONFIG_DIR": "/var/lib/langflow", "LANGFLOW_SAVE_DB_IN_CONFIG_DIR": "true", "LANGFLOW_COMPONENTS_PATH": "/nima-components",

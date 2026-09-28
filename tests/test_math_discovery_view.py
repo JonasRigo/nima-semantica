@@ -40,6 +40,7 @@ def test_assembly_preserves_arbitrary_json_and_rejects_ambiguous_paths():
 
 
 @pytest.mark.integration
+@pytest.mark.symbolic
 def test_unresolved_support_does_not_block_exploration_but_blocks_assembly_submission(tmp_path):
     from nima_semantica.symbolic_transport import configured_symbolic_worker
     service = MathSessionService(MathServiceConfig(database_path=str(tmp_path/"s.db"),project_id="p",run_id="r",allow_execution=True),worker=configured_symbolic_worker())

@@ -2,27 +2,51 @@
 
 ## Prerequisites
 
-The managed stack targets Linux with Python 3.11–3.13, Docker Engine with Compose, systemd user services, Bubblewrap and `prlimit`.
+The deployment targets are Ubuntu/Linux and macOS Apple silicon with Python 3.11–3.13. See [platform verification status](PLATFORM_SUPPORT.md) before approving a release candidate.
+
+Linux managed setup requires Docker Engine with Compose, systemd user services, Bubblewrap and `prlimit`.
 PDF provisioning additionally needs Python 3.11; Lean provisioning needs Elan and Bubblewrap with the `--size` option for bounded temporary filesystems.
 Debian 11's Bubblewrap 0.4.1 lacks that option: the Lean service can start, but theorem verification cannot complete with that version.
 Install these operating-system prerequisites before running the wizard.
+
+On macOS, install and start Docker Desktop with a Linux ARM64 engine and Docker Compose. Run a native ARM64 Python interpreter, not Rosetta. PDF and Lean execute in Linux containers; host Elan, Bubblewrap, `prlimit`, and systemd are not required. Docker must enforce memory, swap and process limits and permit the tested worker namespace isolation. Setup runs an isolation preflight and refuses to continue when it fails. Allocate sufficient Docker memory for the selected models and concurrent services; the PDF and Lean workers each have an 8 GB maximum.
+
 Use a dedicated Python environment and install the release wheel with its `mcp` extra, or install a source checkout with `pip install -e '.[mcp]'`.
 Building from source also requires Git so packaging can check the public inventory against the ignore rules.
 For the Linux CPU stack, install `torch==2.13.0+cpu` from `https://download.pytorch.org/whl/cpu` first, as shown in the [quick start](../README.md#start-here), to avoid the default CUDA dependency download.
-Managed Langflow and PDF provisioning also select CPU builds explicitly.
-The Langflow application, base package and LFX runtime are pinned together at 1.12.0; managed builds apply the bundled `constraints-tested.txt` as well.
+Linux managed Langflow and PDF provisioning select CPU builds explicitly. Native macOS Langflow uses native macOS wheels.
+The Langflow application, base package and LFX runtime are pinned together at 1.12.0, with `lfx-openai==0.1.4`; managed builds apply the bundled `constraints-tested.txt` as well. Newer OpenAI extension bundles can satisfy dependency metadata yet fail to import against this LFX runtime; native setup checks those imports explicitly.
 
 ## Wizard
+
+The same wizard configures independent LLM and embedding providers. LLM choices are OpenRouter, OpenAI, native Anthropic, native Gemini, native Ollama, or an arbitrary OpenAI-compatible endpoint (for example a local LM Studio or vLLM server). Model identifiers are operator-selected, not restricted to a cloud model list. Custom endpoint URLs, credential variable names, token limits and provider generation parameters are supported. A credential value is never written into installation JSON; `--credential -` explicitly selects a no-key compatible endpoint. Native Ollama does not require a cloud credential.
+
+Embeddings are a separate choice: lexical-only (`none`), Ollama, OpenAI, or a compatible embedding endpoint. Ollama setup records the installed model digest and observed dimension. Compatible/OpenAI embeddings require an explicit revision and dimension. LLM and embedding servers may be different, including one local and one remote. No hosted LLM call is needed for corpus ingestion, indexing or deterministic retrieval.
+
+An entirely local setup, after installing the chosen models in Ollama:
+
+```sh
+nima setup --non-interactive --provider ollama --model YOUR_LOCAL_CHAT_MODEL \
+  --base-url http://127.0.0.1:11434 \
+  --embedding-provider ollama --embedding-model YOUR_LOCAL_EMBEDDING_MODEL \
+  --embedding-base-url http://127.0.0.1:11434 --provision
+```
+
+For compatible local servers, select `--provider compatible --base-url URL --credential -`; use the independent `--embedding-provider compatible --embedding-base-url URL --embedding-credential - --embedding-model MODEL --embedding-revision REVISION --embedding-dimension N` flags for embeddings. `--model-parameters` accepts a JSON object of generation options, and `--max-tokens` controls the output budget. Interactive setup asks for the same endpoint and credential choices.
+
+Size the local model's context window for the workflow, not just its output. Ollama's server default may be too small for tool schemas and evidence; configure, for example, `--model-parameters '{"num_ctx":16384}'` when supported by your model and available memory. Output limits do not increase the input context window. The verification campaign observed context truncation with a 4,096-token local window.
+
+Provider support does not imply every model supports every workflow: agentic tools require reliable structured/tool-call output and usage reporting. Ollama cannot force tool selection server-side; NIMA rejects invalid or multiple tool calls and does not fall back to a paid cloud model. Choose a suitable local model for those tools; lexical/vector graph retrieval does not require these model capabilities. Native Anthropic and Gemini adapters are tested for construction and protocol binding, but live calls require the operator's own credentials.
 
 ```sh
 nima setup --provision --pdf --lean
 ```
 
-Choose the tool LLM and provider, an optional Ollama embedding model, and any tool-specific overrides.
+Choose the tool LLM and provider, an independent optional embedding model, and any tool-specific overrides.
 Omitting embeddings enables lexical retrieval; vector retrieval requires the exact configured embedding model.
 The wizard records effective assignments for every model input.
-OpenRouter and compatible providers use their configured API base; Ollama uses its compatible chat endpoint.
-Supply custom endpoint/provider settings through `--base-url` or an installation JSON.
+OpenRouter/OpenAI/compatible providers use their configured compatible API base; Anthropic, Gemini and Ollama use native APIs.
+Supply custom endpoints interactively, through `--base-url`/`--embedding-base-url`, or an installation JSON.
 
 `--provision` authorizes dependency and model downloads and service startup.
 PDF assets are downloaded and verified in a separate environment; ingestion uses the advanced NIMA normalizer.
@@ -73,8 +97,14 @@ nima project init my-research --corpus papers --path /path/to/project
 
 Project initialization installs the configured canvases and records exact live identities.
 A live canvas changed in the editor must be exported and reconciled before replacement.
-Managed Langflow uses host networking on Linux and listens on loopback; the data directory is shared with its container at the same absolute path.
+Managed Langflow uses host networking on Linux and listens on loopback. On macOS, Langflow runs natively in `langflow-env` under the data directory, using Python 3.11 and a user LaunchAgent. No Langflow Desktop signup is required. Native Langflow, CLI and MCP share the corpus through macOS filesystem locks. Do not mount this corpus into Docker Desktop: host locks were not honored inside the container in verification. Compose publishes only execution-worker ports on loopback; workers never mount the corpus.
 Custom deployments must provide reachable worker URLs and token-file paths.
+
+The optional `pdf_container_url`, `symbolic_container_url`, and `lean_container_url` settings distinguish Langflow endpoints from native client URLs for custom container deployments. Each model profile also accepts `container_url`; an empty value preserves `base_url`. Managed macOS setup uses the native loopback endpoints for Langflow. Existing Linux configuration files remain valid.
+
+macOS worker definitions and stage logs live in `installation/compose-macos.yaml` and `installation/` under the configured data directory. Langflow's generated `org.nima.langflow.<installation-id>.plist` lives in `~/Library/LaunchAgents` and starts at login; its stdout/stderr logs live under `installation/`. Setup leaves other Langflow installations untouched. Rerunning setup resumes completed builds, checks model assets again and restarts native Langflow. It preserves enabled PDF/Lean services and rejects operator-edited Compose or LaunchAgent definitions. Workers restart when Docker restarts. Only the trusted symbolic controller has Docker socket access; generated-code containers do not receive it. PDF and Lean retain Bubblewrap isolation inside non-root containers.
+
+Native macOS provisional PDF reading also requires the managed `nima-fast-pdf` image; it uses a bounded Linux process because Darwin cannot enforce the reader's address-space limit. Missing Docker or a missing image produces an error, never an unbounded host fallback.
 
 Back up the data directory with services stopped, or use a consistent database backup procedure.
 Preserve SQLite databases, their sidecars, immutable artifacts, private graph databases and installation/project manifests together.

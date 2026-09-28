@@ -12,6 +12,7 @@ import stat
 import uuid
 import shutil
 import ctypes
+import sys
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -152,6 +153,22 @@ def _open_directory(path):
         raise
 
 
+def _rename_directory_noreplace(parent, source, target):
+    """Atomically publish under a pinned parent FD without replacing a racer."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "darwin":
+        rename, flag = libc.renameatx_np, 0x00000004  # Darwin RENAME_EXCL
+    elif sys.platform == "linux":
+        rename, flag = libc.renameat2, 1  # Linux RENAME_NOREPLACE
+    else:
+        raise NotImplementedError("atomic OKF publication requires Linux or macOS")
+    rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    rename.restype = ctypes.c_int
+    if rename(parent, os.fsencode(source), parent, os.fsencode(target), flag) != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code))
+
+
 def export_bundle(bundle: OKFBundle, directory: str | Path) -> None:
     """Publish into a new directory; never overwrite an existing destination."""
     bundle = OKFBundle.model_validate(bundle.model_dump())
@@ -192,14 +209,7 @@ def export_bundle(bundle: OKFBundle, directory: str | Path) -> None:
             finally:
                 os.close(fd)
         os.fsync(stage_fd)
-        # Linux renameat2(RENAME_NOREPLACE) makes publication atomic and race-safe.
-        libc = ctypes.CDLL(None, use_errno=True)
-        rename = libc.renameat2
-        rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
-        rename.restype = ctypes.c_int
-        if rename(parent, os.fsencode(staging), parent, os.fsencode(root.name), 1) != 0:
-            code = ctypes.get_errno()
-            raise OSError(code, os.strerror(code))
+        _rename_directory_noreplace(parent, staging, root.name)
         published = True
         os.fsync(parent)
     finally:

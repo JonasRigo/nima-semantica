@@ -1,4 +1,5 @@
 from pathlib import Path
+import pytest
 
 from nima_semantica.okf_io import OKFBundle, OKFConceptDocument, export_bundle, import_bundle
 
@@ -37,3 +38,17 @@ def test_bundle_export_import_ignores_reserved_files(tmp_path: Path):
     ]
     assert {k: v for k, v in restored.files().items() if k != "index.md"} == bundle.files()
     assert restored.index_body == "generated index"
+
+
+def test_export_does_not_replace_destination_created_during_publication(tmp_path, monkeypatch):
+    import nima_semantica.okf_io as io
+    destination = tmp_path / "bundle ü"
+    rename = io._rename_directory_noreplace
+    def race(parent, source, target):
+        destination.mkdir()
+        return rename(parent, source, target)
+    monkeypatch.setattr(io, "_rename_directory_noreplace", race)
+    with pytest.raises(FileExistsError):
+        export_bundle(OKFBundle(), destination)
+    assert destination.is_dir() and list(destination.iterdir()) == []
+    assert list(tmp_path.iterdir()) == [destination]

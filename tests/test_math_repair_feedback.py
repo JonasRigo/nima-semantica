@@ -137,6 +137,7 @@ def test_actual_cancelled_targeted_execution_does_not_count(tmp_path):
 
 
 @pytest.mark.integration
+@pytest.mark.symbolic
 def test_compiled_repair_attempt_then_existing_substantiation(tmp_path):
     from nima_semantica.symbolic_transport import configured_symbolic_worker
     service, sid, target = setup(tmp_path, configured_symbolic_worker())

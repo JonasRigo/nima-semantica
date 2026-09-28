@@ -41,6 +41,10 @@ class CitationMismatch(ConflictError):
     """A model-proposed evidence ID is not among the exact IDs supplied to it."""
 
 
+class RegionalGraphMismatch(ValueError):
+    """A model graph violates the supplied ontology or graph structure."""
+
+
 class ShortQuery(StrictModel):
     query: str = Field(min_length=3, max_length=96)
     purpose: str = Field(min_length=1, max_length=500)
@@ -197,6 +201,10 @@ def _model_step(store, request, context, model, attempts, stage, payload, result
             if isinstance(exc, CitationMismatch):
                 retryable = ordinal == 0
                 feedback = str(exc)
+            elif isinstance(exc, RegionalGraphMismatch):
+                retryable = ordinal == 0
+                feedback = (str(exc) + ". Correct the graph using only the supplied ontology's node types "
+                    "and relation source/target types. Preserve exact passage citations; do not invent evidence.")
             if not retryable:
                 raise
         finally:
@@ -592,6 +600,13 @@ def _run_query(store, request, context, model, attempts, query, ordinal, *, arxi
     def validate_regional_citations(draft):
         for item in (*draft.nodes, *draft.edges):
             _require_exact_citations(item.source_region_ids, allowed, label="regional graph citation")
+        candidate = GraphExtractionCandidate(nodes=draft.nodes, edges=draft.edges, unresolved=draft.gaps)
+        try:
+            _validate_candidate(candidate, allowed)
+            if provisional:
+                _validate_provisional(store, candidate, sorted(allowed), context)
+        except ValueError as exc:
+            raise RegionalGraphMismatch(str(exc)) from exc
     try:
         draft = _model_step(store, request, context, model, attempts, "regional_" + str(ordinal),
             payload, RegionalDraft, validator=validate_regional_citations)

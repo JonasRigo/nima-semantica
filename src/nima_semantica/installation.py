@@ -8,7 +8,7 @@ import re
 import sys
 import tempfile
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .models import AcquisitionPolicy
 from .paper_discovery import PaperDiscoveryPolicy
 
@@ -17,20 +17,40 @@ class Config(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+MODEL_ENDPOINTS = {"openrouter": "https://openrouter.ai/api/v1", "openai": "https://api.openai.com/v1",
+    "compatible": "", "ollama": "http://127.0.0.1:11434", "anthropic": "https://api.anthropic.com",
+    "gemini": "https://generativelanguage.googleapis.com"}
+
+
 class ModelProfile(Config):
     provider: str = "openrouter"
     model: str
     base_url: str = "https://openrouter.ai/api/v1"
+    container_url: str = ""
     credential: str = "NIMA_MODEL_API_KEY"
     max_tokens: int = Field(default=8192, ge=1)
     parameters: dict = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def provider_defaults(cls, value):
+        if isinstance(value, dict):
+            value = dict(value)
+            provider = value.get("provider", "openrouter")
+            if provider not in MODEL_ENDPOINTS:
+                raise ValueError("Unsupported provider; use compatible for an OpenAI-compatible endpoint")
+            value.setdefault("base_url", MODEL_ENDPOINTS[provider])
+            value.setdefault("credential", "" if provider == "ollama" else "NIMA_MODEL_API_KEY")
+            if not value["base_url"]:
+                raise ValueError("A compatible provider requires an explicit base_url")
+        return value
 
 
 class EmbeddingProfile(Config):
     provider: str = "ollama"
     model: str
     base_url: str = "http://127.0.0.1:11434"
-    container_url: str = "http://127.0.0.1:11434"
+    container_url: str = ""
     revision: str
     dimension: int = Field(ge=1)
     credential: str = "NIMA_EMBEDDING_API_KEY"
@@ -49,10 +69,13 @@ class Installation(Config):
     langflow_url: str = "http://127.0.0.1:7860"
     langflow_api_key_env: str = "NIMA_LANGFLOW_API_KEY"
     pdf_url: str = ""
+    pdf_container_url: str = ""
     pdf_token_file: str = ""
     symbolic_url: str = ""
+    symbolic_container_url: str = ""
     symbolic_token_file: str = ""
     lean_url: str = ""
+    lean_container_url: str = ""
     lean_token_file: str = ""
 
 

@@ -284,6 +284,7 @@ def test_atomic_compiler_supports_generic_matrix_work_without_model_python():
     assert graph.submit({"trace": "0"}, {"trace": result["outputs"]["trace"]["id"]})["ready"] is True
 
 
+@pytest.mark.symbolic
 def test_controller_compiled_source_executes_in_the_isolated_symbolic_worker():
     from nima_semantica.symbolic_transport import configured_symbolic_worker
 

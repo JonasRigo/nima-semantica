@@ -67,6 +67,7 @@ def test_reconstruction_rejects_foreign_failed_and_changed_receipts():
 
 
 @pytest.mark.integration
+@pytest.mark.symbolic
 def test_simple_reconstruction_can_support_claim_without_promoting_receipt(tmp_path):
     from nima_semantica.symbolic_transport import configured_symbolic_worker
     service = service_at(tmp_path, configured_symbolic_worker())

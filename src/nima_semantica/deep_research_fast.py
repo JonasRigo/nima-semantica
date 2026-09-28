@@ -39,6 +39,15 @@ def fast_text(data: bytes, name: str) -> tuple[str, str]:
     """Use text-layer extraction only; absent/OCR-only text fails explicitly."""
     suffix = name.lower().split("?")[0]
     if data.startswith(b"%PDF-"):
+        if sys.platform == "darwin":
+            from .deep_research_fast_pdf import extract_macos
+            text = extract_macos(data).decode("utf-8", errors="replace")
+            method = "pypdf-text-v1"
+            if len(text.encode("utf-8")) > 4_000_000 or text.count("\f") > 150:
+                raise ValueError("fast-read text exceeds output limits")
+            if len(text.strip()) < 200:
+                raise ValueError("fast reading found insufficient text; full preparation may be required")
+            return re.sub(r"[ \t]+", " ", text).strip(), method
         try:
             converted = subprocess.run(["pdftotext", "-layout", "-", "-"], input=data,
                 capture_output=True, timeout=45, check=False)

@@ -44,7 +44,7 @@ def model_inventory():
 
 
 def wire_embeddings(flow, installation):
-    profile = installation.embedding.model_copy(update={"base_url": installation.embedding.container_url})
+    profile = installation.embedding.model_copy(update={"base_url": installation.embedding.container_url or installation.embedding.base_url})
     manifest = {"provider": profile.provider, "model": profile.model, "revision": profile.revision,
                 "parameters": {}, "dimension": profile.dimension, "normalization": "l2"}
     for target in list(flow["data"]["nodes"]):
@@ -61,7 +61,7 @@ def wire_embeddings(flow, installation):
             node["data"]["node"]["template"]["profile_json"]["value"] = profile.model_dump_json()
             credential = node["data"]["node"]["template"]["api_key"]
             credential["value"] = profile.credential if profile.provider != "ollama" else ""
-            credential["load_from_db"] = profile.provider != "ollama"
+            credential["load_from_db"] = profile.provider != "ollama" and bool(profile.credential)
             flow["data"]["nodes"].append(node)
             flow["data"]["edges"] = [e for e in flow["data"]["edges"] if not (e["target"] == target["id"] and e["data"]["targetHandle"]["fieldName"] == field)]
             sh = {"dataType": "ConfiguredEmbeddings", "id": mid, "name": "embeddings", "output_types": ["Embeddings"]}
@@ -75,22 +75,40 @@ def wire_embeddings(flow, installation):
 def wire_model(flow, target, field, profile, role):
     template = json.loads((assets() / "examples/langflow_replacement/review_research.json").read_text())
     model = copy.deepcopy(next(n for n in template["data"]["nodes"] if n["data"]["type"] == "OpenAIModel"))
-    mid = "OpenAIModel-nima-" + hashlib.sha256(role.encode()).hexdigest()[:12]
+    native = profile.provider in {"anthropic", "gemini", "ollama"}
+    kind = "ConfiguredModel" if native else "OpenAIModel"
+    if native:
+        model = json.loads((assets() / "examples/configured_embeddings_node.json").read_text())
+        definition = model["data"]["node"]
+        definition["base_classes"] = ["LanguageModel"]
+        definition["template"]["code"]["value"] = (assets() / "deploy/langflow_components/nima_tools/ConfiguredModel.py").read_text()
+        definition["template"]["profile_json"]["value"] = profile.model_dump_json()
+        definition["template"]["profile_json"]["display_name"] = "Model profile"
+        definition["template"]["api_key"]["display_name"] = "Model credential"
+        definition["outputs"] = [{**definition["outputs"][0], "name":"model_output", "display_name":"Language Model",
+            "method":"build_model", "types":["LanguageModel"], "selected":"LanguageModel", "hidden":False}]
+        definition["metadata"] = {"nima_component_id":"configured_model", "contract_version":"1"}
+        definition["field_order"] = ["profile_json", "api_key"]
+        model["data"].update(type=kind, selected_output="model_output")
+    mid = kind + "-nima-" + hashlib.sha256(role.encode()).hexdigest()[:12]
+    model["type"] = "genericNode"
     model["id"] = mid
     model["data"]["id"] = mid
     model["data"]["node"]["display_name"] = "Tool model · " + profile.provider
     model["data"]["node"]["description"] = "Configured model: " + profile.model
     model["position"] = {"x": target.get("position", {}).get("x", 0) - 350, "y": target.get("position", {}).get("y", 0) - 250}
     values = model["data"]["node"]["template"]
-    for key, value in {"model_name": profile.model, "openai_api_base": profile.base_url,
-                       "max_tokens": profile.max_tokens, "model_kwargs": profile.parameters, "max_retries": 0}.items():
-        values[key]["value"] = value
-    values["api_key"]["value"] = profile.credential if profile.provider != "ollama" else "ollama"
-    values["api_key"]["load_from_db"] = profile.provider != "ollama"
+    if not native:
+        for key, value in {"model_name": profile.model, "openai_api_base": profile.container_url or profile.base_url,
+                           "max_tokens": profile.max_tokens, "model_kwargs": profile.parameters, "max_retries": 0}.items():
+            values[key]["value"] = value
+    authenticated = profile.provider != "ollama" and bool(profile.credential)
+    values["api_key"]["value"] = profile.credential if authenticated else ("" if native else "local")
+    values["api_key"]["load_from_db"] = authenticated
     flow["data"]["edges"] = [e for e in flow["data"]["edges"]
                               if not (e["target"] == target["id"] and e.get("data", {}).get("targetHandle", {}).get("fieldName") == field)]
     flow["data"]["nodes"].append(model)
-    source_handle = {"dataType": "OpenAIModel", "id": mid, "name": "model_output", "output_types": ["LanguageModel"]}
+    source_handle = {"dataType": kind, "id": mid, "name": "model_output", "output_types": ["LanguageModel"]}
     target_handle = {"fieldName": field, "id": target["id"], "inputTypes": target["data"]["node"]["template"][field]["input_types"], "type": "other"}
     edge = {"id": f"{mid}-{target['id']}-{field}", "source": mid, "target": target["id"],
             "data": {"sourceHandle": source_handle, "targetHandle": target_handle},
@@ -101,7 +119,7 @@ def wire_model(flow, target, field, profile, role):
 def configure_flow(flow, name, installation, corpus, project):
     flow = copy.deepcopy(flow)
     # Remove previous model nodes after discarding their model-input edges below.
-    old_models = {n["id"] for n in flow["data"]["nodes"] if n["data"]["type"] == "OpenAIModel"}
+    old_models = {n["id"] for n in flow["data"]["nodes"] if n["data"]["type"] in {"OpenAIModel", "ConfiguredModel"}}
     flow["data"]["nodes"] = [n for n in flow["data"]["nodes"] if n["id"] not in old_models]
     flow["data"]["edges"] = [e for e in flow["data"]["edges"] if e["source"] not in old_models and e["target"] not in old_models]
     assignments = {}
@@ -117,7 +135,7 @@ def configure_flow(flow, name, installation, corpus, project):
         assignments[role] = profile.model_dump()
     for node in flow["data"]["nodes"]:
         template = node["data"]["node"]["template"]
-        values = {"corpus_id": corpus, "project_id": project, "pdf_url": installation.pdf_url,
+        values = {"corpus_id": corpus, "project_id": project, "pdf_url": installation.pdf_container_url or installation.pdf_url,
                   "pdf_token_file": installation.pdf_token_file,
                   "discovery_providers_json": json.dumps(installation.discovery.discovery_providers),
                   "max_discoveries": installation.discovery.max_discoveries,
@@ -179,8 +197,8 @@ def ensure_credentials(client, installation):
     import sys
     response = client.get("/api/v1/variables/"); response.raise_for_status()
     existing = {v["name"] for v in response.json() if v.get("has_value", True)}
-    names = {p.credential for p in [installation.llm, *installation.overrides.values()] if p.provider != "ollama"}
-    if installation.embedding and installation.embedding.provider != "ollama":
+    names = {p.credential for p in [installation.llm, *installation.overrides.values()] if p.provider != "ollama" and p.credential}
+    if installation.embedding and installation.embedding.provider != "ollama" and installation.embedding.credential:
         names.add(installation.embedding.credential)
     for name in sorted(names - existing):
         value = os.environ.get(name)
@@ -213,6 +231,9 @@ def publish_flows(installation, corpus, project, directory):
                 current_hash = hashlib.sha256(json.dumps(current.json()["data"], sort_keys=True).encode()).hexdigest()
                 if current_hash != previous["hash"]:
                     raise ValueError(f"Live flow {name} changed in the editor; export and reconcile before updating")
+                # Langflow assigns globally unique names (including suffixes
+                # for another project's toolbox). Preserve that saved name.
+                payload.pop("name", None)
                 response = client.patch(f"/api/v1/flows/{previous['id']}", json=payload)
             else:
                 response = client.post("/api/v1/flows/", json=payload)

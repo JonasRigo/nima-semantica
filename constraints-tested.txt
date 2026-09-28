@@ -2,5 +2,7 @@
 semantica==0.6.8
 langflow-base==1.12.0
 lfx==1.12.0
+# Newer OpenAI bundles import provider APIs absent from pinned LFX 1.12.0.
+lfx-openai==0.1.4
 pydantic==2.13.4
 faiss-cpu==1.15.0

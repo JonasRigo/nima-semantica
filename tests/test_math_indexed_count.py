@@ -47,6 +47,7 @@ def test_global_count_cannot_be_applied_inside_each_indexed_member():
         compile_graph_program(graph, steps, {"beta": "total"}, (spec,))
 
 
+@pytest.mark.symbolic
 def test_correct_member_sum_compiles_and_retains_typed_lineage():
     from nima_semantica.symbolic_transport import configured_symbolic_worker
 

@@ -10,6 +10,7 @@ from nima_semantica.setup_services import provision
 
 def test_provision_failure_resume_and_generated_local_configuration(tmp_path, monkeypatch):
     import nima_semantica.setup_services as services
+    monkeypatch.setattr(services.sys, "platform", "linux")
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
     monkeypatch.setattr(services.shutil, "which", lambda name: "/usr/bin/" + name)
     calls = []

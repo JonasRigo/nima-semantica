@@ -34,20 +34,14 @@ def setup(args):
     else:
         if args.non_interactive and not args.model:
             raise ValueError("--model or --from-config is required for non-interactive setup")
-        model = args.model or input("Tool LLM model identifier: ").strip()
-        provider = args.provider or ("openrouter" if args.non_interactive else input("Provider [openrouter/ollama/compatible] (openrouter): ").strip() or "openrouter")
-        base_url = args.base_url or ("http://127.0.0.1:11434/v1" if provider == "ollama" else "https://openrouter.ai/api/v1")
+        from .model_setup import model_profile, embedding_profile
+        profile = model_profile(args)
         root = Path(args.data_root or Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "nima").expanduser().resolve()
-        config = Installation(data_root=str(root), llm=ModelProfile(provider=provider, model=model, base_url=base_url))
+        config = Installation(data_root=str(root), llm=profile, embedding=embedding_profile(args))
         if not args.non_interactive:
-            from .installation import EmbeddingProfile
-            embedding = input("Ollama embedding model (blank for lexical retrieval): ").strip()
-            if embedding:
-                from .setup_services import probe_embedding
-                config.embedding = EmbeddingProfile(**probe_embedding(embedding))
             for name, roles in model_inventory().items():
                 if roles:
-                    override = input(f"{name}: model override (blank uses {model}): ").strip()
+                    override = input(f"{name}: model override (blank uses {profile.model}): ").strip()
                     if override:
                         config.overrides[name] = config.llm.model_copy(update={"model": override})
     inventory = model_inventory()
@@ -285,7 +279,8 @@ def doctor(config):
     import httpx
     checks = {"python": (3, 11) <= sys.version_info[:2] <= (3, 13),
               "resources": assets().is_dir(), "mcp": importlib.util.find_spec("mcp") is not None}
-    for command in ("docker", "bwrap", "prlimit", "systemctl"):
+    commands = ("docker",) if sys.platform == "darwin" else ("docker", "bwrap", "prlimit", "systemctl")
+    for command in commands:
         checks[command] = shutil.which(command) is not None
     if urlsplit(config.symbolic_url).hostname in {"localhost", "127.0.0.1", "::1"}:
         try:
@@ -331,8 +326,16 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     install = commands.add_parser("setup")
     install.add_argument("--from-config"); install.add_argument("--non-interactive", action="store_true")
-    install.add_argument("--model"); install.add_argument("--provider", choices=["openrouter", "ollama", "compatible"])
+    from .installation import MODEL_ENDPOINTS
+    install.add_argument("--model"); install.add_argument("--provider", choices=list(MODEL_ENDPOINTS))
     install.add_argument("--base-url"); install.add_argument("--data-root")
+    install.add_argument("--credential", help="Credential environment variable name; '-' means no authentication")
+    install.add_argument("--max-tokens", type=int, default=8192)
+    install.add_argument("--model-parameters", help="Provider-specific generation parameters as a JSON object")
+    install.add_argument("--embedding-provider", choices=["none", "ollama", "openai", "compatible"])
+    install.add_argument("--embedding-model"); install.add_argument("--embedding-base-url")
+    install.add_argument("--embedding-credential", help="Independent embedding credential variable; '-' means no authentication")
+    install.add_argument("--embedding-revision"); install.add_argument("--embedding-dimension", type=int)
     install.add_argument("--provision", action="store_true", help="Install/start the local stack, including dependency and model downloads")
     install.add_argument("--pdf", action="store_true"); install.add_argument("--lean", action="store_true")
     commands.add_parser("doctor")

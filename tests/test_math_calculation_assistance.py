@@ -60,6 +60,7 @@ def test_selected_quote_reaches_unchanged_applicability_gate():
 
 
 @pytest.mark.integration
+@pytest.mark.symbolic
 def test_identical_and_missing_reconstruction_coverage(service):
     sid = service.open("Compute", ["answer"])["session_id"]
     explored = call(service,sid,"e","run_experiment",source="a = 1\nb = a + a\nprint(b)",depends_on=["task"],purpose="Explore")
@@ -74,6 +75,7 @@ def test_identical_and_missing_reconstruction_coverage(service):
 
 
 @pytest.mark.integration
+@pytest.mark.symbolic
 def test_reuse_preserves_atomic_matrix_and_unresolved_assumption(service):
     sid = service.open("Compute x", ["answer"])["session_id"]
     plan = [dict(id="one",op="integer",value=1,meaning="unit"),
@@ -96,6 +98,7 @@ def test_reuse_preserves_atomic_matrix_and_unresolved_assumption(service):
 
 
 @pytest.mark.integration
+@pytest.mark.symbolic
 def test_algebra_is_not_domain_application(service):
     sid = service.open("Compute x + x and twice x", ["answer"])["session_id"]
     steps = [dict(id="x",op="symbol",value="x",meaning="task variable"),
@@ -114,6 +117,7 @@ def test_algebra_is_not_domain_application(service):
 
 
 @pytest.mark.integration
+@pytest.mark.symbolic
 def test_operation_exception_has_operands(service):
     sid = service.open("Compute", ["answer"])["session_id"]
     result = call(service,sid,"bad","run_calculation_graph",steps=[dict(id="one",op="integer",value=1,meaning="unit"),

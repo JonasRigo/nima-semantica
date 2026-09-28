@@ -62,8 +62,8 @@ def model_json_object(content):
 
 def completion_envelope(content, manifest, usage, metadata, *, provider_usage=None):
     """Preserve unusable completions as evidence, never repair them into results."""
-    reason = metadata.get("done_reason") or metadata.get("finish_reason")
-    error = "truncated" if reason in ("length", "max_tokens", "max_output_tokens") else None
+    reason = metadata.get("done_reason") or metadata.get("finish_reason") or metadata.get("stop_reason")
+    error = "truncated" if str(reason).lower() in ("length", "max_tokens", "max_output_tokens") else None
     result = {}
     if error is None:
         try:

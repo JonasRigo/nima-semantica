@@ -211,6 +211,7 @@ def test_real_retrieval_no_research_writes(service, store):
 
 
 @pytest.mark.integration
+@pytest.mark.symbolic
 def test_isolated_calculation_submission_and_failed_receipt(service):
     from nima_semantica.symbolic_transport import configured_symbolic_worker
     service.worker = configured_symbolic_worker()
@@ -271,6 +272,7 @@ async def _stdio_lifecycle(tmp_path):
 
 
 @pytest.mark.integration
+@pytest.mark.symbolic
 def test_real_stdio_retrieval_calculation_and_submit(tmp_path):
     pytest.importorskip("semantica")
     from nima_semantica.storage import GraphStore

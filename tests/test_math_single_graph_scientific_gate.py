@@ -8,6 +8,8 @@ from nima_semantica.math_graph_program import compile_graph_program
 from nima_semantica.math_single_graph_state import SingleCalculationGraph
 from nima_semantica.symbolic_transport import configured_symbolic_worker
 
+pytestmark = pytest.mark.symbolic
+
 
 def _step(identifier, op, args=(), *, value=None, provenance=(), meaning=None):
     step = {"id": identifier, "op": op, "args": list(args),

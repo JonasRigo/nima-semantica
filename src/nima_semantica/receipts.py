@@ -7,6 +7,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from .models import Record, StrictModel, now
+from . import __version__
 from .okf_contracts import GraphIdentifier
 
 
@@ -39,7 +40,7 @@ def receipt(stage, run_id, project_id, corpus_id, inputs, outputs=(), status="co
         "schema_version": 1, "invocation_id": uuid4().hex, "stage": stage,
         "run_id": run_id, "outputs": list(outputs), "status": status,
         "error": error, "recorded_at": now(), "semantica_version": version("semantica"),
-        "nima_version": "0.1.0a1", "metadata": metadata or {},
+        "nima_version": __version__, "metadata": metadata or {},
     })
 
 

@@ -27,19 +27,23 @@ All three can survive the end of a chat session.
 
 ## Start here
 
-Use Linux and Python 3.11–3.13 in a dedicated environment.
+Use Ubuntu/Linux or macOS on Apple silicon with Python 3.11–3.13 in a dedicated environment.
+The macOS deployment runs Langflow natively in a dedicated Python environment, with Docker Desktop execution workers. No Langflow Desktop account is required.
+See the [platform verification status](docs/PLATFORM_SUPPORT.md) for release qualification and tested configurations.
 Install the release wheel, then run the setup wizard:
 
 ```sh
 python -m venv .venv
-.venv/bin/pip install torch==2.13.0+cpu --index-url https://download.pytorch.org/whl/cpu
-.venv/bin/pip install 'nima_semantica-0.1.0-py3-none-any.whl[mcp]'
+.venv/bin/pip install 'nima_semantica-0.1.1-py3-none-any.whl[mcp]'
 .venv/bin/nima setup --provision --pdf --lean
 .venv/bin/nima project init my-research --corpus papers --path /path/to/project
 ```
 
+On Linux, install `torch==2.13.0+cpu` from `https://download.pytorch.org/whl/cpu` before the wheel to select the CPU build. On macOS, use the native PyPI build selected by pip.
+
 The [user guide](docs/README.md) covers prerequisites, model configuration, Codex/Claude Code/OpenCode connections and continuing an existing project.
 A shared tool model and optional overrides configure every model-using workflow; the harness controls its own model.
+The same wizard supports native Anthropic, Gemini and Ollama plus OpenAI-compatible endpoints. LLM and embedding choices are independent; an all-local Ollama or compatible-server setup needs no paid cloud credentials.
 
 ```sh
 nima ingest papers /path/to/paper.pdf
@@ -79,5 +83,5 @@ python -m pytest -q
 ```
 
 NIMA is under active development; contributions, including custom Langflow workflows, are welcome.
-Use [CITATION.cff](CITATION.cff) for author and release metadata and [DOI 10.5281/zenodo.22998905](https://doi.org/10.5281/zenodo.22998905) for the versioned archive.
+Use [CITATION.cff](CITATION.cff) for author and release metadata. The [v0.1.0 archive](https://doi.org/10.5281/zenodo.22998905) remains available; v0.1.1 has not yet been assigned a versioned DOI.
 See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for project and third-party terms.

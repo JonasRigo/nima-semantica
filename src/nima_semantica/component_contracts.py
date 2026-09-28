@@ -242,6 +242,12 @@ def validate_manifest_execution(
 
 def manifest_for_component(name: str) -> ComponentManifest:
     """Resolve a maintained foundational adapter, rejecting retired tools."""
+    if name == "ConfiguredModel":
+        return ComponentManifest(component_id="configured_model", version="1",
+            input_contract="model_profile", output_contract="language_model",
+            scope_fields=(), revision_fields=(), capabilities=(ComponentCapability.MODEL_CALL,),
+            authority=ComponentAuthority.READ_ONLY, side_effect_class=SideEffectClass.READ_ONLY_RETRIEVAL,
+            receipt=ReceiptDeclaration(mode=ReceiptMode.NONE))
     if name == "ConfiguredEmbeddings":
         return ComponentManifest(component_id="configured_embeddings", version="1",
             input_contract="embedding_profile", output_contract="embeddings",

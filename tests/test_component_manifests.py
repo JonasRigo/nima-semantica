@@ -35,7 +35,7 @@ def test_every_shipped_wrapper_declares_a_manifest():
         assert len(classes) == 1, path
         # Inspectable adapters embed their implementation instead of hiding it
         # behind a subclass-only palette wrapper.
-        if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in {"run", "run_request", "build_tool", "build_backend", "build_embeddings"} for node in classes[0].body):
+        if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in {"run", "run_request", "build_tool", "build_backend", "build_embeddings", "build_model"} for node in classes[0].body):
             assert any(isinstance(node, ast.Assign) and any(
                 isinstance(target, ast.Name) and target.id == "nima_manifest" for target in node.targets
             ) for node in classes[0].body), path

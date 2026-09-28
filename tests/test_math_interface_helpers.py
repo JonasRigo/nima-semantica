@@ -99,6 +99,7 @@ def test_named_references_exact_scope_replay_and_provisional_status(tmp_path):
 @pytest.mark.integration
 @pytest.mark.parametrize("domain,expected", [("algebra", "x + y"),
     ("probability", "1"), ("matrix", "Matrix([[x + y, x + y]])"), ("physics", "x + y")])
+@pytest.mark.symbolic
 def test_aggregation_executes_and_named_submission_preserves_status(tmp_path, domain, expected):
     from nima_semantica.symbolic_transport import configured_symbolic_worker
     service = MathSessionService(MathServiceConfig(database_path=str(tmp_path / "s.db"),

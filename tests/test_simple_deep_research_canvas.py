@@ -86,6 +86,7 @@ def test_stock_arxiv_then_stock_url_only_for_observed_hit(monkeypatch):
         calls.append(("arxiv", self.search_query))
         return DataFrame([{"id": "http://arxiv.org/abs/2601.12345", "title": "A paper", "summary": "Abstract"}])
     async def fetch(self):
+        assert {row['key']: row['value'] for row in self.headers} == {'User-Agent':'NIMA-DeepResearch/5.0'}
         calls.append(("url", tuple(self.urls), self.max_depth, self.format))
         return DataFrame([{"url": self.urls[0], "text": "<html>Paper</html>"}])
     monkeypatch.setattr(ArXivComponent, "search_papers_dataframe", search)

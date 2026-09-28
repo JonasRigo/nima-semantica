@@ -2,9 +2,8 @@ cff-version: 1.2.0
 message: "Cite NIMA-Semantica and its Semantica dependency."
 title: NIMA-Semantica
 type: software
-version: 0.1.0
+version: 0.1.1
 repository-code: https://github.com/JonasRigo/nima-semantica
-doi: 10.5281/zenodo.22998905
 authors:
   - family-names: Rigo
     given-names: Jonas

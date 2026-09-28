@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nima-semantica"
-version = "0.1.0"
+version = "0.1.1"
 authors = [{name = "Jonas Rigo"}]
 description = "Local, auditable mathematical research on Semantica"
 requires-python = ">=3.11,<3.14"
@@ -20,7 +20,7 @@ Issues = "https://github.com/JonasRigo/nima-semantica/issues"
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.27.1,<2"]
-langflow = ["langflow==1.12.0", "langflow-base==1.12.0", "lfx==1.12.0", "lfx-arxiv>=0.1.5,<1.0.0", "beautifulsoup4>=4.12,<5"]
+langflow = ["langflow==1.12.0", "langflow-base==1.12.0", "lfx==1.12.0", "lfx-openai==0.1.4", "lfx-arxiv>=0.1.5,<1.0.0", "beautifulsoup4>=4.12,<5", "langchain-anthropic>=1.4,<2", "langchain-google-genai>=4.1,<5", "langchain-ollama>=0.3.10,<1"]
 pdf = ["docling==2.122.0", "docling-core==2.92.0", "transformers==5.15.1", "torch>=2.13,<2.14", "torchvision>=0.28,<0.29", "onnxruntime==1.29.0", "packaging>=24,<27"]
 test = ["pytest>=8,<10", "pytest-asyncio>=0.24"]
 all = ["nima-semantica[langflow,pdf,mcp]"]
@@ -39,4 +39,4 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["integration: requires installed optional services", "live: uses explicitly configured Langflow providers"]
+markers = ["integration: requires installed optional services", "live: uses explicitly configured Langflow providers", "symbolic: requires the isolated symbolic worker image or configured remote worker"]

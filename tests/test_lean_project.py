@@ -1,5 +1,7 @@
 import json
+import os
 import shutil
+import threading
 from pathlib import Path
 
 import pytest
@@ -16,11 +18,14 @@ class Artifacts:
 
     def __init__(self, root):
         self.root = root
+        self._mutex = threading.RLock()
+        self._in_transaction = False
 
 
 @pytest.fixture(scope="module")
 def verifier():
-    root = Path(__file__).resolve().parents[1] / ".nima/lean-toolchain-4.32.1"
+    root = Path(os.environ.get("NIMA_TEST_LEAN_TOOLCHAIN",
+        Path(__file__).resolve().parents[1] / ".nima/lean-toolchain-4.32.1"))
     if not (root / "bin/lean").exists() or not shutil.which("bwrap"):
         pytest.skip("explicit local Lean 4.32.1 installation and bwrap required")
     return LeanProjectVerifier(PinnedDirectory(root, tree_digest(root)), timeout=60)

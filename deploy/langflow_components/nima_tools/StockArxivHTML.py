@@ -89,7 +89,7 @@ class StockArxivHTML(BaseComponent):
             url_reader.continue_on_failure = True
             url_reader.check_response_status = True
             url_reader.autoset_encoding = True
-            url_reader.headers = DataFrame([{"key": "User-Agent", "value": "NIMA-DeepResearch/5.0"}])
+            url_reader.headers = [{"key": "User-Agent", "value": "NIMA-DeepResearch/5.0"}]
             try:
                 pages = (await url_reader.fetch_content()).to_dict(orient="records")
             except Exception as exc:

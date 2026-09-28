@@ -284,6 +284,31 @@
       "wrapper": "deploy/langflow_components/nima_tools/ConfiguredEmbeddings.py"
     },
     {
+      "identity": "ConfiguredModel",
+      "manifest": {
+        "authority": "read_only",
+        "capabilities": [
+          "model_call"
+        ],
+        "component_id": "configured_model",
+        "diagnostics": "required",
+        "input_contract": "model_profile",
+        "output_contract": "language_model",
+        "receipt": {
+          "contract_id": null,
+          "field": "receipt_ids",
+          "mode": "none"
+        },
+        "registry_resource_kinds": [],
+        "revision_fields": [],
+        "schema_version": 1,
+        "scope_fields": [],
+        "side_effect_class": "read_only_retrieval",
+        "version": "1"
+      },
+      "wrapper": "deploy/langflow_components/nima_tools/ConfiguredModel.py"
+    },
+    {
       "identity": "CounterexampleFields",
       "manifest": {
         "authority": "transformation",

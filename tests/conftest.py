@@ -1,6 +1,30 @@
 import pytest
+import os
+import subprocess
 
 from nima_semantica.storage import GraphStore
+
+
+@pytest.fixture(scope="session")
+def symbolic_runtime():
+    if os.environ.get("NIMA_SYMBOLIC_WORKER_URL"):
+        return
+    try:
+        available = subprocess.run(["docker", "image", "inspect", "nima-sympy:1.14.0-pilot"],
+                                   capture_output=True, timeout=15).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        available = False
+    if not available:
+        message = "requires nima-sympy:1.14.0-pilot or NIMA_SYMBOLIC_WORKER_URL"
+        if os.environ.get("NIMA_LIVE_SYMBOLIC") == "1":
+            pytest.fail(message)
+        pytest.skip(message)
+
+
+@pytest.fixture(autouse=True)
+def require_marked_symbolic_runtime(request):
+    if request.node.get_closest_marker("symbolic"):
+        request.getfixturevalue("symbolic_runtime")
 
 
 def seed_region(store, text="Exact source text.", *, corpus_id="papers", project_id=None):

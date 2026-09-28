@@ -339,6 +339,38 @@ def test_unneeded_refinement_cannot_discard_valid_relevance_decisions():
             "relevant": False, "reason": "Off topic"}], "refinement": raw["refinement"]})
 
 
+@pytest.mark.parametrize('repair', [True, False])
+def test_regional_ontology_error_has_one_audited_correction(store, monkeypatch, repair):
+    from nima_semantica.deep_research_passes import RegionalGraphMismatch, _validate_provisional
+    monkeypatch.setattr('nima_semantica.deep_research_passes.exact_fast_passage', lambda *a, **k: None)
+    req = request(store, 'ontology-correction-' + str(repair))
+    prompts, attempts = [], []
+    def model(prompt):
+        prompts.append(prompt)
+        draft = _draft('exact-passage', 'fixture')
+        if len(prompts) == 1 or not repair:
+            draft['edges'][0]['relation'] = 'about'  # paper -> claim is not an allowed about relation
+        return Invocation(result=draft, manifest=MANIFEST, input_tokens=40, output_tokens=20)
+    def validate(draft):
+        try:
+            _validate_provisional(store, GraphExtractionCandidate(nodes=draft.nodes, edges=draft.edges),
+                ['exact-passage'], context())
+        except ValueError as exc:
+            raise RegionalGraphMismatch(str(exc)) from exc
+    def run():
+        return _model_step(store, req, context(), model, attempts, 'regional_0',
+            {'stage':'regional_graph'}, RegionalDraft, validator=validate)
+    if repair:
+        assert run().edges[0].relation == 'asserts'
+    else:
+        with pytest.raises(RegionalGraphMismatch):
+            run()
+    assert len(prompts) == 2
+    assert 'violates the review ontology' in prompts[1]['validation_feedback']
+    assert [a['status'] for a in attempts] == ['failed', 'completed' if repair else 'failed']
+    assert not store.records('ProvisionalReviewGraph')
+
+
 def test_pdf_worker_preflight_fails_before_paid_model_or_provider(store):
     req = request(store, "passes-pdf-unready")
     calls = []

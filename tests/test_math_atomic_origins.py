@@ -23,6 +23,7 @@ def service_at(tmp_path, worker=None):
 
 
 @pytest.mark.integration
+@pytest.mark.symbolic
 def test_explicit_assumption_executes_but_cannot_qualify_answer(tmp_path):
     from nima_semantica.symbolic_transport import configured_symbolic_worker
     service = service_at(tmp_path, configured_symbolic_worker())

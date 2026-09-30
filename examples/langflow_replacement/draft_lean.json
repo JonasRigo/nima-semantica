@@ -238,7 +238,7 @@
             "base_classes": [
               "Message"
             ],
-            "display_name": "Request \u00b7 Draft Lean",
+            "display_name": "Request · Draft Lean",
             "documentation": "https://docs.langflow.org/chat-input-and-output",
             "minimized": true,
             "custom_fields": {},
@@ -513,7 +513,7 @@
             "base_classes": [
               "Message"
             ],
-            "display_name": "Result \u00b7 Draft Lean",
+            "display_name": "Result · Draft Lean",
             "documentation": "https://docs.langflow.org/chat-input-and-output",
             "minimized": true,
             "custom_fields": {},
@@ -615,7 +615,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Harness-selected targets; operator permissions stay outside public JSON.\"\"\"\nimport json\nfrom lfx.io import StrInput, DropdownInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.lean_draft_contracts import DraftLeanRequest\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\n\n\nclass DraftLeanFields(BaseComponent):\n    name = \"DraftLeanFields\"\n    display_name = \"Draft Lean Inputs\"\n    description = \"Pin exact graph and target-content revisions; select the exact local proof task to develop. Additional prepared region IDs are optional; exact corpus/project scope and permissions are operator-owned.\"\n    nima_manifest = manifest_for_component(\"DraftLeanFields\")\n    inputs = [DropdownInput(name=\"mode\",display_name=\"Mode\",options=[\"preview\",\"draft\",\"repair\"],value=\"preview\"),\n        StrInput(name=\"graph_revision_json\",display_name=\"Exact graph revision (JSON)\",value=\"null\"),\n        StrInput(name=\"target_json\",display_name=\"Exact local target JSON (including content_revision)\",value=\"null\"),\n        StrInput(name=\"environment_digest\",display_name=\"Pinned environment digest\",value=\"\"),\n        StrInput(name=\"targets_json\",display_name=\"Exact declaration names (JSON list)\",value='[\"target\"]'),\n        StrInput(name=\"expected_type_fingerprints_json\",display_name=\"Expected alpha-normalized type fingerprints (JSON)\",value=\"{}\"),\n        StrInput(name=\"artifact_id\",display_name=\"Proposed extraction artifact ID, optional\",value=\"\"),\n        StrInput(name=\"source_region_ids_json\",display_name=\"Additional prepared region IDs (JSON list)\",value=\"[]\"),\n        StrInput(name=\"operation_id\",display_name=\"Unique attempt ID\",value=\"\"),\n        StrInput(name=\"run_id\",display_name=\"Harness run ID, optional\",value=\"\"),\n        HandleInput(name=\"mcp_request\",display_name=\"Optional request JSON\",input_types=[\"Message\",\"Data\",\"JSON\"],required=False)]\n    outputs = [Output(name=\"request\",display_name=\"Validated proof request\",method=\"request_data\",group_outputs=True),\n        Output(name=\"preview\",display_name=\"Request preview\",method=\"preview_message\",group_outputs=True)]\n\n    async def run(self):\n        override=native(getattr(self,\"mcp_request\",None))\n        if isinstance(override,str):\n            if len(override)>250000:raise ValueError(\"request exceeds input limit\")\n            override=strict_json_object(override) if override.strip() else {}\n        if override is None:override={}\n        if not isinstance(override,dict):raise ValueError(\"expected request object\")\n        payload=dict(mode=self.mode,graph_revision=json.loads(self.graph_revision_json),target=json.loads(self.target_json),environment_digest=self.environment_digest or None,\n            targets=json.loads(self.targets_json),expected_declaration_type_fingerprints=json.loads(self.expected_type_fingerprints_json),\n            source_region_ids=json.loads(self.source_region_ids_json),artifact_id=self.artifact_id or None,\n            operation_id=self.operation_id or None,run_id=self.run_id or None)\n        return DraftLeanRequest.model_validate(payload|override).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
+                "value": "\"\"\"Harness-selected targets; operator permissions stay outside public JSON.\"\"\"\nimport json\nfrom lfx.io import StrInput, DropdownInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.lean_draft_contracts import DraftLeanRequest\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import RequestFields as BaseComponent\n\n\nclass DraftLeanFields(BaseComponent):\n    name = \"DraftLeanFields\"\n    display_name = \"Draft Lean Inputs\"\n    description = \"Pin exact graph and target-content revisions; select the exact local proof task to develop. Additional prepared region IDs are optional; exact corpus/project scope and permissions are operator-owned.\"\n    nima_manifest = manifest_for_component(\"DraftLeanFields\")\n    inputs = [DropdownInput(name=\"mode\",display_name=\"Mode\",options=[\"preview\",\"draft\",\"repair\"],value=\"preview\"),\n        StrInput(name=\"graph_revision_json\",display_name=\"Exact graph revision (JSON)\",value=\"null\"),\n        StrInput(name=\"target_json\",display_name=\"Exact local target JSON (including content_revision)\",value=\"null\"),\n        StrInput(name=\"environment_digest\",display_name=\"Pinned environment digest\",value=\"\"),\n        StrInput(name=\"targets_json\",display_name=\"Exact declaration names (JSON list)\",value='[\"target\"]'),\n        StrInput(name=\"expected_type_fingerprints_json\",display_name=\"Expected alpha-normalized type fingerprints (JSON)\",value=\"{}\"),\n        StrInput(name=\"artifact_id\",display_name=\"Proposed extraction artifact ID, optional\",value=\"\"),\n        StrInput(name=\"source_region_ids_json\",display_name=\"Additional prepared region IDs (JSON list)\",value=\"[]\"),\n        StrInput(name=\"operation_id\",display_name=\"Unique attempt ID\",value=\"\"),\n        StrInput(name=\"run_id\",display_name=\"Harness run ID, optional\",value=\"\"),\n        HandleInput(name=\"mcp_request\",display_name=\"Optional request JSON\",input_types=[\"Message\",\"Data\",\"JSON\"],required=False)]\n    outputs = [Output(name=\"request\",display_name=\"Validated proof request\",method=\"request_data\",group_outputs=True),\n        Output(name=\"preview\",display_name=\"Request preview\",method=\"preview_message\",group_outputs=True)]\n\n    async def run(self):\n        override=native(getattr(self,\"mcp_request\",None))\n        if isinstance(override,str):\n            if len(override)>250000:raise ValueError(\"request exceeds input limit\")\n            override=strict_json_object(override) if override.strip() else {}\n        if override is None:override={}\n        if not isinstance(override,dict):raise ValueError(\"expected request object\")\n        payload=dict(mode=self.mode,graph_revision=json.loads(self.graph_revision_json),target=json.loads(self.target_json),environment_digest=self.environment_digest or None,\n            targets=json.loads(self.targets_json),expected_declaration_type_fingerprints=json.loads(self.expected_type_fingerprints_json),\n            source_region_ids=json.loads(self.source_region_ids_json),artifact_id=self.artifact_id or None,\n            operation_id=self.operation_id or None,run_id=self.run_id or None)\n        return DraftLeanRequest.model_validate(payload|override).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -883,7 +883,7 @@
             "metadata": {
               "nima_component_id": "draft_lean_fields",
               "contract_version": "2",
-              "source_sha256": "627ee3f3ba2d9e6cbdc9a880b752ae64f88119dd2297e8970516861900732aeb"
+              "source_sha256": "a53ec96fd84cc5bb1f653414dfdaa7b223305f04669fe2b77be0ad713a2a90d8"
             },
             "tool_mode": false
           },
@@ -1092,7 +1092,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Inspectable proof agent with exact grounding and proposal-only publication.\"\"\"\nimport json\nfrom lfx.io import StrInput, BoolInput, IntInput, HandleInput\nfrom lfx.schema import Message, DataFrame\nfrom nima_semantica.lean_draft_contracts import DraftLeanRequest, DraftLeanContext\nfrom nima_semantica.lean_draft_tool import draft_lean\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.lean_draft_state import POLICY_DIGEST\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\nfrom nima_semantica.lean_search import LeanSearchPolicy\nfrom nima_semantica.providers import ModelManifest, completion_envelope\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass DraftLean(BaseComponent):\n    name = \"DraftLean\"\n    display_name = \"Draft Lean \u00b7 Ontology-State Agent\"\n    description = \"Formalize or repair a harness-selected local target. Private source revisions, corpus retrieval, LeanSearch, local declaration resolution and exact isolated verification. No automatic correspondence certification or parent completion.\"\n    nima_manifest = manifest_for_component(\"DraftLean\")\n    inputs = [\n        HandleInput(name=\"backend\",display_name=\"Verify Lean capability (operator)\",input_types=[\"DraftLeanBackend\"],required=False),\n        HandleInput(name=\"lean_search\",display_name=\"LeanSearch capability (operator)\",input_types=[\"Tool\"],required=False),\n        IntInput(name=\"max_verifications\",display_name=\"Maximum source checks (operator)\",value=6),\n        IntInput(name=\"max_resolutions\",display_name=\"Maximum local lookups (operator)\",value=6),handle(\"payload\",\"Validated proof request\"),handle(\"policy\",\"Pinned private ontology\",required=False),\n        handle(\"retrieval_policy\",\"Optional context retrieval policy\",required=False),\n        StrInput(name=\"corpus_id\",display_name=\"Authorized corpus (operator)\",value=\"papers\"),\n        StrInput(name=\"project_id\",display_name=\"Authorized project (operator)\",value=\"research\"),\n        BoolInput(name=\"allow_audit_writes\",display_name=\"Allow attempts and outcome artifacts (operator)\",value=False),\n        BoolInput(name=\"allow_model_calls\",display_name=\"Allow model calls (operator)\",value=False),\n        IntInput(name=\"max_actions\",display_name=\"Agent action limit (operator)\",value=20),\n        IntInput(name=\"max_nodes\",display_name=\"Maximum snapshot nodes (operator)\",value=128),\n        IntInput(name=\"max_edges\",display_name=\"Maximum snapshot edges (operator)\",value=256),\n        IntInput(name=\"max_read_regions\",display_name=\"Maximum exact-read regions (operator)\",value=32),\n        StrInput(name=\"model_manifest_json\",display_name=\"Model identity JSON (operator)\",value=\"{}\",advanced=True),\n        HandleInput(name=\"model\",display_name=\"Proof language model (operator)\",input_types=[\"LanguageModel\"],required=False)]\n\n    async def run(self):\n        policy = getattr(self,\"policy\",None)\n        if policy and _value(policy).get(\"policy_digest\") != POLICY_DIGEST:\n            raise ValueError(\"canvas policy differs from pinned controller policy\")\n        request = DraftLeanRequest.model_validate(_value(self.payload))\n        manifest = ModelManifest.model_validate_json(self.model_manifest_json) if self.model_manifest_json.strip() not in (\"\",\"{}\") else None\n        backend = getattr(self,\"backend\",None) or None\n        discovery = getattr(self,\"lean_search\",None) or None\n        context = DraftLeanContext(corpus_id=self.corpus_id,project_id=self.project_id,\n            allow_audit_writes=self.allow_audit_writes,allow_model_calls=self.allow_model_calls,\n            allow_execution=bool(backend and backend.enabled),max_verifications=self.max_verifications,max_resolutions=self.max_resolutions,\n            lean_search=LeanSearchPolicy.model_validate(discovery.metadata[\"nima_lean_search\"]) if discovery is not None else LeanSearchPolicy(),\n            max_actions=self.max_actions,max_nodes=self.max_nodes,max_edges=self.max_edges,max_read_regions=self.max_read_regions,\n            model_manifest=manifest, retrieval=MathRetrievalPolicy.model_validate(_value(self.retrieval_policy))\n                if getattr(self,\"retrieval_policy\",None) else MathRetrievalPolicy())\n        language_model = getattr(self,\"model\",None)\n        def invoke(prompt):\n            messages = [*prompt[\"messages\"],{\"role\":\"user\",\"content\":\"Remaining actions: \"+str(prompt[\"remaining_actions\"])}]\n            response = language_model.bind_tools(prompt[\"tools\"],tool_choice=\"required\",parallel_tool_calls=False).invoke(messages)\n            if not response.usage_metadata:raise ValueError(\"model omitted usage metadata\")\n            calls = response.tool_calls\n            valid = len(calls)==1 and calls[0][\"name\"] in {t[\"function\"][\"name\"] for t in prompt[\"tools\"]} and not getattr(response,\"invalid_tool_calls\",[])\n            content = json.dumps({\"name\":calls[0][\"name\"],\"arguments\":calls[0][\"args\"]}) if valid else \"invalid tool envelope\"\n            return completion_envelope(content,manifest,response.usage_metadata,response.response_metadata)\n        with configured_store(required=False) as store:\n            options = {}\n            if backend is not None and request.mode != \"preview\" and context.allow_model_calls and context.allow_audit_writes:\n                options.update(verifier_factory=backend.load_verifier,verification=backend.verify_exact)\n            if discovery is not None:\n                options[\"discovery\"] = lambda policy,action: discovery.invoke(action.model_dump(mode=\"json\"))\n            return draft_lean(store,request,context,model=invoke if language_model is not None else None,**options).model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)\n        for char in (\"`\",\"<\",\">\",\"&\"):text=text.replace(char,\"\\\\u\"+format(ord(char),\"04x\"))\n        return Message(text=\"```json\\n\"+text+\"\\n```\")\n\n    async def table_data(self) -> DataFrame:\n        return DataFrame((await self.result_data()).data.get(\"data\",{}).get(\"attempts\",[]))\n",
+                "value": "\"\"\"Inspectable proof agent with exact grounding and proposal-only publication.\"\"\"\nimport json\nfrom lfx.io import StrInput, BoolInput, IntInput, HandleInput\nfrom lfx.schema import Message, DataFrame\nfrom nima_semantica.lean_draft_contracts import DraftLeanRequest, DraftLeanContext\nfrom nima_semantica.lean_draft_tool import draft_lean\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.lean_draft_state import POLICY_DIGEST\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\nfrom nima_semantica.lean_search import LeanSearchPolicy\nfrom nima_semantica.providers import ModelManifest, completion_envelope\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass DraftLean(BaseComponent):\n    name = \"DraftLean\"\n    display_name = \"Draft Lean · Ontology-State Agent\"\n    description = \"Formalize or repair a harness-selected local target. Private source revisions, corpus retrieval, LeanSearch, local declaration resolution and exact isolated verification. No automatic correspondence certification or parent completion.\"\n    nima_manifest = manifest_for_component(\"DraftLean\")\n    inputs = [\n        HandleInput(name=\"backend\",display_name=\"Verify Lean capability (operator)\",input_types=[\"DraftLeanBackend\"],required=False),\n        HandleInput(name=\"lean_search\",display_name=\"LeanSearch capability (operator)\",input_types=[\"Tool\"],required=False),\n        IntInput(name=\"max_verifications\",display_name=\"Maximum source checks (operator)\",value=6),\n        IntInput(name=\"max_resolutions\",display_name=\"Maximum local lookups (operator)\",value=6),handle(\"payload\",\"Validated proof request\"),handle(\"policy\",\"Pinned private ontology\",required=False),\n        handle(\"retrieval_policy\",\"Optional context retrieval policy\",required=False),\n        StrInput(name=\"corpus_id\",display_name=\"Authorized corpus (operator)\",value=\"papers\"),\n        StrInput(name=\"project_id\",display_name=\"Authorized project (operator)\",value=\"research\"),\n        BoolInput(name=\"allow_audit_writes\",display_name=\"Allow attempts and outcome artifacts (operator)\",value=False),\n        BoolInput(name=\"allow_model_calls\",display_name=\"Allow model calls (operator)\",value=False),\n        IntInput(name=\"max_actions\",display_name=\"Agent action limit (operator)\",value=20),\n        IntInput(name=\"max_nodes\",display_name=\"Maximum snapshot nodes (operator)\",value=128),\n        IntInput(name=\"max_edges\",display_name=\"Maximum snapshot edges (operator)\",value=256),\n        IntInput(name=\"max_read_regions\",display_name=\"Maximum exact-read regions (operator)\",value=32),\n        StrInput(name=\"model_manifest_json\",display_name=\"Model identity JSON (operator)\",value=\"{}\",advanced=True),\n        HandleInput(name=\"model\",display_name=\"Proof language model (operator)\",input_types=[\"LanguageModel\"],required=False)]\n\n    async def run(self):\n        policy = getattr(self,\"policy\",None)\n        if policy and _value(policy).get(\"policy_digest\") != POLICY_DIGEST:\n            raise ValueError(\"canvas policy differs from pinned controller policy\")\n        request = DraftLeanRequest.model_validate(_value(self.payload))\n        manifest = ModelManifest.model_validate_json(self.model_manifest_json) if self.model_manifest_json.strip() not in (\"\",\"{}\") else None\n        backend = getattr(self,\"backend\",None) or None\n        discovery = getattr(self,\"lean_search\",None) or None\n        context = DraftLeanContext(corpus_id=self.corpus_id,project_id=self.project_id,\n            allow_audit_writes=self.allow_audit_writes,allow_model_calls=self.allow_model_calls,\n            allow_execution=bool(backend and backend.enabled),max_verifications=self.max_verifications,max_resolutions=self.max_resolutions,\n            lean_search=LeanSearchPolicy.model_validate(discovery.metadata[\"nima_lean_search\"]) if discovery is not None else LeanSearchPolicy(),\n            max_actions=self.max_actions,max_nodes=self.max_nodes,max_edges=self.max_edges,max_read_regions=self.max_read_regions,\n            model_manifest=manifest, retrieval=MathRetrievalPolicy.model_validate(_value(self.retrieval_policy))\n                if getattr(self,\"retrieval_policy\",None) else MathRetrievalPolicy())\n        language_model = getattr(self,\"model\",None)\n        def invoke(prompt):\n            messages = [*prompt[\"messages\"],{\"role\":\"user\",\"content\":\"Remaining actions: \"+str(prompt[\"remaining_actions\"])}]\n            response = language_model.bind_tools(prompt[\"tools\"],tool_choice=\"required\",parallel_tool_calls=False).invoke(messages)\n            if not response.usage_metadata:raise ValueError(\"model omitted usage metadata\")\n            calls = response.tool_calls\n            valid = len(calls)==1 and calls[0][\"name\"] in {t[\"function\"][\"name\"] for t in prompt[\"tools\"]} and not getattr(response,\"invalid_tool_calls\",[])\n            content = json.dumps({\"name\":calls[0][\"name\"],\"arguments\":calls[0][\"args\"]}) if valid else \"invalid tool envelope\"\n            return completion_envelope(content,manifest,response.usage_metadata,response.response_metadata)\n        with configured_store(required=False) as store:\n            options = {}\n            if backend is not None and request.mode != \"preview\" and context.allow_model_calls and context.allow_audit_writes:\n                options.update(verifier_factory=backend.load_verifier,verification=backend.verify_exact)\n            if discovery is not None:\n                options[\"discovery\"] = lambda policy,action: discovery.invoke(action.model_dump(mode=\"json\"))\n            return draft_lean(store,request,context,model=invoke if language_model is not None else None,**options).model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)\n        for char in (\"`\",\"<\",\">\",\"&\"):text=text.replace(char,\"\\\\u\"+format(ord(char),\"04x\"))\n        return Message(text=\"```json\\n\"+text+\"\\n```\")\n\n    async def table_data(self) -> DataFrame:\n        return DataFrame((await self.result_data()).data.get(\"data\",{}).get(\"attempts\",[]))\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -1303,7 +1303,7 @@
               "Message",
               "Table"
             ],
-            "display_name": "Draft Lean \u00b7 Ontology-State Agent",
+            "display_name": "Draft Lean · Ontology-State Agent",
             "documentation": "",
             "minimized": false,
             "custom_fields": {},
@@ -1620,7 +1620,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Operator-authorized method-context retrieval inside search planning.\"\"\"\nfrom lfx.io import BoolInput, StrInput\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\n\n\nclass LeanDraftRetrieval(BaseComponent):\n    name = \"LeanDraftRetrieval\"\n    display_name = \"Lean Context Retrieval \u00b7 Operator Policy\"\n    description = \"Optional native corpus retrieval and exact reads for support and counterevidence. May add prepared evidence regions, never enlarge the selected graph targets.\"\n    nima_manifest = manifest_for_component(\"LeanDraftRetrieval\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Allow context retrieval (operator)\",value=False),\n        StrInput(name=\"projection_id\",display_name=\"Prepared projection ID (operator)\",value=\"\")]\n\n    async def run(self):\n        return MathRetrievalPolicy(enabled=self.enabled,projection_id=self.projection_id.strip() or None).model_dump(mode=\"json\")\n",
+                "value": "\"\"\"Operator-authorized method-context retrieval inside search planning.\"\"\"\nfrom lfx.io import BoolInput, StrInput\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\n\n\nclass LeanDraftRetrieval(BaseComponent):\n    name = \"LeanDraftRetrieval\"\n    display_name = \"Lean Context Retrieval · Operator Policy\"\n    description = \"Optional native corpus retrieval and exact reads for support and counterevidence. May add prepared evidence regions, never enlarge the selected graph targets.\"\n    nima_manifest = manifest_for_component(\"LeanDraftRetrieval\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Allow context retrieval (operator)\",value=False),\n        StrInput(name=\"projection_id\",display_name=\"Prepared projection ID (operator)\",value=\"\")]\n\n    async def run(self):\n        return MathRetrievalPolicy(enabled=self.enabled,projection_id=self.projection_id.strip() or None).model_dump(mode=\"json\")\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -1682,7 +1682,7 @@
               "Message",
               "Table"
             ],
-            "display_name": "Lean Context Retrieval \u00b7 Operator Policy",
+            "display_name": "Lean Context Retrieval · Operator Policy",
             "documentation": "",
             "minimized": false,
             "custom_fields": {},
@@ -1788,7 +1788,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Optional on-demand LeanSearch; provider candidates are not locally verified.\"\"\"\nfrom lfx.custom import Component\nfrom lfx.io import BoolInput, StrInput, IntInput, Output\nfrom lfx.base.tools.base import Tool\nfrom langchain_core.tools import StructuredTool\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.lean_search import LeanSearchPolicy, SearchLean, search_lean\n\n\nclass LeanSearch(Component):\n    name = \"LeanSearch\"\n    display_name = \"LeanSearch \u00b7 Declaration Discovery\"\n    description = \"Optional external library search, gated by explicit query-disclosure approval. Candidates must be resolved in the pinned local environment. Building the capability sends no request.\"\n    nima_manifest = manifest_for_component(\"LeanSearch\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Enable LeanSearch (operator)\",value=False),\n        BoolInput(name=\"allow_query_disclosure\",display_name=\"Approve external query disclosure (operator)\",value=False),\n        StrInput(name=\"endpoint\",display_name=\"Approved endpoint (operator)\",value=\"https://leansearch.net/search\"),\n        StrInput(name=\"index_revision\",display_name=\"Provider index revision (operator)\",value=\"provider-unpinned\"),\n        IntInput(name=\"max_results\",display_name=\"Maximum candidates (operator)\",value=5)]\n    outputs = [Output(name=\"tool\",display_name=\"LeanSearch capability\",method=\"build_tool\",group_outputs=True)]\n\n    async def build_tool(self) -> Tool:\n        policy=LeanSearchPolicy(enabled=self.enabled,allow_query_disclosure=self.allow_query_disclosure,\n            endpoint=self.endpoint,index_revision=self.index_revision,max_results=self.max_results)\n        def discover(query: str):return search_lean(policy,SearchLean(query=query))\n        return StructuredTool.from_function(func=discover,name=\"search_lean\",description=self.description,\n            args_schema=SearchLean,metadata={\"nima_lean_search\":policy.model_dump(mode=\"json\")})\n",
+                "value": "\"\"\"Optional on-demand LeanSearch; provider candidates are not locally verified.\"\"\"\nfrom lfx.custom import Component\nfrom lfx.io import BoolInput, StrInput, IntInput, Output\nfrom lfx.base.tools.base import Tool\nfrom langchain_core.tools import StructuredTool\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.lean_search import LeanSearchPolicy, SearchLean, search_lean\n\n\nclass LeanSearch(Component):\n    name = \"LeanSearch\"\n    display_name = \"LeanSearch · Declaration Discovery\"\n    description = \"Optional external library search, gated by explicit query-disclosure approval. Candidates must be resolved in the pinned local environment. Building the capability sends no request.\"\n    nima_manifest = manifest_for_component(\"LeanSearch\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Enable LeanSearch (operator)\",value=False),\n        BoolInput(name=\"allow_query_disclosure\",display_name=\"Approve external query disclosure (operator)\",value=False),\n        StrInput(name=\"endpoint\",display_name=\"Approved endpoint (operator)\",value=\"https://leansearch.net/search\"),\n        StrInput(name=\"index_revision\",display_name=\"Provider index revision (operator)\",value=\"provider-unpinned\"),\n        IntInput(name=\"max_results\",display_name=\"Maximum candidates (operator)\",value=5)]\n    outputs = [Output(name=\"tool\",display_name=\"LeanSearch capability\",method=\"build_tool\",group_outputs=True)]\n\n    async def build_tool(self) -> Tool:\n        policy=LeanSearchPolicy(enabled=self.enabled,allow_query_disclosure=self.allow_query_disclosure,\n            endpoint=self.endpoint,index_revision=self.index_revision,max_results=self.max_results)\n        def discover(query: str):return search_lean(policy,SearchLean(query=query))\n        return StructuredTool.from_function(func=discover,name=\"search_lean\",description=self.description,\n            args_schema=SearchLean,metadata={\"nima_lean_search\":policy.model_dump(mode=\"json\")})\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -1891,7 +1891,7 @@
             "base_classes": [
               "Tool"
             ],
-            "display_name": "LeanSearch \u00b7 Declaration Discovery",
+            "display_name": "LeanSearch · Declaration Discovery",
             "documentation": "",
             "minimized": false,
             "custom_fields": {},
@@ -1948,7 +1948,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Inspectable lazy capability: exact-source checks and generated lookup probes.\"\"\"\nfrom lfx.custom import Component\nfrom lfx.io import BoolInput, Output\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.lean_draft_backend import DraftLeanBackend\nfrom nima_semantica.lean_transport import configured_lean_verifier\nfrom nima_semantica.verify_lean_tool import verify_lean\n\n\nclass LeanDraftVerification(Component):\n    name = \"LeanDraftVerification\"\n    display_name = \"Verify Lean \u00b7 Exact Source and Local Resolution\"\n    description = \"On-demand isolated Verify Lean for current source revisions and controller-generated declaration probes. Pinned environment, kernel replay, axiom inspection and durable receipts. Building this capability executes nothing.\"\n    nima_manifest = manifest_for_component(\"LeanDraftVerification\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Allow isolated Lean execution (operator)\",value=False)]\n    outputs = [Output(name=\"backend\",display_name=\"Pinned verification capability\",method=\"build_backend\",group_outputs=True)]\n\n    async def build_backend(self) -> DraftLeanBackend:\n        enabled = bool(self.enabled)\n        def verify_exact(store, request, context, *, verifier):\n            if not enabled:raise ValueError(\"Lean execution is not authorized\")\n            return verify_lean(store,request,context,verifier=verifier)\n        return DraftLeanBackend(enabled,configured_lean_verifier,verify_exact)\n",
+                "value": "\"\"\"Inspectable lazy capability: exact-source checks and generated lookup probes.\"\"\"\nfrom lfx.custom import Component\nfrom lfx.io import BoolInput, Output\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.lean_draft_backend import DraftLeanBackend\nfrom nima_semantica.lean_transport import configured_lean_verifier\nfrom nima_semantica.verify_lean_tool import verify_lean\n\n\nclass LeanDraftVerification(Component):\n    name = \"LeanDraftVerification\"\n    display_name = \"Verify Lean · Exact Source and Local Resolution\"\n    description = \"On-demand isolated Verify Lean for current source revisions and controller-generated declaration probes. Pinned environment, kernel replay, axiom inspection and durable receipts. Building this capability executes nothing.\"\n    nima_manifest = manifest_for_component(\"LeanDraftVerification\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Allow isolated Lean execution (operator)\",value=False)]\n    outputs = [Output(name=\"backend\",display_name=\"Pinned verification capability\",method=\"build_backend\",group_outputs=True)]\n\n    async def build_backend(self) -> DraftLeanBackend:\n        enabled = bool(self.enabled)\n        def verify_exact(store, request, context, *, verifier):\n            if not enabled:raise ValueError(\"Lean execution is not authorized\")\n            return verify_lean(store,request,context,verifier=verifier)\n        return DraftLeanBackend(enabled,configured_lean_verifier,verify_exact)\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -1986,7 +1986,7 @@
             "base_classes": [
               "DraftLeanBackend"
             ],
-            "display_name": "Verify Lean \u00b7 Exact Source and Local Resolution",
+            "display_name": "Verify Lean · Exact Source and Local Resolution",
             "documentation": "",
             "minimized": false,
             "custom_fields": {},
@@ -2037,8 +2037,8 @@
         "id": "ChatInput-draft_lean-message-DraftLeanFields-nima-mcp_request",
         "source": "ChatInput-draft_lean",
         "target": "DraftLeanFields-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153ChatInput\u0153, \u0153id\u0153: \u0153ChatInput-draft_lean\u0153, \u0153name\u0153: \u0153message\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153mcp_request\u0153, \u0153id\u0153: \u0153DraftLeanFields-nima\u0153, \u0153inputTypes\u0153: [\u0153Message\u0153, \u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œChatInputœ, œidœ: œChatInput-draft_leanœ, œnameœ: œmessageœ, œoutput_typesœ: [œMessageœ]}",
+        "targetHandle": "{œfieldNameœ: œmcp_requestœ, œidœ: œDraftLeanFields-nimaœ, œinputTypesœ: [œMessageœ, œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "ChatInput",
@@ -2064,8 +2064,8 @@
         "id": "DraftLeanFields-nima-request-DraftLean-nima-payload",
         "source": "DraftLeanFields-nima",
         "target": "DraftLean-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153DraftLeanFields\u0153, \u0153id\u0153: \u0153DraftLeanFields-nima\u0153, \u0153name\u0153: \u0153request\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œDraftLeanFieldsœ, œidœ: œDraftLeanFields-nimaœ, œnameœ: œrequestœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œpayloadœ, œidœ: œDraftLean-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "DraftLeanFields",
@@ -2090,8 +2090,8 @@
         "id": "LeanDraftOntology-nima-result-DraftLean-nima-policy",
         "source": "LeanDraftOntology-nima",
         "target": "DraftLean-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153LeanDraftOntology\u0153, \u0153id\u0153: \u0153LeanDraftOntology-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153policy\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œLeanDraftOntologyœ, œidœ: œLeanDraftOntology-nimaœ, œnameœ: œresultœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œpolicyœ, œidœ: œDraftLean-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "LeanDraftOntology",
@@ -2116,8 +2116,8 @@
         "id": "LeanDraftRetrieval-nima-result-DraftLean-nima-retrieval_policy",
         "source": "LeanDraftRetrieval-nima",
         "target": "DraftLean-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153LeanDraftRetrieval\u0153, \u0153id\u0153: \u0153LeanDraftRetrieval-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153retrieval_policy\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œLeanDraftRetrievalœ, œidœ: œLeanDraftRetrieval-nimaœ, œnameœ: œresultœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œretrieval_policyœ, œidœ: œDraftLean-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "LeanDraftRetrieval",
@@ -2142,8 +2142,8 @@
         "id": "LeanSearch-nima-tool-DraftLean-nima-lean_search",
         "source": "LeanSearch-nima",
         "target": "DraftLean-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153LeanSearch\u0153, \u0153id\u0153: \u0153LeanSearch-nima\u0153, \u0153name\u0153: \u0153tool\u0153, \u0153output_types\u0153: [\u0153Tool\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153lean_search\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153inputTypes\u0153: [\u0153Tool\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œLeanSearchœ, œidœ: œLeanSearch-nimaœ, œnameœ: œtoolœ, œoutput_typesœ: [œToolœ]}",
+        "targetHandle": "{œfieldNameœ: œlean_searchœ, œidœ: œDraftLean-nimaœ, œinputTypesœ: [œToolœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "LeanSearch",
@@ -2167,8 +2167,8 @@
         "id": "LeanDraftVerification-nima-backend-DraftLean-nima-backend",
         "source": "LeanDraftVerification-nima",
         "target": "DraftLean-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153LeanDraftVerification\u0153, \u0153id\u0153: \u0153LeanDraftVerification-nima\u0153, \u0153name\u0153: \u0153backend\u0153, \u0153output_types\u0153: [\u0153DraftLeanBackend\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153backend\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153inputTypes\u0153: [\u0153DraftLeanBackend\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œLeanDraftVerificationœ, œidœ: œLeanDraftVerification-nimaœ, œnameœ: œbackendœ, œoutput_typesœ: [œDraftLeanBackendœ]}",
+        "targetHandle": "{œfieldNameœ: œbackendœ, œidœ: œDraftLean-nimaœ, œinputTypesœ: [œDraftLeanBackendœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "LeanDraftVerification",
@@ -2192,8 +2192,8 @@
         "id": "DraftLean-nima-result-LeanDraftStateView-nima-payload",
         "source": "DraftLean-nima",
         "target": "LeanDraftStateView-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153DraftLean\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153LeanDraftStateView-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œDraftLeanœ, œidœ: œDraftLean-nimaœ, œnameœ: œresultœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œpayloadœ, œidœ: œLeanDraftStateView-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "DraftLean",
@@ -2218,8 +2218,8 @@
         "id": "DraftLean-nima-preview-ChatOutput-draft_lean-input_value",
         "source": "DraftLean-nima",
         "target": "ChatOutput-draft_lean",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153DraftLean\u0153, \u0153id\u0153: \u0153DraftLean-nima\u0153, \u0153name\u0153: \u0153preview\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153input_value\u0153, \u0153id\u0153: \u0153ChatOutput-draft_lean\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153, \u0153DataFrame\u0153, \u0153Table\u0153, \u0153Message\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œDraftLeanœ, œidœ: œDraftLean-nimaœ, œnameœ: œpreviewœ, œoutput_typesœ: [œMessageœ]}",
+        "targetHandle": "{œfieldNameœ: œinput_valueœ, œidœ: œChatOutput-draft_leanœ, œinputTypesœ: [œDataœ, œJSONœ, œDataFrameœ, œTableœ, œMessageœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "DraftLean",
@@ -2269,19 +2269,19 @@
       "proof_state": "4f1785bdbb12bec8400481ed798a0771de7fe023092070f151780dcc0aa7213b",
       "proof_support": "e3681e68ab167b14aea9d9783cc4dd03eda6128d6174e20abc6d69dd0a66bcb5",
       "review_tool": "bd39b44d288c081ba47dc7c8aa979565b62016bfedbe4b7f95a8d93a49549d78",
-      "graph_analysis": "2aa032feda06ae667d7fd1032dc4f3934c2346fd778288ec23628cd63d93c6d8",
-      "evidence_contracts": "123b56812fec1957487514b00217698199f47124371f57a1800be31760b0c2fe",
+      "graph_analysis": "03cbc456e4fc0402bb20615dabe0f8d29bc2a884879b2f4366eeeb42c0a9c012",
+      "evidence_contracts": "30ad091006d4f35efca64a019a17580c2d8a0546daf15c6467b733775b9d5b7e",
       "math_retrieval": "85fbfd0f8d6ef4aaec36f025ac1a7c6adefe3d22aab66c8d55d7f04c6b7cdb0f",
       "math_reasoning": "c7eca62e04e55ffb8256b160c755831687ca0348c9ad435ea50337bb356a4728",
       "reasoning_state": "cf22253686c357a8954fd7ed54cae77d5dfaa2da249af60707586e89bf2eaf20",
-      "reasoning_kernel": "0932753d1ee9bdea4348441d384d13034cf3b011478d4e4eadf5674a82774df3"
+      "reasoning_kernel": "71a592fe5f12b662bd5731c4d3917fb40f9e12475316f5e7df781a899821bd34"
     },
     "publication": "not_published_by_builder",
     "components": {
       "DraftLeanFields": {
         "nima_component_id": "draft_lean_fields",
         "contract_version": "2",
-        "source_sha256": "627ee3f3ba2d9e6cbdc9a880b752ae64f88119dd2297e8970516861900732aeb"
+        "source_sha256": "a53ec96fd84cc5bb1f653414dfdaa7b223305f04669fe2b77be0ad713a2a90d8"
       },
       "DraftLean": {
         "nima_component_id": "draft_lean",

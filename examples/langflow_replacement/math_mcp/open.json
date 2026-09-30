@@ -234,7 +234,7 @@
             "base_classes": [
               "Message"
             ],
-            "display_name": "Transport \u00b7 Optional MCP JSON (Chat Input)",
+            "display_name": "Transport · Optional MCP JSON (Chat Input)",
             "documentation": "https://docs.langflow.org/chat-input-and-output",
             "minimized": true,
             "custom_fields": {},
@@ -290,7 +290,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Inspectable open boundary for the private calculation graph.\"\"\"\nimport json\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import BoolInput, MessageTextInput, Output\nfrom lfx.schema import Message\nfrom nima_semantica.math_mcp_contracts import TOOLS, invoke, operation_catalogue\nfrom nima_semantica.math_mcp import canvas_service\nfrom nima_semantica.component_contracts import manifest_for_component\n\n\nclass MathMCPOpen(Component):\n    nima_manifest = manifest_for_component('MathMCPOpen')\n    display_name = 'Math \u00b7 Open'\n    description = 'Create or resume an immutable task-bound private calculation session. Session mutation: run sequentially, await its returned revision before the next mutation (including retrieval).'\n    name = 'MathMCPOpen'\n    icon = \"calculator\"\n    inputs = [\n        MessageTextInput(name=\"request_json\", display_name=\"Typed request JSON\", value=\"{}\", tool_mode=True),\n        BoolInput(name=\"execute\", display_name=\"Execute authorized request (operator)\", value=False),\n    ]\n    outputs = [Output(name=\"response\", display_name=\"Result and receipt\", method=\"run_request\")]\n\n    def run_request(self) -> Message:\n        operation = 'open'\n        if operation == \"operations\":\n            result = operation_catalogue()\n        elif not self.execute:\n            result = {\"executed\": False, \"operation\": operation,\n                \"request_schema\": TOOLS[operation][0].model_json_schema(),\n                \"authority\": \"Private graph only; no mathematical truth certificate.\"}\n        else:\n            request = json.loads(self.request_json or \"{}\")\n            # Same typed arguments, service and admission rules as stdio MCP.\n            # NIMA_MATH_CONFIG binds scope and capabilities outside model inputs.\n            result = invoke(canvas_service(), operation, request)\n        return Message(text=json.dumps(result, ensure_ascii=False))\n",
+                "value": "\"\"\"Inspectable open boundary for the private calculation graph.\"\"\"\nimport json\nfrom lfx.custom.custom_component.component import Component\nfrom pydantic import ValidationError\nfrom lfx.io import BoolInput, MessageTextInput, Output\nfrom lfx.schema import Message\nfrom nima_semantica.math_mcp_contracts import TOOLS, invoke, operation_catalogue\nfrom nima_semantica.math_mcp import canvas_service\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.request_diagnostics import invalid_request\nfrom nima_semantica.providers import strict_json_object\n\n\nclass MathMCPOpen(Component):\n    nima_manifest = manifest_for_component('MathMCPOpen')\n    display_name = 'Math · Open'\n    description = 'Create or resume an immutable task-bound private calculation session. Session mutation: run sequentially, await its returned revision before the next mutation (including retrieval).'\n    name = 'MathMCPOpen'\n    icon = \"calculator\"\n    inputs = [\n        MessageTextInput(name=\"request_json\", display_name=\"Typed request JSON\", value=\"{}\", tool_mode=True),\n        BoolInput(name=\"execute\", display_name=\"Execute authorized request (operator)\", value=False),\n    ]\n    outputs = [Output(name=\"response\", display_name=\"Result and receipt\", method=\"run_request\")]\n\n    def run_request(self) -> Message:\n        operation = 'open'\n        if operation == \"operations\":\n            result = operation_catalogue()\n        elif not self.execute:\n            result = {\"executed\": False, \"operation\": operation,\n                \"request_schema\": TOOLS[operation][0].model_json_schema(),\n                \"authority\": \"Private graph only; no mathematical truth certificate.\"}\n        else:\n            try:\n                request = strict_json_object(self.request_json or \"{}\")\n                TOOLS[operation][0].model_validate(request)\n            except (ValidationError, ValueError) as exc:\n                return Message(text=json.dumps(invalid_request(operation, exc)))\n            # Same typed arguments, service and admission rules as stdio MCP.\n            # NIMA_MATH_CONFIG binds scope and capabilities outside model inputs.\n            result = invoke(canvas_service(), operation, request)\n        return Message(text=json.dumps(result, ensure_ascii=False))\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -355,7 +355,7 @@
             "base_classes": [
               "Message"
             ],
-            "display_name": "Math \u00b7 Open",
+            "display_name": "Math · Open",
             "documentation": "",
             "minimized": false,
             "custom_fields": {},
@@ -628,7 +628,7 @@
             "base_classes": [
               "Message"
             ],
-            "display_name": "Result \u00b7 Tool Guide (Chat Output)",
+            "display_name": "Result · Tool Guide (Chat Output)",
             "documentation": "https://docs.langflow.org/chat-input-and-output",
             "minimized": true,
             "custom_fields": {},
@@ -677,8 +677,8 @@
         "id": "ChatInput-7Agrz-MathMCPOpen-nima",
         "source": "ChatInput-7Agrz",
         "target": "MathMCPOpen-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153ChatInput\u0153, \u0153id\u0153: \u0153ChatInput-7Agrz\u0153, \u0153name\u0153: \u0153message\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153request_json\u0153, \u0153id\u0153: \u0153MathMCPOpen-nima\u0153, \u0153inputTypes\u0153: [\u0153Message\u0153], \u0153type\u0153: \u0153str\u0153}",
+        "sourceHandle": "{œdataTypeœ: œChatInputœ, œidœ: œChatInput-7Agrzœ, œnameœ: œmessageœ, œoutput_typesœ: [œMessageœ]}",
+        "targetHandle": "{œfieldNameœ: œrequest_jsonœ, œidœ: œMathMCPOpen-nimaœ, œinputTypesœ: [œMessageœ], œtypeœ: œstrœ}",
         "data": {
           "sourceHandle": {
             "dataType": "ChatInput",
@@ -702,8 +702,8 @@
         "id": "MathMCPOpen-nima-ChatOutput-omYFS",
         "source": "MathMCPOpen-nima",
         "target": "ChatOutput-omYFS",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153MathMCPOpen\u0153, \u0153id\u0153: \u0153MathMCPOpen-nima\u0153, \u0153name\u0153: \u0153response\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153input_value\u0153, \u0153id\u0153: \u0153ChatOutput-omYFS\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153, \u0153DataFrame\u0153, \u0153Table\u0153, \u0153Message\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œMathMCPOpenœ, œidœ: œMathMCPOpen-nimaœ, œnameœ: œresponseœ, œoutput_typesœ: [œMessageœ]}",
+        "targetHandle": "{œfieldNameœ: œinput_valueœ, œidœ: œChatOutput-omYFSœ, œinputTypesœ: [œDataœ, œJSONœ, œDataFrameœ, œTableœ, œMessageœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "MathMCPOpen",
@@ -735,7 +735,7 @@
     }
   },
   "is_component": false,
-  "name": "Calculate Mathematics \u00b7 Open",
+  "name": "Calculate Mathematics · Open",
   "description": "Create or resume an immutable task-bound private calculation session. Session mutation: run sequentially, await its returned revision before the next mutation (including retrieval).",
   "endpoint_name": "nima-math-open",
   "nima_tool_manifest": {
@@ -743,10 +743,11 @@
     "contract_version": "math-session-v1",
     "visual_approval": "pending",
     "publication": "candidate",
-    "source_sha256": "1fd877b0133e9fa65fff72e479ba468eb18e8ac14b46c1ad1f9063c0d60c2347",
+    "source_sha256": "ddd981c033735040df99c5a7fd524d1d6034f620734d5a69a13775f840d62b45",
     "native_sources_sha256": {
+      "calculation_values.py": "2227718cd02c2e0826b15c16be6023b1ba07dd8af4ce89efaab5ed4e25fceb05",
       "math_mcp_contracts.py": "ec076ef89f14120b855a2eb18b8f5bcfb7d73754d6da3bf9538e10a4ab56de44",
-      "math_mcp.py": "2972a98b8803bd4c0109614dc00c91c4c19632aadc8200f6608be05e0f31f7ea",
+      "math_mcp.py": "3f5e5874f690c57fcbfabe4384d3746fc51cb2145f74b612eee136b441e666f9",
       "math_session_service.py": "bd973b9952f97d06361ad0e60125ccca2b1def8099f64705e52fc74e6acebc7d",
       "math_interface_helpers.py": "fc73d964acde88bff7083af9ee05493b68948d624354b5e5fb071e99e5ba5436",
       "math_repair_feedback.py": "8dfdc65e31b5a6a7c2b1ddd7a9e78cd81319fcbb4fd1c133e52f510731e1b6dc",
@@ -754,8 +755,7 @@
       "math_calculation_assistance.py": "1fe7bb065a14da050fd83b8f5b89443309f89f6d7168795ff92e57ab64ecf76c",
       "math_response_views.py": "cd8f99a5b8ac1876c51ed0e97cce7179304026c05bf61d6a20d8c06198b93fe2",
       "math_graph_program.py": "57a301194e03ab5a39ee3c968709d86b18f73e8b64753559e00b779e3515403b",
-      "math_single_graph_state.py": "27d48c5fedac59ee40db07be4c3036f9bacb4ce2447e83d56a97a34d9d24b2fc",
-      "calculation_values.py": "2227718cd02c2e0826b15c16be6023b1ba07dd8af4ce89efaab5ed4e25fceb05"
+      "math_single_graph_state.py": "27d48c5fedac59ee40db07be4c3036f9bacb4ce2447e83d56a97a34d9d24b2fc"
     }
   }
 }

@@ -238,7 +238,7 @@
             "base_classes": [
               "Message"
             ],
-            "display_name": "Request \u00b7 Verify Lean",
+            "display_name": "Request · Verify Lean",
             "documentation": "https://docs.langflow.org/chat-input-and-output",
             "minimized": true,
             "custom_fields": {},
@@ -513,7 +513,7 @@
             "base_classes": [
               "Message"
             ],
-            "display_name": "Result \u00b7 Verify Lean",
+            "display_name": "Result · Verify Lean",
             "documentation": "https://docs.langflow.org/chat-input-and-output",
             "minimized": true,
             "custom_fields": {},
@@ -593,7 +593,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Exact submitted Lean modules and theorem names; never generated or repaired.\"\"\"\nimport json\nfrom lfx.io import StrInput, MultilineInput, DropdownInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.verify_lean_tool import VerifyLeanRequest\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\n\n\nclass VerifyLeanFields(BaseComponent):\n    name=\"VerifyLeanFields\"\n    display_name=\"Verify Lean \u00b7 Exact Submission\"\n    description=\"Exact source modules, compilation order and target theorem names. JSON additionally accepts expected alpha-normalized type fingerprints, run/proof references, source regions and a graph revision. No source transformation.\"\n    nima_manifest=manifest_for_component(\"VerifyLeanFields\")\n    inputs=[DropdownInput(name=\"mode\",display_name=\"Mode\",options=[\"preview\",\"verify\"],value=\"preview\"),\n        MultilineInput(name=\"sources_json\",display_name=\"Module sources (JSON)\",value=json.dumps({\"Submission\":\"theorem target : True := True.intro\"})),\n        StrInput(name=\"targets_json\",display_name=\"Theorem names (JSON)\",value='[\"target\"]'),\n        StrInput(name=\"imports_json\",display_name=\"Submitted modules to inspect (JSON)\",value='[\"Submission\"]'),\n        StrInput(name=\"module_order_json\",display_name=\"Compilation order (JSON, optional)\",value=\"[]\"),\n        StrInput(name=\"operation_id\",display_name=\"Unique attempt ID\",value=\"\"),\n        StrInput(name=\"run_id\",display_name=\"Harness run ID, optional\",value=\"\"),\n        HandleInput(name=\"mcp_request\",display_name=\"Optional request JSON\",input_types=[\"Message\",\"Data\",\"JSON\"],required=False)]\n    outputs=[Output(name=\"request\",display_name=\"Validated exact submission\",method=\"request_data\",group_outputs=True),\n        Output(name=\"preview\",display_name=\"Request preview\",method=\"preview_message\",group_outputs=True)]\n\n    async def run(self):\n        override=native(getattr(self,\"mcp_request\",None))\n        if isinstance(override,str):\n            if len(override)>16*1024*1024:raise ValueError(\"request size limit\")\n            override=strict_json_object(override) if override.strip() else {}\n        if override is None:override={}\n        if not isinstance(override,dict):raise ValueError(\"expected JSON object\")\n        payload={\"mode\":self.mode,\"operation_id\":self.operation_id or None,\"run_id\":self.run_id or None,\n            \"sources\":strict_json_object(self.sources_json),\"targets\":json.loads(self.targets_json),\n            \"imports\":json.loads(self.imports_json),\"module_order\":json.loads(self.module_order_json)}\n        return VerifyLeanRequest.model_validate(payload|override).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
+                "value": "\"\"\"Exact submitted Lean modules and theorem names; never generated or repaired.\"\"\"\nimport json\nfrom lfx.io import StrInput, MultilineInput, DropdownInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.verify_lean_tool import VerifyLeanRequest\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import RequestFields as BaseComponent\n\n\nclass VerifyLeanFields(BaseComponent):\n    name=\"VerifyLeanFields\"\n    display_name=\"Verify Lean · Exact Submission\"\n    description=\"Exact source modules, compilation order and target theorem names. JSON additionally accepts expected alpha-normalized type fingerprints, run/proof references, source regions and a graph revision. No source transformation.\"\n    nima_manifest=manifest_for_component(\"VerifyLeanFields\")\n    inputs=[DropdownInput(name=\"mode\",display_name=\"Mode\",options=[\"preview\",\"verify\"],value=\"preview\"),\n        MultilineInput(name=\"sources_json\",display_name=\"Module sources (JSON)\",value=json.dumps({\"Submission\":\"theorem target : True := True.intro\"})),\n        StrInput(name=\"targets_json\",display_name=\"Theorem names (JSON)\",value='[\"target\"]'),\n        StrInput(name=\"imports_json\",display_name=\"Submitted modules to inspect (JSON)\",value='[\"Submission\"]'),\n        StrInput(name=\"module_order_json\",display_name=\"Compilation order (JSON, optional)\",value=\"[]\"),\n        StrInput(name=\"operation_id\",display_name=\"Unique attempt ID\",value=\"\"),\n        StrInput(name=\"run_id\",display_name=\"Harness run ID, optional\",value=\"\"),\n        HandleInput(name=\"mcp_request\",display_name=\"Optional request JSON\",input_types=[\"Message\",\"Data\",\"JSON\"],required=False)]\n    outputs=[Output(name=\"request\",display_name=\"Validated exact submission\",method=\"request_data\",group_outputs=True),\n        Output(name=\"preview\",display_name=\"Request preview\",method=\"preview_message\",group_outputs=True)]\n\n    async def run(self):\n        override=native(getattr(self,\"mcp_request\",None))\n        if isinstance(override,str):\n            if len(override)>16*1024*1024:raise ValueError(\"request size limit\")\n            override=strict_json_object(override) if override.strip() else {}\n        if override is None:override={}\n        if not isinstance(override,dict):raise ValueError(\"expected JSON object\")\n        payload={\"mode\":self.mode,\"operation_id\":self.operation_id or None,\"run_id\":self.run_id or None,\n            \"sources\":strict_json_object(self.sources_json),\"targets\":json.loads(self.targets_json),\n            \"imports\":json.loads(self.imports_json),\"module_order\":json.loads(self.module_order_json)}\n        return VerifyLeanRequest.model_validate(payload|override).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -779,7 +779,7 @@
               "JSON",
               "Message"
             ],
-            "display_name": "Verify Lean \u00b7 Exact Submission",
+            "display_name": "Verify Lean · Exact Submission",
             "documentation": "",
             "minimized": false,
             "custom_fields": {},
@@ -824,7 +824,7 @@
             "metadata": {
               "nima_component_id": "verify_lean_fields",
               "contract_version": "2",
-              "source_sha256": "3be8468fa051f89ad6e306d67637a0cf15d75dfa0549189e1e0a0984adefd969"
+              "source_sha256": "6b94fff459e8fe6dd09a4eafe40b6a9d75d284d478342bba7e9535dbcc026228"
             },
             "tool_mode": false
           },
@@ -939,7 +939,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Visible deterministic Lean service boundary; no model or retrieval component.\"\"\"\nimport json\nfrom lfx.io import StrInput, BoolInput, HandleInput\nfrom lfx.schema import Message, DataFrame\nfrom nima_semantica.verify_lean_tool import VerifyLeanRequest, VerifyLeanContext, verify_lean\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass VerifyLean(BaseComponent):\n    name=\"VerifyLean\"\n    display_name=\"Verify Lean \u00b7 Pinned Kernel Check\"\n    description=\"Execute exact submitted modules in the operator-pinned isolated verifier; independently inspect theorem dependencies, allowed axioms and kernel replay. Persist exact types, source hashes, diagnostics, attempts and pending project progress. No source edits, dependency installation, retrieval or LLM.\"\n    nima_manifest=manifest_for_component(\"VerifyLean\")\n    inputs=[handle(\"payload\",\"Exact Lean submission\"),\n        StrInput(name=\"corpus_id\",display_name=\"Authorized corpus (operator)\",value=\"papers\"),\n        StrInput(name=\"project_id\",display_name=\"Authorized project (operator)\",value=\"research\"),\n        BoolInput(name=\"allow_execution\",display_name=\"Allow isolated Lean execution (operator)\",value=False),\n        BoolInput(name=\"allow_audit_writes\",display_name=\"Allow proof attempts and artifacts (operator)\",value=False),\n        HandleInput(name=\"verifier\",display_name=\"Pinned Lean verifier (optional operator injection)\",input_types=[\"LeanVerifier\"],required=False)]\n\n    async def run(self):\n        request=VerifyLeanRequest.model_validate(_value(self.payload))\n        context=VerifyLeanContext(corpus_id=self.corpus_id,project_id=self.project_id,\n            allow_execution=self.allow_execution,allow_audit_writes=self.allow_audit_writes)\n        with configured_store(required=False) as store:\n            return verify_lean(store,request,context,verifier=getattr(self,\"verifier\",None)).model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)\n        for char in (\"`\",\"<\",\">\",\"&\"):text=text.replace(char,\"\\\\u\"+format(ord(char),\"04x\"))\n        return Message(text=\"```json\\n\"+text+\"\\n```\")\n\n    async def table_data(self) -> DataFrame:\n        data=(await self.result_data()).data.get(\"data\",{})\n        checked=data.get(\"verification\",{}).get(\"project_result\",{})\n        return DataFrame([{\"target\":name,\"exact_type\":kind,\"axioms\":checked.get(\"axioms\",{}).get(name,[]),\n            \"formal_acceptance\":data.get(\"formal_verification_accepted\",False),\"correspondence_verified\":False}\n            for name,kind in checked.get(\"declaration_types\",{}).items()])\n",
+                "value": "\"\"\"Visible deterministic Lean service boundary; no model or retrieval component.\"\"\"\nimport json\nfrom lfx.io import StrInput, BoolInput, HandleInput\nfrom lfx.schema import Message, DataFrame\nfrom nima_semantica.verify_lean_tool import VerifyLeanRequest, VerifyLeanContext, verify_lean\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass VerifyLean(BaseComponent):\n    name=\"VerifyLean\"\n    display_name=\"Verify Lean · Pinned Kernel Check\"\n    description=\"Execute exact submitted modules in the operator-pinned isolated verifier; independently inspect theorem dependencies, allowed axioms and kernel replay. Persist exact types, source hashes, diagnostics, attempts and pending project progress. No source edits, dependency installation, retrieval or LLM.\"\n    nima_manifest=manifest_for_component(\"VerifyLean\")\n    inputs=[handle(\"payload\",\"Exact Lean submission\"),\n        StrInput(name=\"corpus_id\",display_name=\"Authorized corpus (operator)\",value=\"papers\"),\n        StrInput(name=\"project_id\",display_name=\"Authorized project (operator)\",value=\"research\"),\n        BoolInput(name=\"allow_execution\",display_name=\"Allow isolated Lean execution (operator)\",value=False),\n        BoolInput(name=\"allow_audit_writes\",display_name=\"Allow proof attempts and artifacts (operator)\",value=False),\n        HandleInput(name=\"verifier\",display_name=\"Pinned Lean verifier (optional operator injection)\",input_types=[\"LeanVerifier\"],required=False)]\n\n    async def run(self):\n        request=VerifyLeanRequest.model_validate(_value(self.payload))\n        context=VerifyLeanContext(corpus_id=self.corpus_id,project_id=self.project_id,\n            allow_execution=self.allow_execution,allow_audit_writes=self.allow_audit_writes)\n        with configured_store(required=False) as store:\n            return verify_lean(store,request,context,verifier=getattr(self,\"verifier\",None)).model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)\n        for char in (\"`\",\"<\",\">\",\"&\"):text=text.replace(char,\"\\\\u\"+format(ord(char),\"04x\"))\n        return Message(text=\"```json\\n\"+text+\"\\n```\")\n\n    async def table_data(self) -> DataFrame:\n        data=(await self.result_data()).data.get(\"data\",{})\n        checked=data.get(\"verification\",{}).get(\"project_result\",{})\n        return DataFrame([{\"target\":name,\"exact_type\":kind,\"axioms\":checked.get(\"axioms\",{}).get(name,[]),\n            \"formal_acceptance\":data.get(\"formal_verification_accepted\",False),\"correspondence_verified\":False}\n            for name,kind in checked.get(\"declaration_types\",{}).items()])\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -1002,7 +1002,7 @@
               "Message",
               "Table"
             ],
-            "display_name": "Verify Lean \u00b7 Pinned Kernel Check",
+            "display_name": "Verify Lean · Pinned Kernel Check",
             "documentation": "",
             "minimized": false,
             "custom_fields": {},
@@ -1209,8 +1209,8 @@
         "id": "ChatInput-leanverification-message-VerifyLeanFields-nima-mcp_request",
         "source": "ChatInput-leanverification",
         "target": "VerifyLeanFields-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153ChatInput\u0153, \u0153id\u0153: \u0153ChatInput-leanverification\u0153, \u0153name\u0153: \u0153message\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153mcp_request\u0153, \u0153id\u0153: \u0153VerifyLeanFields-nima\u0153, \u0153inputTypes\u0153: [\u0153Message\u0153, \u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œChatInputœ, œidœ: œChatInput-leanverificationœ, œnameœ: œmessageœ, œoutput_typesœ: [œMessageœ]}",
+        "targetHandle": "{œfieldNameœ: œmcp_requestœ, œidœ: œVerifyLeanFields-nimaœ, œinputTypesœ: [œMessageœ, œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "ChatInput",
@@ -1236,8 +1236,8 @@
         "id": "VerifyLeanFields-nima-request-VerifyLean-nima-payload",
         "source": "VerifyLeanFields-nima",
         "target": "VerifyLean-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153VerifyLeanFields\u0153, \u0153id\u0153: \u0153VerifyLeanFields-nima\u0153, \u0153name\u0153: \u0153request\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153VerifyLean-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œVerifyLeanFieldsœ, œidœ: œVerifyLeanFields-nimaœ, œnameœ: œrequestœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œpayloadœ, œidœ: œVerifyLean-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "VerifyLeanFields",
@@ -1262,8 +1262,8 @@
         "id": "VerifyLean-nima-result-LeanVerificationView-nima-payload",
         "source": "VerifyLean-nima",
         "target": "LeanVerificationView-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153VerifyLean\u0153, \u0153id\u0153: \u0153VerifyLean-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153LeanVerificationView-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œVerifyLeanœ, œidœ: œVerifyLean-nimaœ, œnameœ: œresultœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œpayloadœ, œidœ: œLeanVerificationView-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "VerifyLean",
@@ -1288,8 +1288,8 @@
         "id": "VerifyLean-nima-preview-ChatOutput-leanverification-input_value",
         "source": "VerifyLean-nima",
         "target": "ChatOutput-leanverification",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153VerifyLean\u0153, \u0153id\u0153: \u0153VerifyLean-nima\u0153, \u0153name\u0153: \u0153preview\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153input_value\u0153, \u0153id\u0153: \u0153ChatOutput-leanverification\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153, \u0153DataFrame\u0153, \u0153Table\u0153, \u0153Message\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œVerifyLeanœ, œidœ: œVerifyLean-nimaœ, œnameœ: œpreviewœ, œoutput_typesœ: [œMessageœ]}",
+        "targetHandle": "{œfieldNameœ: œinput_valueœ, œidœ: œChatOutput-leanverificationœ, œinputTypesœ: [œDataœ, œJSONœ, œDataFrameœ, œTableœ, œMessageœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "VerifyLean",
@@ -1336,7 +1336,7 @@
       "VerifyLeanFields": {
         "nima_component_id": "verify_lean_fields",
         "contract_version": "2",
-        "source_sha256": "3be8468fa051f89ad6e306d67637a0cf15d75dfa0549189e1e0a0984adefd969"
+        "source_sha256": "6b94fff459e8fe6dd09a4eafe40b6a9d75d284d478342bba7e9535dbcc026228"
       },
       "VerifyLean": {
         "nima_component_id": "verify_lean",

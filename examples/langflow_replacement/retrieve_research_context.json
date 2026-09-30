@@ -593,7 +593,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Visible public retrieval request; authority and providers are operator-owned.\"\"\"\nfrom lfx.io import DropdownInput, IntInput, MessageTextInput, StrInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.research_retrieval import ResearchRetrievalRequest\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\n\n\nclass ResearchRetrievalFields(BaseComponent):\n    name = \"ResearchRetrievalFields\"\n    display_name = \"Research Context Inputs\"\n    description = \"Query, explicit lexical/vector/hybrid mode, current projection selection and context limits. Model-backed modes require an attempt ID.\"\n    nima_manifest = manifest_for_component(\"ResearchRetrievalFields\")\n    inputs = [MessageTextInput(name=\"query\", display_name=\"Research query\", value=\"x\"),\n        DropdownInput(name=\"mode\", display_name=\"Retrieval mode\", options=[\"lexical\", \"vector\", \"hybrid\"], value=\"lexical\"),\n        StrInput(name=\"projection_id\", display_name=\"Exact projection ID (optional)\", value=\"\"),\n        StrInput(name=\"expected_store_revision\", display_name=\"Expected store revision (optional)\", value=\"\"),\n        StrInput(name=\"operation_id\", display_name=\"Model attempt ID\", value=\"\"),\n        StrInput(name=\"run_id\", display_name=\"Research run ID (optional)\", value=\"\"),\n        IntInput(name=\"limit\", display_name=\"Seed limit\", value=8),\n        IntInput(name=\"max_hops\", display_name=\"Graph hops\", value=2),\n        IntInput(name=\"max_nodes\", display_name=\"Visited node limit\", value=64, advanced=True),\n        IntInput(name=\"max_edges\", display_name=\"Examined edge limit\", value=128, advanced=True),\n        IntInput(name=\"max_neighbors\", display_name=\"Neighbors per node\", value=32, advanced=True),\n        IntInput(name=\"max_results\", display_name=\"Passage limit\", value=16),\n        IntInput(name=\"max_chars\", display_name=\"Exact passage character limit\", value=30000),\n        HandleInput(name=\"mcp_request\", display_name=\"Optional request JSON\", input_types=[\"Message\", \"Data\", \"JSON\"], required=False)]\n    outputs = [Output(name=\"request\", display_name=\"Validated request\", method=\"request_data\", group_outputs=True),\n        Output(name=\"preview\", display_name=\"Request preview\", method=\"preview_message\", group_outputs=True)]\n\n    async def run(self):\n        override = native(getattr(self, \"mcp_request\", None))\n        if override is None:\n            override = {}\n        if isinstance(override, str):\n            if len(override) > 30000:\n                raise ValueError(\"request exceeds transport limit\")\n            override = strict_json_object(override) if override.strip() else {}\n        if not isinstance(override, dict):\n            raise ValueError(\"expected a JSON object\")\n        payload = {name: getattr(self, name) for name in ResearchRetrievalRequest.model_fields}\n        for name in (\"projection_id\", \"expected_store_revision\", \"operation_id\", \"run_id\"):\n            payload[name] = payload[name] or None\n        payload.update(override)\n        return ResearchRetrievalRequest.model_validate(payload).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
+                "value": "\"\"\"Visible public retrieval request; authority and providers are operator-owned.\"\"\"\nfrom lfx.io import BoolInput, DropdownInput, IntInput, MessageTextInput, StrInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.research_retrieval import ResearchRetrievalRequest\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import RequestFields as BaseComponent\n\n\nclass ResearchRetrievalFields(BaseComponent):\n    name = \"ResearchRetrievalFields\"\n    display_name = \"Research Context Inputs\"\n    description = \"Query, explicit lexical/vector/hybrid mode, current projection selection and context limits. Model-backed modes require an attempt ID.\"\n    nima_manifest = manifest_for_component(\"ResearchRetrievalFields\")\n    inputs = [MessageTextInput(name=\"query\", display_name=\"Research query\", value=\"x\"),\n        DropdownInput(name=\"mode\", display_name=\"Retrieval mode\", options=[\"lexical\", \"vector\", \"hybrid\"], value=\"lexical\"),\n        BoolInput(name=\"include_provisional\", display_name=\"Include provisional fast evidence\", value=True),\n        StrInput(name=\"projection_id\", display_name=\"Exact projection ID (optional)\", value=\"\"),\n        StrInput(name=\"expected_store_revision\", display_name=\"Expected store revision (optional)\", value=\"\"),\n        StrInput(name=\"operation_id\", display_name=\"Model attempt ID\", value=\"\"),\n        StrInput(name=\"run_id\", display_name=\"Research run ID (optional)\", value=\"\"),\n        IntInput(name=\"limit\", display_name=\"Seed limit\", value=8),\n        IntInput(name=\"max_hops\", display_name=\"Graph hops\", value=2),\n        IntInput(name=\"max_nodes\", display_name=\"Visited node limit\", value=64, advanced=True),\n        IntInput(name=\"max_edges\", display_name=\"Examined edge limit\", value=128, advanced=True),\n        IntInput(name=\"max_neighbors\", display_name=\"Neighbors per node\", value=32, advanced=True),\n        IntInput(name=\"max_results\", display_name=\"Passage limit\", value=16),\n        IntInput(name=\"max_chars\", display_name=\"Exact passage character limit\", value=30000),\n        HandleInput(name=\"mcp_request\", display_name=\"Optional request JSON\", input_types=[\"Message\", \"Data\", \"JSON\"], required=False)]\n    outputs = [Output(name=\"request\", display_name=\"Validated request\", method=\"request_data\", group_outputs=True),\n        Output(name=\"preview\", display_name=\"Request preview\", method=\"preview_message\", group_outputs=True)]\n\n    async def run(self):\n        override = native(getattr(self, \"mcp_request\", None))\n        if override is None:\n            override = {}\n        if isinstance(override, str):\n            if len(override) > 30000:\n                raise ValueError(\"request exceeds transport limit\")\n            override = strict_json_object(override) if override.strip() else {}\n        if not isinstance(override, dict):\n            raise ValueError(\"expected a JSON object\")\n        payload = {name: getattr(self, name) for name in ResearchRetrievalRequest.model_fields}\n        for name in (\"projection_id\", \"expected_store_revision\", \"operation_id\", \"run_id\"):\n            payload[name] = payload[name] or None\n        payload.update(override)\n        return ResearchRetrievalRequest.model_validate(payload).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -626,6 +626,27 @@
                 "track_in_telemetry": false,
                 "type": "str",
                 "_input_type": "StrInput"
+              },
+              "include_provisional": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "include_provisional",
+                "value": true,
+                "display_name": "Include provisional fast evidence",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
               },
               "limit": {
                 "tool_mode": false,
@@ -946,7 +967,7 @@
             "metadata": {
               "nima_component_id": "research_retrieval_fields",
               "contract_version": "1",
-              "source_sha256": "181f2482df8aeaba53f414d433c148027f264da55a9b7342339f9de31488dfeb"
+              "source_sha256": "da4e0871d35c97e25bd889cfa75798885210b018ec7d0df2c399566aec62e9e3"
             },
             "tool_mode": false
           },
@@ -1341,7 +1362,7 @@
       "ResearchRetrievalFields": {
         "nima_component_id": "research_retrieval_fields",
         "contract_version": "1",
-        "source_sha256": "181f2482df8aeaba53f414d433c148027f264da55a9b7342339f9de31488dfeb"
+        "source_sha256": "da4e0871d35c97e25bd889cfa75798885210b018ec7d0df2c399566aec62e9e3"
       },
       "RetrieveResearchContext": {
         "nima_component_id": "retrieve_research_context",

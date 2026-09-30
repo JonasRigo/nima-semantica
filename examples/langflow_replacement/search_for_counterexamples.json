@@ -238,7 +238,7 @@
             "base_classes": [
               "Message"
             ],
-            "display_name": "Request \u00b7 Counterexample Search",
+            "display_name": "Request · Counterexample Search",
             "documentation": "https://docs.langflow.org/chat-input-and-output",
             "minimized": true,
             "custom_fields": {},
@@ -513,7 +513,7 @@
             "base_classes": [
               "Message"
             ],
-            "display_name": "Result \u00b7 Counterexample Search",
+            "display_name": "Result · Counterexample Search",
             "documentation": "https://docs.langflow.org/chat-input-and-output",
             "minimized": true,
             "custom_fields": {},
@@ -615,7 +615,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Visible public fields for one harness-selected claim or proof step.\"\"\"\nfrom lfx.io import StrInput, DropdownInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.counterexample_contracts import CounterexampleRequest\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\n\n\nclass CounterexampleFields(BaseComponent):\n    name = \"CounterexampleFields\"\n    display_name = \"Counterexample Search Inputs\"\n    description = \"Select a claim, assumptions, domain and quantifier. JSON also accepts an exact encoding, target/parent references, graph revision and source regions.\"\n    nima_manifest = manifest_for_component(\"CounterexampleFields\")\n    inputs = [DropdownInput(name=\"mode\", display_name=\"Mode\", options=[\"preview\",\"integer\",\"agent\"], value=\"preview\"),\n        StrInput(name=\"statement\", display_name=\"Exact claim or proof step\", value=\"For every integer x, x squared equals x.\"),\n        StrInput(name=\"domain\", display_name=\"Domain\", value=\"integers\"),\n        DropdownInput(name=\"quantifier\", display_name=\"Quantifier\", options=[\"forall\",\"exists\",\"mixed\"], value=\"forall\"),\n        StrInput(name=\"assumptions_json\", display_name=\"Assumptions as JSON list\", value=\"[]\"),\n        StrInput(name=\"encoding_json\", display_name=\"Integer encoding JSON, optional\", value=\"{}\", advanced=True),\n        StrInput(name=\"operation_id\", display_name=\"Unique attempt ID\", value=\"\"),\n        StrInput(name=\"run_id\", display_name=\"Harness run ID, optional\", value=\"\"),\n        HandleInput(name=\"mcp_request\", display_name=\"Optional request JSON\", input_types=[\"Message\",\"Data\",\"JSON\"], required=False)]\n    outputs = [Output(name=\"request\",display_name=\"Validated search request\",method=\"request_data\",group_outputs=True),\n        Output(name=\"preview\",display_name=\"Request preview\",method=\"preview_message\",group_outputs=True)]\n\n    async def run(self):\n        import json\n        override = native(getattr(self,\"mcp_request\",None))\n        if isinstance(override,str):\n            if len(override)>60000:raise ValueError(\"request exceeds input limit\")\n            override = strict_json_object(override) if override.strip() else {}\n        if override is None:override={}\n        if not isinstance(override,dict):raise ValueError(\"expected request object\")\n        payload = {k:getattr(self,k) for k in (\"mode\",\"statement\",\"domain\",\"quantifier\")}\n        payload.update(operation_id=self.operation_id or None,run_id=self.run_id or None,\n            assumptions=json.loads(self.assumptions_json),\n            encoding=strict_json_object(self.encoding_json) if self.encoding_json.strip() not in (\"\",\"{}\") else None)\n        return CounterexampleRequest.model_validate(payload|override).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
+                "value": "\"\"\"Visible public fields for one harness-selected claim or proof step.\"\"\"\nfrom lfx.io import StrInput, DropdownInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.counterexample_contracts import CounterexampleRequest\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import RequestFields as BaseComponent\n\n\nclass CounterexampleFields(BaseComponent):\n    name = \"CounterexampleFields\"\n    display_name = \"Counterexample Search Inputs\"\n    description = \"Select a claim, assumptions, domain and quantifier. JSON also accepts an exact encoding, target/parent references, graph revision and source regions.\"\n    nima_manifest = manifest_for_component(\"CounterexampleFields\")\n    inputs = [DropdownInput(name=\"mode\", display_name=\"Mode\", options=[\"preview\",\"integer\",\"agent\"], value=\"preview\"),\n        StrInput(name=\"statement\", display_name=\"Exact claim or proof step\", value=\"For every integer x, x squared equals x.\"),\n        StrInput(name=\"domain\", display_name=\"Domain\", value=\"integers\"),\n        DropdownInput(name=\"quantifier\", display_name=\"Quantifier\", options=[\"forall\",\"exists\",\"mixed\"], value=\"forall\"),\n        StrInput(name=\"assumptions_json\", display_name=\"Assumptions as JSON list\", value=\"[]\"),\n        StrInput(name=\"encoding_json\", display_name=\"Integer encoding JSON, optional\", value=\"{}\", advanced=True),\n        StrInput(name=\"operation_id\", display_name=\"Unique attempt ID\", value=\"\"),\n        StrInput(name=\"run_id\", display_name=\"Harness run ID, optional\", value=\"\"),\n        HandleInput(name=\"mcp_request\", display_name=\"Optional request JSON\", input_types=[\"Message\",\"Data\",\"JSON\"], required=False)]\n    outputs = [Output(name=\"request\",display_name=\"Validated search request\",method=\"request_data\",group_outputs=True),\n        Output(name=\"preview\",display_name=\"Request preview\",method=\"preview_message\",group_outputs=True)]\n\n    async def run(self):\n        import json\n        override = native(getattr(self,\"mcp_request\",None))\n        if isinstance(override,str):\n            if len(override)>60000:raise ValueError(\"request exceeds input limit\")\n            override = strict_json_object(override) if override.strip() else {}\n        if override is None:override={}\n        if not isinstance(override,dict):raise ValueError(\"expected request object\")\n        payload = {k:getattr(self,k) for k in (\"mode\",\"statement\",\"domain\",\"quantifier\")}\n        payload.update(operation_id=self.operation_id or None,run_id=self.run_id or None,\n            assumptions=json.loads(self.assumptions_json),\n            encoding=strict_json_object(self.encoding_json) if self.encoding_json.strip() not in (\"\",\"{}\") else None)\n        return CounterexampleRequest.model_validate(payload|override).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -846,7 +846,7 @@
             "metadata": {
               "nima_component_id": "counterexample_fields",
               "contract_version": "1",
-              "source_sha256": "d1e3499bfb7ef73b29862467d9801ee75b54de9897f506b4985e83eb04a47895"
+              "source_sha256": "97e8be4e4bbf31f7e883557f133a54d3ac8936d1d8afa4cfa150a4f94d51769f"
             },
             "tool_mode": false
           },
@@ -1053,7 +1053,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Inspectable agent loop with typed search proposals and independent rechecks.\"\"\"\nimport json\nfrom lfx.io import StrInput, BoolInput, IntInput, HandleInput\nfrom lfx.schema import Message, DataFrame\nfrom nima_semantica.counterexample_contracts import CounterexampleRequest, CounterexampleContext\nfrom nima_semantica.counterexample_tool import search_counterexamples\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_reasoning import POLICY_DIGEST\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\nfrom nima_semantica.providers import ModelManifest, completion_envelope\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass SearchForCounterexamples(BaseComponent):\n    name = \"SearchForCounterexamples\"\n    display_name = \"Counterexample Search \u00b7 Private Graph Agent\"\n    description = \"Single agent: plan or revise an encoding, optionally retrieve context, search and submit. A fixed isolated kernel searches; independent exact checks validate witnesses. Scope and scientific limitations are explicit.\"\n    nima_manifest = manifest_for_component(\"SearchForCounterexamples\")\n    inputs = [handle(\"payload\",\"Validated search request\"),handle(\"policy\",\"Pinned private ontology\",required=False),\n        handle(\"retrieval_policy\",\"Optional context retrieval policy\",required=False),\n        StrInput(name=\"corpus_id\",display_name=\"Authorized corpus (operator)\",value=\"papers\"),\n        StrInput(name=\"project_id\",display_name=\"Authorized project (operator)\",value=\"research\"),\n        BoolInput(name=\"allow_execution\",display_name=\"Allow isolated search (operator)\",value=False),\n        BoolInput(name=\"allow_audit_writes\",display_name=\"Allow attempts and outcome artifacts (operator)\",value=False),\n        BoolInput(name=\"allow_model_calls\",display_name=\"Allow model calls (operator)\",value=False),\n        IntInput(name=\"max_actions\",display_name=\"Agent action limit (operator)\",value=10),\n        IntInput(name=\"max_evaluations\",display_name=\"Maximum points per search (operator)\",value=10000),\n        IntInput(name=\"timeout_seconds\",display_name=\"Worker timeout (operator)\",value=60),\n        StrInput(name=\"model_manifest_json\",display_name=\"Model identity JSON (operator)\",value=\"{}\",advanced=True),\n        HandleInput(name=\"model\",display_name=\"Search language model (operator)\",input_types=[\"LanguageModel\"],required=False),\n        HandleInput(name=\"worker\",display_name=\"Isolated symbolic worker (operator)\",input_types=[\"SymbolicWorker\"],required=False)]\n\n    async def run(self):\n        policy = getattr(self,\"policy\",None)\n        if policy and _value(policy).get(\"policy_digest\") != POLICY_DIGEST:\n            raise ValueError(\"canvas policy differs from pinned controller policy\")\n        request = CounterexampleRequest.model_validate(_value(self.payload))\n        manifest = ModelManifest.model_validate_json(self.model_manifest_json) if self.model_manifest_json.strip() not in (\"\",\"{}\") else None\n        context = CounterexampleContext(corpus_id=self.corpus_id,project_id=self.project_id,\n            allow_execution=self.allow_execution,allow_audit_writes=self.allow_audit_writes,allow_model_calls=self.allow_model_calls,\n            max_actions=self.max_actions,max_evaluations=self.max_evaluations,timeout_seconds=self.timeout_seconds,\n            model_manifest=manifest, retrieval=MathRetrievalPolicy.model_validate(_value(self.retrieval_policy))\n                if getattr(self,\"retrieval_policy\",None) else MathRetrievalPolicy())\n        language_model = getattr(self,\"model\",None)\n        def invoke(prompt):\n            messages = [*prompt[\"messages\"],{\"role\":\"user\",\"content\":\"Remaining actions: \"+str(prompt[\"remaining_actions\"])}]\n            response = language_model.bind_tools(prompt[\"tools\"],tool_choice=\"required\",parallel_tool_calls=False).invoke(messages)\n            if not response.usage_metadata:raise ValueError(\"model omitted usage metadata\")\n            calls = response.tool_calls\n            valid = len(calls)==1 and calls[0][\"name\"] in {t[\"function\"][\"name\"] for t in prompt[\"tools\"]} and not getattr(response,\"invalid_tool_calls\",[])\n            content = json.dumps({\"name\":calls[0][\"name\"],\"arguments\":calls[0][\"args\"]}) if valid else \"invalid tool envelope\"\n            return completion_envelope(content,manifest,response.usage_metadata,response.response_metadata)\n        with configured_store(required=False) as store:\n            return search_counterexamples(store,request,context,model=invoke if language_model is not None else None,\n                worker=getattr(self,\"worker\",None)).model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)\n        for char in (\"`\",\"<\",\">\",\"&\"):text=text.replace(char,\"\\\\u\"+format(ord(char),\"04x\"))\n        return Message(text=\"```json\\n\"+text+\"\\n```\")\n\n    async def table_data(self) -> DataFrame:\n        return DataFrame((await self.result_data()).data.get(\"data\",{}).get(\"attempts\",[]))\n",
+                "value": "\"\"\"Inspectable agent loop with typed search proposals and independent rechecks.\"\"\"\nimport json\nfrom lfx.io import StrInput, BoolInput, IntInput, HandleInput\nfrom lfx.schema import Message, DataFrame\nfrom nima_semantica.counterexample_contracts import CounterexampleRequest, CounterexampleContext\nfrom nima_semantica.counterexample_tool import search_counterexamples\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_reasoning import POLICY_DIGEST\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\nfrom nima_semantica.providers import ModelManifest, completion_envelope\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass SearchForCounterexamples(BaseComponent):\n    name = \"SearchForCounterexamples\"\n    display_name = \"Counterexample Search · Private Graph Agent\"\n    description = \"Single agent: plan or revise an encoding, optionally retrieve context, search and submit. A fixed isolated kernel searches; independent exact checks validate witnesses. Scope and scientific limitations are explicit.\"\n    nima_manifest = manifest_for_component(\"SearchForCounterexamples\")\n    inputs = [handle(\"payload\",\"Validated search request\"),handle(\"policy\",\"Pinned private ontology\",required=False),\n        handle(\"retrieval_policy\",\"Optional context retrieval policy\",required=False),\n        StrInput(name=\"corpus_id\",display_name=\"Authorized corpus (operator)\",value=\"papers\"),\n        StrInput(name=\"project_id\",display_name=\"Authorized project (operator)\",value=\"research\"),\n        BoolInput(name=\"allow_execution\",display_name=\"Allow isolated search (operator)\",value=False),\n        BoolInput(name=\"allow_audit_writes\",display_name=\"Allow attempts and outcome artifacts (operator)\",value=False),\n        BoolInput(name=\"allow_model_calls\",display_name=\"Allow model calls (operator)\",value=False),\n        IntInput(name=\"max_actions\",display_name=\"Agent action limit (operator)\",value=10),\n        IntInput(name=\"max_evaluations\",display_name=\"Maximum points per search (operator)\",value=10000),\n        IntInput(name=\"timeout_seconds\",display_name=\"Worker timeout (operator)\",value=60),\n        StrInput(name=\"model_manifest_json\",display_name=\"Model identity JSON (operator)\",value=\"{}\",advanced=True),\n        HandleInput(name=\"model\",display_name=\"Search language model (operator)\",input_types=[\"LanguageModel\"],required=False),\n        HandleInput(name=\"worker\",display_name=\"Isolated symbolic worker (operator)\",input_types=[\"SymbolicWorker\"],required=False)]\n\n    async def run(self):\n        policy = getattr(self,\"policy\",None)\n        if policy and _value(policy).get(\"policy_digest\") != POLICY_DIGEST:\n            raise ValueError(\"canvas policy differs from pinned controller policy\")\n        request = CounterexampleRequest.model_validate(_value(self.payload))\n        manifest = ModelManifest.model_validate_json(self.model_manifest_json) if self.model_manifest_json.strip() not in (\"\",\"{}\") else None\n        context = CounterexampleContext(corpus_id=self.corpus_id,project_id=self.project_id,\n            allow_execution=self.allow_execution,allow_audit_writes=self.allow_audit_writes,allow_model_calls=self.allow_model_calls,\n            max_actions=self.max_actions,max_evaluations=self.max_evaluations,timeout_seconds=self.timeout_seconds,\n            model_manifest=manifest, retrieval=MathRetrievalPolicy.model_validate(_value(self.retrieval_policy))\n                if getattr(self,\"retrieval_policy\",None) else MathRetrievalPolicy())\n        language_model = getattr(self,\"model\",None)\n        def invoke(prompt):\n            messages = [*prompt[\"messages\"],{\"role\":\"user\",\"content\":\"Remaining actions: \"+str(prompt[\"remaining_actions\"])}]\n            response = language_model.bind_tools(prompt[\"tools\"],tool_choice=\"required\",parallel_tool_calls=False).invoke(messages)\n            if not response.usage_metadata:raise ValueError(\"model omitted usage metadata\")\n            calls = response.tool_calls\n            valid = len(calls)==1 and calls[0][\"name\"] in {t[\"function\"][\"name\"] for t in prompt[\"tools\"]} and not getattr(response,\"invalid_tool_calls\",[])\n            content = json.dumps({\"name\":calls[0][\"name\"],\"arguments\":calls[0][\"args\"]}) if valid else \"invalid tool envelope\"\n            return completion_envelope(content,manifest,response.usage_metadata,response.response_metadata)\n        with configured_store(required=False) as store:\n            return search_counterexamples(store,request,context,model=invoke if language_model is not None else None,\n                worker=getattr(self,\"worker\",None)).model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)\n        for char in (\"`\",\"<\",\">\",\"&\"):text=text.replace(char,\"\\\\u\"+format(ord(char),\"04x\"))\n        return Message(text=\"```json\\n\"+text+\"\\n```\")\n\n    async def table_data(self) -> DataFrame:\n        return DataFrame((await self.result_data()).data.get(\"data\",{}).get(\"attempts\",[]))\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -1201,7 +1201,7 @@
               "Message",
               "Table"
             ],
-            "display_name": "Counterexample Search \u00b7 Private Graph Agent",
+            "display_name": "Counterexample Search · Private Graph Agent",
             "documentation": "",
             "minimized": false,
             "custom_fields": {},
@@ -1518,7 +1518,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Operator-authorized method-context retrieval inside search planning.\"\"\"\nfrom lfx.io import BoolInput, StrInput\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\n\n\nclass CounterexampleRetrieval(BaseComponent):\n    name = \"CounterexampleRetrieval\"\n    display_name = \"Search Context Retrieval \u00b7 Operator Policy\"\n    description = \"Optional plan context uses scoped NIMA retrieval and exact source reads; passages remain method evidence, not verification.\"\n    nima_manifest = manifest_for_component(\"CounterexampleRetrieval\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Allow context retrieval (operator)\",value=False),\n        StrInput(name=\"projection_id\",display_name=\"Prepared projection ID (operator)\",value=\"\")]\n\n    async def run(self):\n        return MathRetrievalPolicy(enabled=self.enabled,projection_id=self.projection_id.strip() or None).model_dump(mode=\"json\")\n",
+                "value": "\"\"\"Operator-authorized method-context retrieval inside search planning.\"\"\"\nfrom lfx.io import BoolInput, StrInput\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\n\n\nclass CounterexampleRetrieval(BaseComponent):\n    name = \"CounterexampleRetrieval\"\n    display_name = \"Search Context Retrieval · Operator Policy\"\n    description = \"Optional plan context uses scoped NIMA retrieval and exact source reads; passages remain method evidence, not verification.\"\n    nima_manifest = manifest_for_component(\"CounterexampleRetrieval\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Allow context retrieval (operator)\",value=False),\n        StrInput(name=\"projection_id\",display_name=\"Prepared projection ID (operator)\",value=\"\")]\n\n    async def run(self):\n        return MathRetrievalPolicy(enabled=self.enabled,projection_id=self.projection_id.strip() or None).model_dump(mode=\"json\")\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -1580,7 +1580,7 @@
               "Message",
               "Table"
             ],
-            "display_name": "Search Context Retrieval \u00b7 Operator Policy",
+            "display_name": "Search Context Retrieval · Operator Policy",
             "documentation": "",
             "minimized": false,
             "custom_fields": {},
@@ -1659,8 +1659,8 @@
         "id": "ChatInput-counterexample-message-CounterexampleFields-nima-mcp_request",
         "source": "ChatInput-counterexample",
         "target": "CounterexampleFields-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153ChatInput\u0153, \u0153id\u0153: \u0153ChatInput-counterexample\u0153, \u0153name\u0153: \u0153message\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153mcp_request\u0153, \u0153id\u0153: \u0153CounterexampleFields-nima\u0153, \u0153inputTypes\u0153: [\u0153Message\u0153, \u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œChatInputœ, œidœ: œChatInput-counterexampleœ, œnameœ: œmessageœ, œoutput_typesœ: [œMessageœ]}",
+        "targetHandle": "{œfieldNameœ: œmcp_requestœ, œidœ: œCounterexampleFields-nimaœ, œinputTypesœ: [œMessageœ, œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "ChatInput",
@@ -1686,8 +1686,8 @@
         "id": "CounterexampleFields-nima-request-SearchForCounterexamples-nima-payload",
         "source": "CounterexampleFields-nima",
         "target": "SearchForCounterexamples-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153CounterexampleFields\u0153, \u0153id\u0153: \u0153CounterexampleFields-nima\u0153, \u0153name\u0153: \u0153request\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153SearchForCounterexamples-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œCounterexampleFieldsœ, œidœ: œCounterexampleFields-nimaœ, œnameœ: œrequestœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œpayloadœ, œidœ: œSearchForCounterexamples-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "CounterexampleFields",
@@ -1712,8 +1712,8 @@
         "id": "CounterexampleOntology-nima-result-SearchForCounterexamples-nima-policy",
         "source": "CounterexampleOntology-nima",
         "target": "SearchForCounterexamples-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153CounterexampleOntology\u0153, \u0153id\u0153: \u0153CounterexampleOntology-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153policy\u0153, \u0153id\u0153: \u0153SearchForCounterexamples-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œCounterexampleOntologyœ, œidœ: œCounterexampleOntology-nimaœ, œnameœ: œresultœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œpolicyœ, œidœ: œSearchForCounterexamples-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "CounterexampleOntology",
@@ -1738,8 +1738,8 @@
         "id": "CounterexampleRetrieval-nima-result-SearchForCounterexamples-nima-retrieval_policy",
         "source": "CounterexampleRetrieval-nima",
         "target": "SearchForCounterexamples-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153CounterexampleRetrieval\u0153, \u0153id\u0153: \u0153CounterexampleRetrieval-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153retrieval_policy\u0153, \u0153id\u0153: \u0153SearchForCounterexamples-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œCounterexampleRetrievalœ, œidœ: œCounterexampleRetrieval-nimaœ, œnameœ: œresultœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œretrieval_policyœ, œidœ: œSearchForCounterexamples-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "CounterexampleRetrieval",
@@ -1764,8 +1764,8 @@
         "id": "SearchForCounterexamples-nima-result-CounterexampleStateView-nima-payload",
         "source": "SearchForCounterexamples-nima",
         "target": "CounterexampleStateView-nima",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153SearchForCounterexamples\u0153, \u0153id\u0153: \u0153SearchForCounterexamples-nima\u0153, \u0153name\u0153: \u0153result\u0153, \u0153output_types\u0153: [\u0153JSON\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153payload\u0153, \u0153id\u0153: \u0153CounterexampleStateView-nima\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œSearchForCounterexamplesœ, œidœ: œSearchForCounterexamples-nimaœ, œnameœ: œresultœ, œoutput_typesœ: [œJSONœ]}",
+        "targetHandle": "{œfieldNameœ: œpayloadœ, œidœ: œCounterexampleStateView-nimaœ, œinputTypesœ: [œDataœ, œJSONœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "SearchForCounterexamples",
@@ -1790,8 +1790,8 @@
         "id": "SearchForCounterexamples-nima-preview-ChatOutput-counterexample-input_value",
         "source": "SearchForCounterexamples-nima",
         "target": "ChatOutput-counterexample",
-        "sourceHandle": "{\u0153dataType\u0153: \u0153SearchForCounterexamples\u0153, \u0153id\u0153: \u0153SearchForCounterexamples-nima\u0153, \u0153name\u0153: \u0153preview\u0153, \u0153output_types\u0153: [\u0153Message\u0153]}",
-        "targetHandle": "{\u0153fieldName\u0153: \u0153input_value\u0153, \u0153id\u0153: \u0153ChatOutput-counterexample\u0153, \u0153inputTypes\u0153: [\u0153Data\u0153, \u0153JSON\u0153, \u0153DataFrame\u0153, \u0153Table\u0153, \u0153Message\u0153], \u0153type\u0153: \u0153other\u0153}",
+        "sourceHandle": "{œdataTypeœ: œSearchForCounterexamplesœ, œidœ: œSearchForCounterexamples-nimaœ, œnameœ: œpreviewœ, œoutput_typesœ: [œMessageœ]}",
+        "targetHandle": "{œfieldNameœ: œinput_valueœ, œidœ: œChatOutput-counterexampleœ, œinputTypesœ: [œDataœ, œJSONœ, œDataFrameœ, œTableœ, œMessageœ], œtypeœ: œotherœ}",
         "data": {
           "sourceHandle": {
             "dataType": "SearchForCounterexamples",
@@ -1835,7 +1835,7 @@
       "math_retrieval": "85fbfd0f8d6ef4aaec36f025ac1a7c6adefe3d22aab66c8d55d7f04c6b7cdb0f",
       "math_reasoning": "c7eca62e04e55ffb8256b160c755831687ca0348c9ad435ea50337bb356a4728",
       "reasoning_state": "cf22253686c357a8954fd7ed54cae77d5dfaa2da249af60707586e89bf2eaf20",
-      "reasoning_kernel": "0932753d1ee9bdea4348441d384d13034cf3b011478d4e4eadf5674a82774df3",
+      "reasoning_kernel": "71a592fe5f12b662bd5731c4d3917fb40f9e12475316f5e7df781a899821bd34",
       "verification": "2de2fb94fee7523ca2ac46c0c9f9381f6538c9d2571ec28a2b1ead3d9ec7ea5f",
       "verification_service": "acb967f508d2b273f377e51b862a22f0fdc3d0b3bd3754547b02c7fdabe7257b",
       "research_additions": "6ace1ee8208f14e611c3480ee418ebd46d144fdf0e69281b461404f5230d682c"
@@ -1845,7 +1845,7 @@
       "CounterexampleFields": {
         "nima_component_id": "counterexample_fields",
         "contract_version": "1",
-        "source_sha256": "d1e3499bfb7ef73b29862467d9801ee75b54de9897f506b4985e83eb04a47895"
+        "source_sha256": "97e8be4e4bbf31f7e883557f133a54d3ac8936d1d8afa4cfa150a4f94d51769f"
       },
       "SearchForCounterexamples": {
         "nima_component_id": "search_for_counterexamples",

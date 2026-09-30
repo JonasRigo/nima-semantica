@@ -65,8 +65,21 @@ def test_http_authentication_framing_and_remote_roundtrip(store):
         assert error.value.code==403
         result=RemoteLeanVerifier(url,"test-token").verify(store,native())
         assert result.certification_verified and len(worker.calls)==1
-        req=urllib.request.Request(url+"/verify",data=b"{}",headers={"Authorization":"Bearer test-token","Transfer-Encoding":"chunked"})
-        with pytest.raises(urllib.error.HTTPError) as error:urllib.request.urlopen(req)
-        assert error.value.code==400 and len(worker.calls)==1
+        # Send only malformed framing headers. The server rejects them before
+        # reading a body; concurrently sending chunks can race its close and
+        # produce a TCP reset on Darwin instead of exposing the HTTP 400.
+        import http.client
+        connection=http.client.HTTPConnection("127.0.0.1",server.server_port,timeout=5)
+        try:
+            connection.putrequest("POST","/verify")
+            connection.putheader("Authorization","Bearer test-token")
+            connection.putheader("Transfer-Encoding","chunked")
+            connection.putheader("Content-Length","2")
+            connection.endheaders()
+            response=connection.getresponse()
+            assert response.status==400 and len(worker.calls)==1
+            response.read()
+        finally:
+            connection.close()
     finally:
         server.shutdown();server.server_close();thread.join(timeout=2)

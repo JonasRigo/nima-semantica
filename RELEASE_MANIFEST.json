@@ -512,7 +512,7 @@
     "tests/test_lean_draft_canvas.py": "5bb1009c5a1a3a0fc9ae8cc7f8e602249ce840601f3df42df02b35b1aaca0786",
     "tests/test_lean_project.py": "33180527e39d92676a1167eae27422a06aef6c4f058f6e0a703596a1415882a7",
     "tests/test_lean_seccomp.py": "7d66f1c91339cef088410ba9388d8eaabf27b31d38a7d6e063854b6b7eeef7ef",
-    "tests/test_lean_transport.py": "664d123846c554ff00ed40da22c08336c25c1d0e58479474f596c70e45e9fdad",
+    "tests/test_lean_transport.py": "5c238e2f1a38fa1481949036c7a8333ef46bb8fa740207999768358f3f9c7766",
     "tests/test_literature_acquisition_service.py": "83a32ff8fbd235d96fff312a3152ee649a969c10bd8c526ebfe4062b8c467b9c",
     "tests/test_macos_fast_pdf.py": "bd4bff4d6777c8e874b7a594e3e406a3fac4a13f075b1a1391c76bfdab82ec01",
     "tests/test_macos_setup.py": "42538e1eed630ee2322cb753b6f89f117f7aadf573160b397156e5c8adccaf95",

@@ -29,4 +29,6 @@ Live provider qualification targets OpenRouter, including Anthropic and Gemini m
 
 Back up corpus data and installation configuration, install the release wheel, and follow [SETUP.md](SETUP.md). Run `nima doctor` and refresh managed project toolboxes through the documented setup workflow. Do not overwrite manually edited Langflow flows without reviewing the reported differences. Provider choices and embedding identities must not change implicitly during an upgrade.
 
+Managed execution images are versioned. Re-run the provisioning workflow after upgrading the wheel; installing the wheel alone does not build `nima-fast-pdf:0.1.2` or replace running workers. Review local context/output limits: an output budget that leaves no room for input is now rejected explicitly. Existing research stores need not be deleted or re-ingested just to upgrade.
+
 macOS uses native Langflow with Docker Desktop execution workers. Intel Macs, Rosetta and untested Linux distributions are outside the qualification. No new versioned DOI or publication date is asserted before the release is actually published.

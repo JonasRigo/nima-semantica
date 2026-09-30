@@ -34,6 +34,55 @@ class Model:
         return Invocation(result=value,manifest=MANIFEST,input_tokens=10,output_tokens=10)
 
 
+def test_large_source_plan_is_read_only_and_bounded(store):
+    prepared, _, _ = pipeline(store, source_request(sources=[{"name":"large.txt", "text":"Evidence. " * 7000}]))
+    before = store.revision
+    result = deep_extraction(store, DeepExtractionRequest(mode="plan",source_id=prepared.data["sources"][0]["source_id"]),
+        context(allow_model_calls=False,allow_audit_writes=False))
+    assert result.status == "complete", result
+    batches = result.data["batches"]
+    assert len(batches) > 1 and all(1 <= len(b["source_region_ids"]) <= 32 for b in batches)
+    assert [key for batch in batches for key in batch["source_region_ids"]] == prepared.data["region_ids"]
+    assert store.revision == before
+    assert all(DeepExtractionRequest.model_validate(b).operation_id for b in batches)
+    assert len({b["operation_id"] for b in batches}) == len(batches)
+    again = deep_extraction(store, DeepExtractionRequest(mode="plan",source_id=result.data["source_id"]), context())
+    assert again.data["batches"] == batches
+    retry = deep_extraction(store, DeepExtractionRequest(mode="plan",source_id=result.data["source_id"],plan_attempt_id="retry"), context())
+    assert retry.data["batches"][0]["operation_id"] != batches[0]["operation_id"]
+
+
+@pytest.mark.parametrize("count", [1, 32, 33])
+def test_regional_bound_is_per_call(count):
+    payload = dict(mode="regional", operation_id="bounded", source_region_ids=[f"r-{i}" for i in range(count)])
+    if count <= 32:
+        assert len(DeepExtractionRequest(**payload).source_region_ids) == count
+    else:
+        with pytest.raises(ValueError):
+            DeepExtractionRequest(**payload)
+
+
+def test_regional_source_assertion_preserves_selection(store):
+    r = region(store)
+    model = Model(actions(r))
+    result = deep_extraction(store, request(r, source_id=r.content["source_id"]), context(), model=model)
+    assert result.artifacts.get("graph_proposal"), result
+    bad = Model([])
+    result = deep_extraction(store, request(r, source_id="wrong", operation_id="mismatch"), context(), model=bad)
+    assert result.status == "failed" and not bad.calls
+
+
+def test_read_regions_supplies_exact_copyable_citation_spans(store):
+    r=region(store,"First line with coeﬃcients.\nSecond line.\n")
+    model=Model(actions(r))
+    result=deep_extraction(store,request(r),context(),model=model)
+    assert result.artifacts.get("graph_proposal"),result
+    reads=[v.content["metadata"]["output"] for _,v in store.records("ExecutionReceipt")
+           if v.content["stage"]=="deep_extraction_read_regions"]
+    spans=reads[0]["passages"][0]["citation_spans"]
+    assert spans and all(r.content["text"][s["start"]:s["end"]]==s["quotation"] for s in spans)
+
+
 def test_preview_denial_no_reads_model_or_writes(store):
     before=store.revision
     assert not deep_extraction(None,DeepExtractionRequest(),context()).data["executed"]

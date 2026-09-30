@@ -56,7 +56,9 @@ def test_disabled_execution_no_writes(configured):
 
 @pytest.mark.parametrize("extra",[{"allow_audit_writes":True},{"corpus_id":"private"},{"model":"evil"},{"max_actions":100}])
 def test_public_override_denied(configured,extra):
-    with pytest.raises(Exception):execute(extra)
+    result = execute(extra)
+    assert result["status"] == "failed" and result["data"]["executed"] is False
+    assert result["diagnostics"][0]["code"] == "request.invalid_field"
 
 
 def test_connected_model_uses_native_actions_and_cached_outputs(configured):
@@ -88,3 +90,32 @@ def test_connected_model_uses_native_actions_and_cached_outputs(configured):
 def test_policy_mismatch_rejected_before_execution(configured):
     component=load_component("DeepExtraction")().set(payload={},policy={"policy_digest":"foreign"})
     with pytest.raises(ValueError,match="policy differs"):asyncio.run(component.result_data())
+
+
+def test_wired_model_canvas(configured, monkeypatch):
+    from langchain_openai import ChatOpenAI
+    from langchain_core.messages import AIMessage
+    from langchain_core.outputs import ChatResult, ChatGeneration
+    from nima_semantica.installation import Installation, ModelProfile
+    from nima_semantica.workflow_installation import configure_flow
+    from nima_semantica.storage import GraphStore
+    from lfx.graph import Graph
+    monkeypatch.setattr("lfx.base.models.provider_ssrf.openai_compatible_client_kwargs", lambda *a, **kw: {})
+    store=GraphStore(configured); r=region(store); store.close()
+    sequence=iter(actions(r))
+    def generate(self, *args, **kwargs):
+        action=next(sequence)
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="",
+            tool_calls=[{"name":action["name"],"args":action["arguments"],"id":"fixture"}],
+            usage_metadata={"input_tokens":10,"output_tokens":20,"total_tokens":30},
+            response_metadata={"finish_reason":"tool_calls"}))])
+    monkeypatch.setattr(ChatOpenAI,"_generate",generate)
+    flow,_=configure_flow(json.loads(CANVAS.read_text()),"deep_extraction",
+        Installation(data_root=str(configured),llm=ModelProfile(model="fixture",credential="")),"papers","research")
+    graph=Graph.from_payload(flow["data"])
+    async def run():
+        await graph.arun(inputs=[{"input_value":json.dumps(request(r).model_dump(mode="json"))}],outputs=["ChatOutput-extraction"])
+        result=(await graph.get_vertex("DeepExtraction-nima").custom_component.result_data()).data
+        assert result["status"] == "partial", result
+        assert result["data"].get("candidate_history"), result
+    asyncio.run(run())

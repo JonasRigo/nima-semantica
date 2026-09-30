@@ -1,5 +1,8 @@
 include setup.py release-resources.json CITATION.cff README.md LICENSE THIRD_PARTY_NOTICES.md .gitignore
 include deploy/release_policy.py
+include RELEASE_MANIFEST.json .dockerignore .zenodo.json Dockerfile.langflow
+include .github/workflows/tests.yml
+recursive-include tests *.py
 prune article
 prune .nima
 prune benchmarks

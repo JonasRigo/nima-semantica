@@ -19,6 +19,7 @@ from .corpus_registry import CorpusRegistry
 from .research_run_service import ResearchRunService
 from .execution_receipts import ExecutionReceiptService
 from .receipts import ExecutionReceipt
+from .source_quality import evidence_locator
 from .providers import Invocation,validate_manifest
 from .tool_contracts import ToolResult
 
@@ -236,7 +237,8 @@ class HypothesisController:
                     revision=g["source_revision"],content_hash=g["artifact_id"],locator={"region_start":g["start"],"region_end":g["end"]})
                 if reference not in references[g["polarity"]]:references[g["polarity"]].append(reference)
                 evidence[region.id]=EvidenceReference(corpus_id=region.corpus_id,project_id=region.project_id,region_id=region.id,
-                    artifact_id=g["artifact_id"],content_hash=g["artifact_id"],source_revision=g["source_revision"])
+                    artifact_id=g["artifact_id"],content_hash=g["artifact_id"],source_revision=g["source_revision"],
+                    locator=evidence_locator(region.content))
             proposals.append(HypothesisProposal(proposal_id=identity((VERSION,self.request.operation_id,c["candidate_hash"],self.scope)),**self.scope,
                 graph_revision=self.request.graph_revision,kind=c["kind"],statement=c["statement"],assumptions=tuple(c["assumptions"]),
                 expected_consequences=tuple(c["expected_consequences"]),unresolved_obligations=tuple(c["unresolved_obligations"]),verification_plans=tuple(c["verification_plans"]),

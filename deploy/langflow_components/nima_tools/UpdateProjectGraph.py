@@ -23,7 +23,7 @@ class UpdateProjectGraph(BaseComponent):
         BoolInput(name="allow_graph_writes",display_name="Allow approved graph writes (operator)",value=False),
         BoolInput(name="allow_audit_writes",display_name="Allow attempt records (operator)",value=False),
         BoolInput(name="allow_projection_writes",display_name="Allow projection rebuilds (operator)",value=False),
-        IntInput(name="max_changes",display_name="Maximum delta changes (operator)",value=512),
+        IntInput(name="max_changes",display_name="Maximum delta changes (operator)",value=12288),
         IntInput(name="max_regions",display_name="Maximum indexed regions (operator)",value=100000),
         IntInput(name="max_tokens",display_name="Maximum lexical tokens (operator)",value=1000000)]
 

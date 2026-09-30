@@ -6,15 +6,15 @@ from nima_semantica.extraction_contracts import DeepExtractionRequest
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.providers import strict_json_object
 from nima_semantica.orchestration.langflow.adapter_support import native
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent
+from nima_semantica.orchestration.langflow.stages.base import RequestFields as BaseComponent
 
 
 class ExtractionFields(BaseComponent):
     name = "ExtractionFields"
     display_name = "Deep Extraction Inputs"
-    description = "Select prepared regions or a prepared document, extraction question and saved ontology. JSON also accepts pinned graph revision and target/parent progress references. No automatic ingestion or graph admission."
+    description = "Select prepared regions/document for extraction, or consolidation_plan/consolidate with saved candidate artifacts and explicit identity/link decisions. JSON accepts the nested consolidation selection, pinned revision and progress references. No automatic ingestion or graph admission."
     nima_manifest = manifest_for_component("ExtractionFields")
-    inputs = [DropdownInput(name="mode",display_name="Mode",options=["preview","regional","document","document_to_proposal"],value="preview"),
+    inputs = [DropdownInput(name="mode",display_name="Mode",options=["preview","plan","regional","document","document_to_proposal","consolidation_plan","consolidate"],value="preview"),
         StrInput(name="question",display_name="Extraction question",value="Extract source-attributed claims, definitions and their explicit relations; retain uncertainty."),
         StrInput(name="source_region_ids_json",display_name="Prepared region IDs (JSON list)",value="[]"),
         StrInput(name="source_id",display_name="Prepared document source ID",value=""),
@@ -28,7 +28,7 @@ class ExtractionFields(BaseComponent):
     async def run(self):
         override=native(getattr(self,"mcp_request",None))
         if isinstance(override,str):
-            if len(override)>60000:raise ValueError("request exceeds input limit")
+            if len(override)>1_000_000:raise ValueError("request exceeds input limit")
             override=strict_json_object(override) if override.strip() else {}
         if override is None:override={}
         if not isinstance(override,dict):raise ValueError("expected request object")

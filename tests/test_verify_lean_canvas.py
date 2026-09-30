@@ -74,7 +74,9 @@ def test_direct_with_explicit_worker_fixture(configured,monkeypatch):
 
 @pytest.mark.parametrize("extra",[{"allow_execution":True},{"corpus_id":"private"},{"check_plan":{}},{"worker":"evil"},{"max_actions":100}])
 def test_public_override_denied(configured,extra):
-    with pytest.raises(Exception):execute(extra)
+    result = execute(extra)
+    assert result["status"] == "failed" and result["data"]["executed"] is False
+    assert result["diagnostics"][0]["code"] == "request.invalid_field"
 
 
 def test_result_branches_execute_once_and_expose_exact_types(configured):

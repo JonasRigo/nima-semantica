@@ -138,8 +138,8 @@ def test_missing_embedding_model_reports_partial_not_ready(configured):
 
 @pytest.mark.parametrize("field", ["corpus_id", "project_id", "actor", "allow_corpus_writes", "allow_embeddings", "pdf_url", "store_path"])
 def test_public_authority_rejected(configured, field):
-    with pytest.raises(Exception):
-        execute({field: "forged"}, writes=True)
+    result = execute({field: "forged"}, writes=True)
+    assert result["status"] == "failed" and result["data"]["executed"] is False
 
 
 def test_pdf_connection_is_operator_owned_and_invoked_once(configured, monkeypatch):

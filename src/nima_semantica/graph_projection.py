@@ -72,6 +72,13 @@ class GraphProjectionService:
         self.receipts = receipts or ExecutionReceiptService(store)
 
     def rebuild(self, request: GraphProjectionRequest) -> GraphProjectionResult:
+        # Implicit refreshes target current knowledge, not the first historical
+        # invocation of an otherwise identical corpus/project request.
+        if request.idempotency_key is None:
+            request = request.model_copy(update={
+                "graph_revision": request.graph_revision or self.store.graph_revision(request.corpus_id, request.project_id),
+                "source_revision": request.source_revision or self._source_revision(request.corpus_id),
+            })
         operation_id = request.idempotency_key or identity({"stage": self.stage, "request": request.model_dump(mode="json")})
         receipt_id = identity({"stage": self.stage, "operation_id": operation_id})
         previous = self.receipts.get(receipt_id, corpus_id=request.corpus_id, project_id=request.project_id)
@@ -212,12 +219,15 @@ class GraphProjectionService:
             text = region.content.get("text", "")
             if not isinstance(text, str):
                 continue
+            # Identity hashes the complete immutable record, including parser
+            # diagnostics. Compute once per region, not twice for every token.
+            region_id = region.id
             for token in self._TOKEN.findall(text.casefold()):
                 token_count += 1
                 if token_count > max_tokens:
                     raise NimaError("projection token budget exceeded")
-                if region.id not in inverted.setdefault(token, []):
-                    inverted[token].append(region.id)
+                if region_id not in inverted.setdefault(token, []):
+                    inverted[token].append(region_id)
         return {"version": 1, "token_count": token_count, "terms": {key: value for key, value in sorted(inverted.items())}}
 
     def _vector(self, regions: list[Record], request: GraphProjectionRequest) -> tuple[dict[str, Any], EmbeddingProjectionManifest | None]:

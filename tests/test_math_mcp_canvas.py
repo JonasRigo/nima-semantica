@@ -52,6 +52,11 @@ def test_installed_canvas_preview_and_native_equivalence(tmp_path, monkeypatch):
         component.set(execute=False, request_json="{}")
         result = json.loads(component.run_request().text)
         assert result.get("executed") is False or operation == "operations"
+        if operation != "operations":
+            component.set(execute=True, request_json='{"unexpected":"SECRET"}')
+            rejected = json.loads(component.run_request().text)
+            assert rejected["status"] == "failed" and rejected["data"]["executed"] is False
+            assert "SECRET" not in json.dumps(rejected)
         if operation == "record_step":
             request = dict(session_id=sid, request_id="same", expected_revision=0, kind="claim", statement="A proposal", value=2, depends_on=["task"])
             expected = invoke(service, operation, request)

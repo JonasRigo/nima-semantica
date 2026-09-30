@@ -70,7 +70,7 @@ class UpdateProjectContext(StrictModel):
     allow_audit_writes: StrictBool=False
     allow_projection_writes: StrictBool=False
     approval: OKFCommitApproval | None=None
-    max_changes: StrictInt=Field(default=512,ge=1,le=2048)
+    max_changes: StrictInt=Field(default=12288,ge=1,le=30000)
     max_regions: StrictInt=Field(default=100000,ge=1,le=1000000)
     max_tokens: StrictInt=Field(default=1000000,ge=1,le=10000000)
 
@@ -175,7 +175,7 @@ def prepare_update(store,request,context):
     elif request.artifact_id:
         env,blob=ArtifactService(store).read(request.artifact_id,**scope)
         if env.project_id!=context.project_id or env.artifact_kind!="graph_candidate" or env.status!="proposed":raise ConflictError("expected authorized proposed graph candidate")
-        if len(blob)>4_000_000:raise ValueError("candidate exceeds complete-read bound")
+        if len(blob)>32_000_000:raise ValueError("candidate exceeds 32 MB complete-read bound; narrow scope explicitly")
         delta=OKFDelta.model_validate_json(blob)
     else:delta=request.delta
     if (delta.corpus_id,delta.project_id)!=(context.corpus_id,context.project_id) or delta.base_revision!=request.graph_revision:raise ConflictError("delta scope/revision differs")

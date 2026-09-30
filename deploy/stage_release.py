@@ -40,4 +40,10 @@ def stage(destination):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('destination')
-    print(json.dumps(stage(parser.parse_args().destination), indent=2))
+    parser.add_argument('--sync-manifest', action='store_true',
+                        help='Refresh the generated checkout manifest from this staged inventory')
+    args = parser.parse_args()
+    result = stage(args.destination)
+    if args.sync_manifest:
+        shutil.copy2(Path(result['destination']) / 'RELEASE_MANIFEST.json', ROOT / 'RELEASE_MANIFEST.json')
+    print(json.dumps(result, indent=2))

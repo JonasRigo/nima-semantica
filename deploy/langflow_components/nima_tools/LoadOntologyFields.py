@@ -5,7 +5,7 @@ from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.ontology_tools import LoadOntologyRequest
 from nima_semantica.providers import strict_json_object
 from nima_semantica.orchestration.langflow.adapter_support import native
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent
+from nima_semantica.orchestration.langflow.stages.base import RequestFields as BaseComponent
 
 
 class LoadOntologyFields(BaseComponent):
@@ -30,7 +30,10 @@ class LoadOntologyFields(BaseComponent):
         if isinstance(override, str):
             if len(override) > 10_000:
                 raise ValueError("ontology selection exceeds input limit")
-            override = strict_json_object(override) if override.strip() else {}
+            try:
+                override = strict_json_object(override) if override.strip() else {}
+            except (ValueError, TypeError):
+                return {"request_error": "Send a JSON object serialized in input_value; use {} to list ontologies."}
         if not isinstance(override, dict):
             raise ValueError("expected a JSON object")
         payload = {"mode": self.mode, "name": self.profile_name or None,

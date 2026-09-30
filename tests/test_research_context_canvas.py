@@ -104,8 +104,8 @@ def test_model_call_default_denial(configured):
 @pytest.mark.parametrize("payload", [{"corpus_id":"other"}, {"project_id":"other"}, {"allow_embeddings":True},
     {"manifest_json":"{}"}, {"query_vector":[1,0]}, {"query":" "}])
 def test_public_authority_and_invalid_input_rejected(configured, payload):
-    with pytest.raises(Exception):
-        execute(payload)
+    result = execute(payload)
+    assert result["status"] == "failed" and result["data"]["executed"] is False
 
 
 def test_native_data_preserves_latex_query():

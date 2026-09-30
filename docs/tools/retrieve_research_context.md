@@ -9,6 +9,9 @@ You receive bounded passages, exact evidence references and scoped graph context
 Call this workflow through your project’s Langflow MCP toolbox.
 
 Request fields: `query`, `mode`, `projection_id`, `expected_store_revision`, `limit`, `max_hops`, `max_nodes`, `max_edges`, `max_neighbors`, `max_results`, `max_chars`, `operation_id`, `run_id`.
+`include_provisional` defaults to `true`; set it to `false` to exclude fast-prepared
+regions and provisional graph context. Included fast evidence carries its quality
+label in the returned region and citation locator; graph context retains evidence labels.
 Use [Tool Guide](tool_guide.md) with `{"tool": "Retrieve Research Context"}` for the complete nested schema, allowed values and required fields.
 
 ## Start with the contract

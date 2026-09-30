@@ -62,7 +62,7 @@ def native_chat_model(profile, credential_value=None):
     token = credential_value or (os.environ.get(profile.credential) if profile.credential else None)
     if hasattr(token, "get_secret_value"):
         token = token.get_secret_value()
-    if profile.provider != "ollama" and not token:
+    if profile.provider != "ollama" and profile.credential and not token:
         raise ValueError("Configured model credential is missing")
     endpoint = profile.container_url or profile.base_url
     options = dict(profile.parameters)
@@ -70,6 +70,21 @@ def native_chat_model(profile, credential_value=None):
                 "anthropic_api_url", "client", "credentials", "client_kwargs", "http_client", "http_async_client"}
     if reserved & options.keys():
         raise ValueError("Model parameters must not override provider, endpoint or credential routing")
+    if profile.provider in {"openai", "openrouter", "compatible"}:
+        from langchain_openai import ChatOpenAI
+        # Compatible endpoints speak chat completions unless explicitly opted
+        # into Responses. Model names alone do not establish API capabilities.
+        responses = options.pop("use_responses_api", False if profile.provider != "openai" else None)
+        transport = {}
+        try:
+            from lfx.base.models.provider_ssrf import openai_compatible_client_kwargs
+        except ImportError:
+            pass  # Core SDK usage has no Langflow dependency.
+        else:
+            transport = openai_compatible_client_kwargs(endpoint, default_url="https://api.openai.com/v1")
+        return ChatOpenAI(model=profile.model, api_key=token or "local", base_url=endpoint,
+            max_tokens=profile.max_tokens, max_retries=0, use_responses_api=responses,
+            model_kwargs=options, **transport)
     if profile.provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
         class AnthropicModel(ChatAnthropic):

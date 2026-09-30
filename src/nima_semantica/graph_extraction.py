@@ -22,6 +22,15 @@ from .okf_contracts import (
 from .ontology_services import OntologyService
 from .proposal_service import ProposalService
 from .receipts import ExecutionReceipt
+from .source_quality import evidence_locator
+
+
+class CandidateOntologyError(ValueError):
+    """Validator-authored vocabulary/endpoint feedback, without source prose."""
+    def __init__(self, report):
+        self.issues = tuple(i.model_dump(mode="json") for i in report.issues)
+        details = "; ".join(f"{i.edge_id or i.node_id or 'graph'}: {i.message}" for i in report.issues[:16])
+        super().__init__("Candidate violates extraction ontology: " + details)
 
 
 class ExtractedNode(StrictModel):
@@ -138,7 +147,7 @@ class GraphExtractionService:
             delta = self._candidate_delta(request, profile, candidate, regions, source_revision)
             report = self.ontology.validate_delta(delta)
             if not report.valid:
-                raise NimaError("extracted graph is incompatible with its ontology profile")
+                raise CandidateOntologyError(report)
             artifact = self._graph_artifact(request, delta, candidate, regions, source_revision)
             self.artifacts.publish(
                 canonical(delta), artifact.envelope, registry_revision=request.registry_revision
@@ -160,7 +169,7 @@ class GraphExtractionService:
             result = GraphExtractionResult(
                 operation_id=operation_id, corpus_id=request.corpus_id,
                 project_id=request.project_id, status="failed", unresolved=(),
-                diagnostics=({"code": type(exc).__name__},), receipt_id=receipt_id,
+                diagnostics=exc.issues if isinstance(exc, CandidateOntologyError) else ({"code": type(exc).__name__},), receipt_id=receipt_id,
             )
             status, error = "failed", "graph extraction failed"
 
@@ -205,7 +214,7 @@ class GraphExtractionService:
                 raise ConflictError("source region offsets or text do not match its artifact")
             regions.append({"id": region_id, "artifact_id": artifact_id, "source_revision": content["source_revision"], "project_id": record.project_id,
                             "text": text, "start": start, "end": end,
-                            "ordinal": content.get("ordinal")})
+                            "ordinal": content.get("ordinal"), "metadata": content.get("metadata", {})})
         return regions
 
     def prepare_candidate(self, request: GraphExtractionRequest, candidate: GraphExtractionCandidate) -> GraphArtifact:
@@ -220,8 +229,9 @@ class GraphExtractionService:
             raise ValueError("candidate exceeds authorized size")
         source_revision = identity([(region["id"], region["source_revision"]) for region in regions])
         delta = self._candidate_delta(request, profile, candidate, regions, source_revision)
-        if not self.ontology.validate_delta(delta).valid:
-            raise ValueError("candidate violates extraction ontology")
+        report = self.ontology.validate_delta(delta)
+        if not report.valid:
+            raise CandidateOntologyError(report)
         return self._graph_artifact(request, delta, candidate, regions, source_revision)
 
     def _candidate_delta(self, request, profile, candidate, regions, source_revision) -> OKFDelta:
@@ -235,7 +245,7 @@ class GraphExtractionService:
                     corpus_id=request.corpus_id, project_id=region["project_id"],
                     artifact_id=region["artifact_id"], region_id=region_id,
                     source_revision=region["source_revision"], content_hash=region["artifact_id"],
-                    locator={"start": region["start"], "end": region["end"], "ordinal": region["ordinal"]},
+                    locator=evidence_locator(region),
                     quotation=region["text"] if len(region["text"]) <= 20_000 else None,
                 ))
                 provenance.append(OKFReference(

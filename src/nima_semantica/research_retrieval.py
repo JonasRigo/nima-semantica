@@ -18,11 +18,13 @@ from .graph_projection import GraphProjectionManifest, GraphProjectionService
 from .execution_receipts import ExecutionReceiptService
 from .receipts import ExecutionReceipt
 from .tool_contracts import ToolResult
+from .source_quality import evidence_locator, preparation_quality, provisional_object, provisional_nodes, PROVISIONAL
 
 
 class ResearchRetrievalRequest(StrictModel):
     query: str = Field(min_length=1, max_length=20_000)
     mode: Literal["lexical", "vector", "hybrid"] = "lexical"
+    include_provisional: StrictBool = True
     projection_id: GraphIdentifier | None = None
     expected_store_revision: GraphIdentifier | None = None
     limit: StrictInt = Field(default=8, ge=1, le=32)
@@ -220,23 +222,35 @@ def projected_context(store, request, context, *, provider=None, manifest=None):
         projection = _projection(store, request, context)
         snapshot = store.read_okf_snapshot(**_scope(context), revision=projection.graph_revision)
         regions, ranked, scores, model = _search(store, request, context, projection, provider, manifest)
+        if not request.include_provisional:
+            regions = {key: region for key, region in regions.items() if preparation_quality(region) != PROVISIONAL}
+            ranked = [key for key in ranked if key in regions]
         if store.revision != revision:
             raise ConflictError("store changed during query embedding")
-        nodes = {"okf:" + identity(n.ref): n for n in snapshot.nodes}
+        affected = provisional_nodes(snapshot.nodes)
+        nodes = {"okf:" + identity(n.ref): n for n in snapshot.nodes
+                 if request.include_provisional or n.ref not in affected}
         links = defaultdict(list)
-        def link(a, b, relation, edge=None, reverse=False):
+        def link(a, b, relation, edge=None, reverse=False, provisional=False):
             links[a].append({"source": a, "target": b, "relation": relation, "edge_ref": edge,
-                "traversal_direction": "reverse" if reverse else "forward"})
+                "traversal_direction": "reverse" if reverse else "forward",
+                "preparation_quality": PROVISIONAL if provisional else "full"})
         for key, node in nodes.items():
             for evidence in node.evidence:
+                if evidence.region_id not in regions and not request.include_provisional:
+                    continue
                 if evidence.region_id not in regions:
                     raise ConflictError("graph evidence region unavailable")
-                link(evidence.region_id, key, "grounds")
-                link(key, evidence.region_id, "source_evidence")
+                provisional = node.ref in affected or preparation_quality(regions[evidence.region_id]) == PROVISIONAL
+                link(evidence.region_id, key, "grounds", provisional=provisional)
+                link(key, evidence.region_id, "source_evidence", provisional=provisional)
         for edge in snapshot.edges:
             a, b = "okf:" + identity(edge.source_id), "okf:" + identity(edge.target_id)
-            link(a, b, edge.relation, edge.ref.model_dump(mode="json"))
-            link(b, a, edge.relation, edge.ref.model_dump(mode="json"), reverse=True)
+            if a not in nodes or b not in nodes or (not request.include_provisional and provisional_object(edge)):
+                continue
+            provisional = provisional_object(edge) or edge.source_id in affected or edge.target_id in affected
+            link(a, b, edge.relation, edge.ref.model_dump(mode="json"), provisional=provisional)
+            link(b, a, edge.relation, edge.ref.model_dump(mode="json"), reverse=True, provisional=provisional)
         groups = defaultdict(list)
         for key, region in regions.items():
             groups[(region.source_id, region.project_id)].append(key)
@@ -244,7 +258,9 @@ def projected_context(store, request, context, *, provider=None, manifest=None):
             group.sort(key=lambda key: (regions[key].ordinal, key))
             for a, b in zip(group, group[1:]):
                 if regions[b].ordinal == regions[a].ordinal + 1:
-                    link(a, b, "adjacent_region"); link(b, a, "adjacent_region")
+                    provisional = any(preparation_quality(regions[key]) == PROVISIONAL for key in (a, b))
+                    link(a, b, "adjacent_region", provisional=provisional)
+                    link(b, a, "adjacent_region", provisional=provisional)
         seeds = ranked[:min(request.limit, request.max_nodes, request.max_results)]
         visited, selected, frontier = set(seeds), list(seeds), list(seeds)
         paths, examined, limited = [], 0, len(seeds) < min(request.limit, len(ranked))
@@ -281,9 +297,9 @@ def projected_context(store, request, context, *, provider=None, manifest=None):
             require_source_region(store, key, **_scope(context))
             reference = EvidenceReference(**_scope(context), region_id=key, artifact_id=region.artifact_id,
                 content_hash=region.artifact_id, source_revision=region.source_revision,
-                locator={"start": region.start, "end": region.end, "ordinal": region.ordinal}).model_copy(update={"project_id": region.project_id})
+                locator=evidence_locator(region)).model_copy(update={"project_id": region.project_id})
             passages.append({"region_id": key, "source_id": region.source_id, "text": region.text,
-                "evidence": reference.model_dump(mode="json")})
+                "evidence": reference.model_dump(mode="json"), "preparation_quality": preparation_quality(region)})
             chars += len(region.text)
         returned = {p["region_id"] for p in passages}
         omitted_matches = len(set(ranked) - returned)
@@ -293,7 +309,9 @@ def projected_context(store, request, context, *, provider=None, manifest=None):
                 continue
             node = nodes[key]
             content = {"ref": node.ref.model_dump(mode="json"), "node_type": node.node_type,
-                "status": node.status.value, "properties": node.properties}
+                "status": node.status.value, "properties": node.properties,
+                "preparation_quality": PROVISIONAL if node.ref in affected else "full",
+                "evidence": [ref.model_dump(mode="json") for ref in node.evidence]}
             size = len(canonical(content).decode("utf-8"))
             if chars + size > request.max_chars:
                 omitted_graph += 1

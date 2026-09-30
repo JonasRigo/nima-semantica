@@ -9,6 +9,8 @@ You receive source and region identifiers, preparation receipts and the actual i
 Call this workflow through your project’s Langflow MCP toolbox.
 
 Request fields: `mode`, `sources`, `index_mode`, `operation_id`, `run_id`, `expected_store_revision`.
+`preparation_mode` selects `full` (default) or `fast`. Fast mode creates searchable
+but explicitly provisional regions; it does not confer graph-update approval.
 Use [Tool Guide](tool_guide.md) with `{"tool": "Prepare and Index Sources"}` for the complete nested schema, allowed values and required fields.
 
 ## Start with the contract

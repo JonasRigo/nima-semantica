@@ -131,7 +131,7 @@ def test_history_retains_failed_interrupted_and_partial_attempts_and_pages(store
         service.record(ExecutionReceipt(receipt_id=status, operation_id=status, stage="fixture", corpus_id="papers",
             project_id="p", run_id="run", status=status))
     first = research_run(store, ResearchRunRequest(run_id="run", limit=2), ctx).data
-    second = research_run(store, ResearchRunRequest(run_id="run", limit=2, after_receipt_id=first["next_receipt_id"]), ctx).data
+    second = research_run(store, ResearchRunRequest.model_validate(first["next_request"]), ctx).data
     assert first["more_attempts"] and not second["more_attempts"]
     assert {r["status"] for r in first["attempts"] + second["attempts"]} == {"completed", "failed", "interrupted", "partial"}
 

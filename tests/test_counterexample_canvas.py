@@ -75,7 +75,9 @@ def test_direct_with_explicit_worker_fixture(configured,monkeypatch):
 
 @pytest.mark.parametrize("extra",[{"allow_execution":True},{"corpus_id":"private"},{"check_plan":{}},{"worker":"evil"},{"max_actions":100}])
 def test_public_override_denied(configured,extra):
-    with pytest.raises(Exception):execute(extra)
+    result = execute(extra)
+    assert result["status"] == "failed" and result["data"]["executed"] is False
+    assert result["diagnostics"][0]["code"] == "request.invalid_field"
 
 
 def test_connected_model_uses_native_single_action_tools(configured):
@@ -104,4 +106,3 @@ def test_connected_model_uses_native_single_action_tools(configured):
     assert len(worker.calls)==1 and len(bound)==3
     assert [t["function"]["name"] for t in bound[0][0]]==["plan_search"]
     assert all(options["parallel_tool_calls"] is False for _,options in bound)
-

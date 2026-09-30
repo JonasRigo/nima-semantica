@@ -57,7 +57,9 @@ def test_disabled_execution_no_writes(configured):
 
 @pytest.mark.parametrize("extra",[{"allow_audit_writes":True},{"corpus_id":"private"},{"model":"evil"},{"max_actions":100}])
 def test_public_override_denied(configured,extra):
-    with pytest.raises(Exception):execute(extra)
+    result = execute(extra)
+    assert result["status"] == "failed" and result["data"]["executed"] is False
+    assert result["diagnostics"][0]["code"] == "request.invalid_field"
 
 
 def test_connected_model_uses_native_actions_and_cached_outputs(configured):
@@ -89,4 +91,3 @@ def test_connected_model_uses_native_actions_and_cached_outputs(configured):
 def test_policy_mismatch_rejected_before_execution(configured):
     component=load_component("SubstantiateGraphSnapshot")().set(payload={},policy={"policy_digest":"foreign"})
     with pytest.raises(ValueError,match="policy differs"):asyncio.run(component.result_data())
-

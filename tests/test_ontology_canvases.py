@@ -39,13 +39,20 @@ def execute(tool, request, *, writes=False, project="research"):
         template["allow_writes"]["value"] = writes
     graph = Graph.from_payload(flow["data"])
     async def run():
-        results = await asyncio.wait_for(graph.arun(inputs=[{"input_value": json.dumps(request)}],
+        results = await asyncio.wait_for(graph.arun(inputs=[{"input_value": request if isinstance(request,str) else json.dumps(request)}],
             outputs=["ChatOutput-" + tool]), 30)
         assert results and results[0].outputs
         vertex = graph.get_vertex(name + "-nima")
         assert vertex.built
         return (await vertex.custom_component.result_data()).data
     return asyncio.run(run())
+
+
+def test_natural_language_request_returns_actionable_error(configured):
+    result = execute("load_ontology", "Please list the available ontologies")
+    assert result["status"] == "failed"
+    assert result["diagnostics"][0]["code"] == "request.invalid_json"
+    assert "input_value" in result["diagnostics"][0]["message"]
 
 
 @pytest.mark.parametrize("tool", ["load_ontology", "save_ontology"])
@@ -96,8 +103,8 @@ def test_without_store_packaged_load_and_validation_still_work(monkeypatch):
 @pytest.mark.parametrize("tool", ["load_ontology", "save_ontology"])
 @pytest.mark.parametrize("field", ["corpus_id", "project_id", "allow_writes", "actor", "store_path", "approved"])
 def test_canvas_rejects_authority_in_public_json(configured, tool, field):
-    with pytest.raises(Exception):
-        execute(tool, {field: "forged"}, writes=True)
+    result = execute(tool, {field: "forged"}, writes=True)
+    assert result["status"] == "failed" and result["data"]["executed"] is False
 
 
 def test_invalid_profile_reaches_receipted_rejection_without_publication(configured):

@@ -1,11 +1,14 @@
 """Inspectable close boundary for the private calculation graph."""
 import json
 from lfx.custom.custom_component.component import Component
+from pydantic import ValidationError
 from lfx.io import BoolInput, MessageTextInput, Output
 from lfx.schema import Message
 from nima_semantica.math_mcp_contracts import TOOLS, invoke, operation_catalogue
 from nima_semantica.math_mcp import canvas_service
 from nima_semantica.component_contracts import manifest_for_component
+from nima_semantica.request_diagnostics import invalid_request
+from nima_semantica.providers import strict_json_object
 
 
 class MathMCPClose(Component):
@@ -29,7 +32,11 @@ class MathMCPClose(Component):
                 "request_schema": TOOLS[operation][0].model_json_schema(),
                 "authority": "Private graph only; no mathematical truth certificate."}
         else:
-            request = json.loads(self.request_json or "{}")
+            try:
+                request = strict_json_object(self.request_json or "{}")
+                TOOLS[operation][0].model_validate(request)
+            except (ValidationError, ValueError) as exc:
+                return Message(text=json.dumps(invalid_request(operation, exc)))
             # Same typed arguments, service and admission rules as stdio MCP.
             # NIMA_MATH_CONFIG binds scope and capabilities outside model inputs.
             result = invoke(canvas_service(), operation, request)

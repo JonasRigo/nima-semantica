@@ -68,6 +68,7 @@ def setup(args):
 
 
 def install_harness(root, config_path, binding, harnesses):
+    binding = dict(binding, cli_command=[str(Path(sys.executable)), "-m", "nima_semantica.cli"])
     root = Path(root).resolve()
     if set(harnesses) - {"codex", "claude", "opencode"}:
         raise ValueError("harness must be codex, claude or opencode")
@@ -89,7 +90,7 @@ def install_harness(root, config_path, binding, harnesses):
         existing = tomllib.loads(text).get("mcp_servers", {})
         for name, server in servers.items():
             if name in existing:
-                if existing[name] != server:
+                if any(existing[name].get(key) != value for key, value in server.items()):
                     raise ValueError(f"Existing Codex {name} configuration differs; reconcile it first")
                 continue
             text += f"\n[mcp_servers.{json.dumps(name)}]\n"
@@ -130,7 +131,9 @@ def install_harness(root, config_path, binding, harnesses):
                 planned[target] = data
     instruction = root / "NIMA_PROJECT.md"
     text = f"# NIMA project\n\nCorpus: `{binding['corpus_id']}`. Project: `{binding['project_id']}`.\nRead `.nima/project.json` and run `nima project status {binding['project_id']} --corpus {binding['corpus_id']}` to reconnect to canonical state.\nDiscover the configured NIMA MCP tools and read the relevant installed skill before work.\nPrivate graph sessions and project knowledge are separate; exports are inspection snapshots.\n"
-    if instruction.exists() and instruction.read_text() != text:
+    legacy_text = text
+    text += "\nIf `nima` is not on PATH, use the `cli_command` argument array in `.nima/project.json`.\n"
+    if instruction.exists() and instruction.read_text() not in (text, legacy_text):
         raise ValueError("Existing NIMA_PROJECT.md differs")
     planned[instruction] = text
     for path, content in planned.items():
@@ -223,22 +226,101 @@ def project_init(args, config):
 
 
 def ingest(args, config):
+    import copy
+    files = args.file if isinstance(args.file, list) else [args.file]
+    if len(files) > 16:
+        raise ValueError("ingestion accepts at most 16 papers per batch")
+    results = []
+    for filename in files:
+        item = copy.copy(args)
+        item.file = filename
+        print(f"Ingesting {filename}: mode={args.mode}, index={args.index_mode}", file=sys.stderr, flush=True)
+        try:
+            result = _ingest_one(item, config)
+            results.append({"input": filename, "result": result.model_dump(mode="json")})
+            print(f"{filename}: {len(result.data.get('region_ids', []))} regions; "
+                  f"index_ready={result.data.get('index_ready', False)}; status={result.status}" +
+                  (f"; failed_stage={result.data['failed_stage']}" if result.data.get('failed_stage') else ""),
+                  file=sys.stderr, flush=True)
+        except Exception as exc:
+            if len(files) == 1:
+                raise
+            results.append({"input": filename, "error": str(exc), "status": "failed"})
+    emit(results[0]["result"] if len(files) == 1 else {"papers": results})
+    return 0 if all(item.get("result", {}).get("data", {}).get("index_ready") for item in results) else 1
+
+
+def project_promote(args, config):
+    """Preview an exact corpus-sharing proposal; commit only its approved hash."""
+    from .storage import GraphStore
+    from .models import identity
+    from .evidence_contracts import build_promotion_proposal, commit_promotion, PromotionApproval
+    project_binding(config, args.corpus, args.project)
+    store = GraphStore(store_path(config))
+    try:
+        snapshot = store.read_okf_snapshot(corpus_id=args.corpus, project_id=args.project)
+        proposal = build_promotion_proposal(snapshot,
+            proposal_id="share-" + identity({"snapshot": snapshot, "rationale": args.rationale}),
+            target_corpus_id=args.corpus, rationale=args.rationale)
+        digest = identity(proposal)
+        if not args.approve_proposal:
+            emit({"proposal": proposal.model_dump(mode="json"), "proposal_hash": digest,
+                  "committed": False, "note": "Sharing preserves preparation quality and scientific status."})
+            return 0
+        if args.approve_proposal != digest or not args.approved_by:
+            raise ValueError("supply the exact current --approve-proposal hash and --approved-by identity")
+        result = commit_promotion(store, snapshot, proposal, PromotionApproval(
+            proposal_id=proposal.proposal_id, proposal_hash=digest,
+            approval_id="approval-" + identity((digest, args.approved_by)),
+            approved_by=args.approved_by, rationale=args.rationale))
+        output = {"committed": result.status == "committed", "result": result.model_dump(mode="json"),
+                  "note": "Sharing does not upgrade preparation quality or scientific status."}
+    finally:
+        store.close()
+    output["projection_ready"] = False
+    if not output["committed"]:
+        emit(output)
+        return 1
+    try:
+        from .graph_projection import GraphProjectionRequest, GraphProjectionService
+        store = GraphStore(store_path(config))
+        try:
+            projection = GraphProjectionService(store).rebuild(GraphProjectionRequest(corpus_id=args.corpus))
+            if projection.status != "completed":
+                raise ValueError("Corpus retrieval projection failed: " + str(projection.diagnostics))
+        finally:
+            store.close()
+        for path in sorted((Path(config.data_root) / "projects" / identifier(args.corpus)).glob("*/project.json")):
+            refresh_project_projection(config, args.corpus, path.parent.name)
+        output["projection_ready"] = True
+    except Exception as exc:
+        output["projection_error"] = str(exc)
+        output["note"] += " Graph commit is retained; retrieval projection refresh needs repair."
+    emit(output)
+    return 0 if output["projection_ready"] else 1
+
+
+def _ingest_one(args, config):
     from .source_tools import SourceToolContext, PrepareSourcesRequest, SourceInput, AcquiredSourceInput, prepare_sources, embed_sources, project_sources
     from .storage import GraphStore
     corpus = identifier(args.corpus)
+    from urllib.parse import urlsplit
+    address = urlsplit(args.file)
+    remote = address.scheme in ("http", "https")
     path = Path(args.file).expanduser()
-    if not path.is_file() or path.is_symlink():
+    if not remote and (not path.is_file() or path.is_symlink()):
         raise ValueError("ingest accepts a local regular file, not a directory, URL or symlink")
     if args.project:
         project_binding(config, corpus, identifier(args.project))
-    if path.stat().st_size > 20_000_000:
+    if not remote and path.stat().st_size > 20_000_000:
         raise ValueError("file exceeds the 20 MB preparation limit")
-    data = path.read_bytes()
-    digest = hashlib.sha256(data).hexdigest()
-    operation = "cli-ingest-" + hashlib.sha256(json.dumps([corpus, args.project, path.name, digest, args.index_mode]).encode()).hexdigest()
+    preparation_mode = getattr(args, "mode", "full")
+    input_format = getattr(args, "format", "auto")
+    if preparation_mode == "fast" and not config.allow_fast_read:
+        raise ValueError("fast reading is disabled in the installation configuration")
     ctx = SourceToolContext(corpus_id=corpus, project_id=args.project,
         source_scope="project" if args.project else "corpus", allow_corpus_writes=not args.project,
-        allow_project_writes=bool(args.project), allow_pdf=bool(config.pdf_url), allow_embeddings=args.index_mode == "vector")
+        allow_project_writes=bool(args.project), allow_pdf=bool(config.pdf_url) or preparation_mode == "fast", allow_embeddings=args.index_mode == "vector")
     def pdf_normalizer(content):
         from .orchestration.langflow.pdf_client import PdfNormalizerClient
         result = PdfNormalizerClient(config.pdf_url, config.pdf_token_file).normalize(content)
@@ -246,17 +328,50 @@ def ingest(args, config):
     store = GraphStore(store_path(config))
     try:
         register_corpus(store, corpus)
+        if remote:
+            from .literature_acquisition import LiteratureAcquisitionRequest, LiteratureAcquisitionService
+            acquired = LiteratureAcquisitionService(store).execute(LiteratureAcquisitionRequest(
+                corpus_id=corpus, project_id=args.project, url=args.file, policy=config.acquisition,
+                staging_only=True, motivating_gap="Explicit CLI paper ingestion"))
+            if acquired.status != "completed":
+                raise ValueError("URL acquisition failed under the configured policy; no automatic PDF fallback")
+            data = store.read_artifact(acquired.result["artifact_id"])
+            acquired_name = acquired.result["name"]
+        else:
+            data, acquired_name = path.read_bytes(), path.name
+        digest = hashlib.sha256(data).hexdigest()
+        detected = "pdf" if data.startswith(b"%PDF-") else (
+            "html" if b"<html" in data[:8192].lower() or b"<!doctype html" in data[:8192].lower()
+            or Path(acquired_name).suffix.lower() in (".html", ".htm") else "other")
+        if input_format != "auto" and detected != input_format:
+            raise ValueError("input format differs from the declared --format; no implicit conversion")
+        name = acquired_name
+        if detected in ("pdf", "html") and Path(name).suffix.lower() not in ("." + detected, ".htm" if detected == "html" else ".pdf"):
+            name = "paper-" + digest[:24] + "." + detected
+        operation = "cli-ingest-" + hashlib.sha256(json.dumps(
+            [corpus, args.project, name, digest, args.index_mode, preparation_mode]).encode()).hexdigest()
+        if getattr(args, "retry", False):
+            import uuid
+            operation += "-retry-" + uuid.uuid4().hex
         # Source bytes remain local to the CLI; never pass a file through model context.
         from .models import Record
-        with store.joined_transaction():
-            artifact_id = store.artifact(data)
-            staged = Record(kind="AcquisitionAttempt", corpus_id=corpus, project_id=args.project,
-                content={"status": "completed", "artifact_id": artifact_id, "name": path.name,
-                         "staging_only": True, "origin": "explicit_local_file"})
-            staging_id = store.put(staged)
-        source = AcquiredSourceInput(name=path.name, acquired_name=path.name, artifact_id=artifact_id, acquisition_id=staging_id)
-        req = PrepareSourcesRequest(mode="prepare_index", operation_id=operation, index_mode=args.index_mode, sources=[source])
+        if remote:
+            artifact_id, staging_id = acquired.result["artifact_id"], acquired.result["acquisition_id"]
+        else:
+            with store.joined_transaction():
+                artifact_id = store.artifact(data)
+                staged = Record(kind="AcquisitionAttempt", corpus_id=corpus, project_id=args.project,
+                    content={"status": "completed", "artifact_id": artifact_id, "name": acquired_name,
+                             "staging_only": True, "origin": "explicit_local_file"})
+                staging_id = store.put(staged)
+        source = AcquiredSourceInput(name=name, acquired_name=acquired_name, artifact_id=artifact_id,
+            acquisition_id=staging_id)
+        req = PrepareSourcesRequest(mode="prepare_index", preparation_mode=preparation_mode,
+            operation_id=operation, index_mode=args.index_mode, sources=[source])
         prepared = prepare_sources(store, req, ctx, pdf_normalizer=pdf_normalizer if config.pdf_url else None)
+        print(f"Preparation: {prepared.status}; {len(prepared.data.get('region_ids', []))} regions. " +
+              (f"Next: {args.index_mode} indexing." if prepared.status == "complete" else "Indexing cannot proceed."),
+              file=sys.stderr, flush=True)
         provider = manifest = None
         if args.index_mode == "vector":
             from .setup_services import embedding_provider
@@ -268,8 +383,7 @@ def ingest(args, config):
         projects = [args.project] if args.project else [p.name for p in (Path(config.data_root) / "projects" / corpus).glob("*") if (p / "project.json").is_file()]
         for project in projects:
             refresh_project_projection(config, corpus, project)
-    emit(result.model_dump(mode="json"))
-    return 0 if result.data.get("index_ready") else 1
+    return result
 
 
 def doctor(config):
@@ -339,15 +453,26 @@ def main(argv=None):
     install.add_argument("--provision", action="store_true", help="Install/start the local stack, including dependency and model downloads")
     install.add_argument("--pdf", action="store_true"); install.add_argument("--lean", action="store_true")
     commands.add_parser("doctor")
+    commands.add_parser("list", help="List registered corpora (local, no service calls)")
     project = commands.add_parser("project").add_subparsers(dest="action", required=True)
-    for action in ("init", "status"):
+    listing = project.add_parser("list", help="List locally registered projects")
+    listing.add_argument("--corpus", help="Only list projects in this corpus; defaults to all corpora")
+    promotion = project.add_parser("promote", help="Preview or explicitly approve sharing the project's graph with its corpus")
+    promotion.add_argument("project"); promotion.add_argument("--corpus", default="papers")
+    promotion.add_argument("--rationale", required=True)
+    promotion.add_argument("--approve-proposal", help="Exact hash returned by preview; omission performs no graph commit")
+    promotion.add_argument("--approved-by", help="Identity of the approving operator")
+    for action in ("init", "status", "refresh"):
         sub = project.add_parser(action); sub.add_argument("project"); sub.add_argument("--corpus", default="papers")
         if action == "init":
             sub.add_argument("--path", default="."); sub.add_argument("--harness", default="codex,claude,opencode")
             sub.add_argument("--offline", action="store_true", help="Initialize storage and graph MCPs without publishing the Langflow toolbox")
     source = commands.add_parser("ingest")
-    source.add_argument("corpus"); source.add_argument("file"); source.add_argument("--project")
+    source.add_argument("corpus"); source.add_argument("file", nargs="+"); source.add_argument("--project")
+    source.add_argument("--mode", choices=["full", "fast"], default="full")
+    source.add_argument("--format", choices=["auto", "pdf", "html"], default="auto")
     source.add_argument("--index-mode", choices=["lexical", "vector"], default="lexical")
+    source.add_argument("--retry", action="store_true", help="Start a new receipted attempt instead of replaying a saved result; preserves existing evidence")
     export = commands.add_parser("export").add_subparsers(dest="format", required=True).add_parser("okf")
     export.add_argument("--corpus", required=True); export.add_argument("--project"); export.add_argument("--output", required=True)
     workflow = commands.add_parser("workflow").add_subparsers(dest="action", required=True)
@@ -360,11 +485,24 @@ def main(argv=None):
         if args.command == "setup":
             setup(args); return 0
         config = load_installation(args.config)
+        if args.command == "list":
+            from .installation import list_corpora
+            emit({"corpora": list_corpora(config)})
+            return 0
         if args.command == "doctor":
             return doctor(config)
         if args.command == "project":
-            if args.action == "init":
+            if args.action == "list":
+                from .installation import list_projects
+                emit({"projects": list_projects(config, args.corpus)})
+            elif args.action == "promote":
+                return project_promote(args, config)
+            elif args.action == "init":
                 project_init(args, config)
+            elif args.action == "refresh":
+                project_binding(config, args.corpus, args.project)
+                refresh_project_projection(config, args.corpus, args.project)
+                emit({"projection_ready": True, "corpus_id": args.corpus, "project_id": args.project})
             else:
                 binding = project_binding(config, args.corpus, args.project)
                 from .storage import GraphStore

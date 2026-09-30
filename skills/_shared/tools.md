@@ -3,6 +3,13 @@
 Read `.nima/project.json` or run `nima project status PROJECT_ID --corpus CORPUS_ID` to establish the current installation and scope.
 Discover the connected toolbox through MCP and consult Tool Guide for current request schemas.
 Langflow tools accept a JSON request serialized in `input_value`; private mathematics and proof tools accept their typed `request` object.
+For example, list ontologies with `{"input_value":"{}"}`, not a natural-language sentence.
+Tool Guide includes per-tool usage, exact schema bounds and recovery guidance.
+Discover all private session operations with `nima_math_tools` or `nima_proof_tools`;
+`nima_math_operations` separately describes atomic calculation operations.
+If `nima` is not on PATH, use the `cli_command` array in `.nima/project.json`.
+For older bindings, use the Python executable configured for `nima-math` or `nima-proof`
+with `-m nima_semantica.cli`; do not substitute an unrelated Python environment.
 Operator configuration owns corpus/project scope and capabilities; a request cannot widen them.
 
 ## Knowledge and working state
@@ -33,6 +40,14 @@ Proof-specific comparison modes require an existing scoped graph target; never i
 Scientific outputs remain uncertified. Operational completion and a scoped Lean receipt have distinct meanings.
 
 ## Recovery and continuation
+
+Per-call bounds are not a fixed total number of batches or rounds. Continue according to
+the requested scope and authorized budget, preserving artifacts and outstanding work.
+Use returned `next_request` objects for pagination and ready-to-submit planned requests
+for independent batches. Never silently truncate inputs or split an atomic approved graph
+delta, coherent proof submission, or joint comparison merely to fit a size limit.
+If safe continuation is unavailable, report the precise constraint and the operator change
+or narrower task needed. Do not invent permission to increase execution budgets.
 
 After a rejected action, inspect its diagnostic and current revision before changing arguments.
 Replay uncertain delivery only with the same request ID and identical arguments. Use a fresh ID for changed work.

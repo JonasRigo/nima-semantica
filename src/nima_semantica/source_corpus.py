@@ -70,6 +70,10 @@ class SourceCorpusService:
         if digest != descriptor.artifact_id or digest != envelope.content_hash:
             raise ConflictError("source descriptor and artifact envelope hash does not match bytes")
         payload = descriptor.model_dump(mode="json")
+        existing_artifact = self.artifacts.registry.resolve(envelope.artifact_id,
+            corpus_id=descriptor.corpus_id, project_id=descriptor.project_id, exact_scope=True)
+        if existing_artifact is not None:
+            registry_revision = existing_artifact.registry_revision
         with self.store.joined_transaction(expected_store_revision):
             for record_id, record in self.store.records(self.SOURCE_KIND, corpus_id=descriptor.corpus_id):
                 if record.content.get("source_id") != descriptor.source_id:
@@ -99,6 +103,8 @@ class SourceCorpusService:
         source = self.get_source(region.source_id, corpus_id=region.corpus_id, project_id=region.project_id)
         if source is None:
             raise NimaError("source region references an unknown source")
+        if region.metadata.get("preparation_quality", "full") != source.metadata.get("preparation_quality", "full"):
+            raise ConflictError("source region must preserve preparation quality")
         if source.project_id is not None and region.project_id != source.project_id:
             raise ConflictError("source region must preserve source visibility")
         source_artifact_id = region.source_artifact_id or region.artifact_id

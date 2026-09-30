@@ -23,6 +23,7 @@ from .receipts import ExecutionReceipt
 from .registry_contracts import RegistryRevision
 from .research_run_service import ResearchRunService
 from .tool_contracts import ToolResult
+from .source_quality import provisional_object
 
 VERSION="analyze-graph-v1"
 JUSTIFICATION="Deterministic analysis of represented graph metadata and explicitly declared dependency semantics; not mathematical certification."
@@ -49,9 +50,9 @@ class AnalyzeGraphContext(StrictModel):
     corpus_id: GraphIdentifier
     project_id: GraphIdentifier | None = None
     allow_audit_writes: StrictBool = False
-    max_nodes: StrictInt = Field(default=128,ge=1,le=256)
-    max_edges: StrictInt = Field(default=256,ge=0,le=512)
-    max_facts: StrictInt = Field(default=2000,ge=1,le=10000)
+    max_nodes: StrictInt = Field(default=4096,ge=1,le=10000)
+    max_edges: StrictInt = Field(default=8192,ge=0,le=20000)
+    max_facts: StrictInt = Field(default=20000,ge=1,le=100000)
     max_matches: StrictInt = Field(default=10000,ge=1,le=100000)
     max_rounds: StrictInt = Field(default=64,ge=1,le=256)
     timeout_seconds: StrictInt = Field(default=30,ge=1,le=120)
@@ -72,7 +73,8 @@ RULES=(
     _rule("problem_dependency",[("Depends","?x","?y"),("RecordedProblem","?y")],("HasProblemDependency","?x")),
     _rule("propagate_problem_dependency",[("Depends","?x","?y"),("HasProblemDependency","?y")],("HasProblemDependency","?x")),
 )
-POLICY_DIGEST=identity({"version":VERSION,"rules":RULES,"trusted_statuses":sorted(TRUSTED_STATUSES)})
+POLICY_DIGEST=identity({"version":VERSION,"rules":RULES,"trusted_statuses":sorted(TRUSTED_STATUSES),
+                        "preparation_policy":"exclude-fast-provisional-v1"})
 
 
 def load_snapshot(store,request,context,ontology):
@@ -88,7 +90,7 @@ def load_snapshot(store,request,context,ontology):
             raise ValueError("analysis accepts registered proposed graph candidates, not arbitrary artifacts")
         raw=store.read_artifact(request.artifact_id)
         if hashlib.sha256(raw).hexdigest()!=request.artifact_id:raise ValueError("candidate bytes differ from pinned hash")
-        if len(raw)>4_000_000:raise ValueError("candidate exceeds complete-read limit")
+        if len(raw)>32_000_000:raise ValueError("candidate exceeds 32 MB complete-read limit")
         delta=OKFDelta.model_validate_json(raw)
         if delta.base_revision!=request.graph_revision or (delta.corpus_id,delta.project_id)!=(context.corpus_id,context.project_id):
             raise ConflictError("candidate revision or scope differs")
@@ -98,7 +100,7 @@ def load_snapshot(store,request,context,ontology):
         snapshot=OKFSnapshot(snapshot_id=request.artifact_id,**scope,graph_revision=request.graph_revision,
             nodes=delta.upsert_nodes,edges=delta.add_edges,ontology_profile=delta.ontology_profile,metadata=delta.metadata)
     if len(snapshot.nodes)>context.max_nodes or len(snapshot.edges)>context.max_edges:
-        raise ValueError("graph exceeds authorized analysis bounds; no silent truncation")
+        raise ValueError(f"graph has {len(snapshot.nodes)} nodes/{len(snapshot.edges)} edges, exceeding operator max_nodes={context.max_nodes}/max_edges={context.max_edges}; request an operator budget change or explicitly select a smaller candidate, never silently truncate")
     if not validate_snapshot_evidence(store,snapshot).valid:raise ValueError("invalid graph evidence")
     return snapshot
 
@@ -132,7 +134,9 @@ def inspect_snapshot_ontology(snapshot,ontology):
 def dependency_disposition(edge,nodes):
     """Relation eligibility only; recorded statuses never certify truth."""
     if edge.status.value in ("refuted","failed","contradicted"):return "excluded"
-    if edge.status.value in TRUSTED_STATUSES and all(nodes[ref].status.value!="proposed" for ref in (edge.source_id,edge.target_id)):
+    if (edge.status.value in TRUSTED_STATUSES and not provisional_object(edge)
+        and all(nodes[ref].status.value!="proposed" and not provisional_object(nodes[ref])
+                for ref in (edge.source_id,edge.target_id))):
         return "recorded"
     return "proposed"
 
@@ -240,6 +244,8 @@ def analyze_graph(store,request,context):
             if ref and (store.get(ref,**scope) is None or store.get(ref,**scope).project_id!=context.project_id):raise ConflictError("progress reference outside scope")
         ontology=OntologyService.from_store(store,**scope)
         snapshot=load_snapshot(store,request,context,ontology)
+        from .graph_consolidation import components
+        data["structure"] = components({n.ref: n for n in snapshot.nodes}, {e.ref: e for e in snapshot.edges})
         graph,translation=translate_snapshot(snapshot,ontology,context)
         data.update(snapshot_id=snapshot.snapshot_id,snapshot_hash=identity(snapshot),graph_revision=request.graph_revision.model_dump(mode="json"),
             node_count=len(snapshot.nodes),edge_count=len(snapshot.edges),translation=translation,logical_graph=graph.model_dump(mode="json"),
@@ -262,6 +268,8 @@ def analyze_graph(store,request,context):
     except (Exception,CancelledError,KeyboardInterrupt) as exc:
         interrupted=exc if isinstance(exc,(CancelledError,KeyboardInterrupt)) else None
         status="failed";data["error"]=type(exc).__name__
+        if isinstance(exc, ValueError) and str(exc).startswith("graph has "):
+            data["recovery"] = str(exc)
         data.pop("reasoning",None);data.pop("conclusions",None)
     terminal="interrupted" if interrupted else "failed" if status=="failed" else "completed" if status=="complete" else "partial"
     with store.joined_transaction():

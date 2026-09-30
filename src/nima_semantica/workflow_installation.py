@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import time
 
 import httpx
 
@@ -75,7 +76,7 @@ def wire_embeddings(flow, installation):
 def wire_model(flow, target, field, profile, role):
     template = json.loads((assets() / "examples/langflow_replacement/review_research.json").read_text())
     model = copy.deepcopy(next(n for n in template["data"]["nodes"] if n["data"]["type"] == "OpenAIModel"))
-    native = profile.provider in {"anthropic", "gemini", "ollama"}
+    native = profile.provider in {"openai", "openrouter", "compatible", "anthropic", "gemini", "ollama"}
     kind = "ConfiguredModel" if native else "OpenAIModel"
     if native:
         model = json.loads((assets() / "examples/configured_embeddings_node.json").read_text())
@@ -210,6 +211,18 @@ def ensure_credentials(client, installation):
         response.raise_for_status()
 
 
+def _published_flow_readback(client, identifier):
+    """Retry only a just-written flow's transient visibility, never its write."""
+    for delay in (0, 0.2, 0.5, 1.0, 2.0):
+        if delay:
+            time.sleep(delay)
+        response = client.get(f"/api/v1/flows/{identifier}")
+        if response.status_code != 404:
+            break
+    response.raise_for_status()
+    return response
+
+
 def publish_flows(installation, corpus, project, directory):
     directory = Path(directory)
     state_path = directory / "publication.json"
@@ -227,10 +240,20 @@ def publish_flows(installation, corpus, project, directory):
             payload.update(folder_id=state["folder_id"], is_component=False, access_type="PRIVATE", mcp_enabled=True, a2a_enabled=False, webhook=False)
             previous = state["flows"].get(name)
             if previous:
-                current = client.get(f"/api/v1/flows/{previous['id']}"); current.raise_for_status()
+                pending = previous.get("pending_verification", False)
+                current = (_published_flow_readback(client, previous["id"]) if pending else
+                           client.get(f"/api/v1/flows/{previous['id']}"))
+                current.raise_for_status()
                 current_hash = hashlib.sha256(json.dumps(current.json()["data"], sort_keys=True).encode()).hexdigest()
                 if current_hash != previous["hash"]:
                     raise ValueError(f"Live flow {name} changed in the editor; export and reconcile before updating")
+                if pending:
+                    previous.pop("pending_verification")
+                    write_json(state_path, state)
+                    if current.json()["data"] == payload["data"]:
+                        # Resume verification of the exact successful write;
+                        # do not POST another flow or repeat a completed PATCH.
+                        continue
                 # Langflow assigns globally unique names (including suffixes
                 # for another project's toolbox). Preserve that saved name.
                 payload.pop("name", None)
@@ -239,7 +262,11 @@ def publish_flows(installation, corpus, project, directory):
                 response = client.post("/api/v1/flows/", json=payload)
             response.raise_for_status()
             identifier = response.json()["id"]
-            readback = client.get(f"/api/v1/flows/{identifier}"); readback.raise_for_status()
+            state["flows"][name] = {"id": identifier,
+                "hash": hashlib.sha256(json.dumps(payload["data"], sort_keys=True).encode()).hexdigest(),
+                "models": assignments, "pending_verification": True}
+            write_json(state_path, state)
+            readback = _published_flow_readback(client, identifier)
             actual = readback.json()["data"]
             if actual != payload["data"]:
                 raise ValueError(f"Saved flow {name} differs from its readback")

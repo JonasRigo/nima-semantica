@@ -78,9 +78,9 @@ def test_native_protocol_routes_without_cloud_fallback(monkeypatch, provider, mo
     assert ('parallel_tool_calls' in options) is (provider == 'anthropic')
 
 
-@pytest.mark.parametrize('provider',['anthropic','gemini','ollama'])
+@pytest.mark.parametrize('provider',['openai','openrouter','compatible','anthropic','gemini','ollama'])
 def test_native_provider_node_wiring_and_reconfiguration(tmp_path, provider):
-    config = Installation(data_root=str(tmp_path), llm=ModelProfile(provider=provider, model='fixture'))
+    config = Installation(data_root=str(tmp_path), llm=ModelProfile(provider=provider, model='fixture',base_url='https://models.example/v1'))
     flow = json.loads(maintained_flows()['review_research'].read_text())
     configured, _ = configure_flow(flow, 'review_research', config, 'papers','project')
     assert validate_flow(configured)
@@ -92,6 +92,32 @@ def test_native_provider_node_wiring_and_reconfiguration(tmp_path, provider):
     assert template['api_key']['load_from_db'] is (provider != 'ollama')
     again, _ = configure_flow(configured, 'review_research', config, 'papers','project')
     assert len([n for n in again['data']['nodes'] if n['data']['type']=='ConfiguredModel']) == 1
+
+
+@pytest.mark.parametrize('provider', ['openrouter', 'compatible'])
+def test_compatible_route_uses_chat_completions_not_model_name_inference(monkeypatch, provider):
+    pytest.importorskip('langchain_openai')
+    import httpx
+    from langchain_openai import ChatOpenAI
+    import langchain_openai
+    calls=[]
+    def reply(request):
+        payload=json.loads(request.content)
+        calls.append((request.url.path,payload))
+        assert request.url.path == '/v1/chat/completions'
+        assert 'seed' not in payload
+        return httpx.Response(200,json={'id':'fixture','choices':[{'index':0,'message':{'role':'assistant','content':'ok'},'finish_reason':'stop'}],
+            'usage':{'prompt_tokens':1,'completion_tokens':1,'total_tokens':2}})
+    monkeypatch.setattr(langchain_openai,'ChatOpenAI',lambda **kw:ChatOpenAI(**kw,http_client=httpx.Client(transport=httpx.MockTransport(reply))))
+    try:
+        import lfx.base.models.provider_ssrf as ssrf
+    except ImportError:
+        pass
+    else:
+        monkeypatch.setattr(ssrf,'openai_compatible_client_kwargs',lambda *a,**kw:{})
+    model=native_chat_model(ModelProfile(provider=provider,model='gpt-6-luna',base_url='https://fixture.example/v1'), 'fake-key')
+    assert model.invoke('fixture').content == 'ok'
+    assert len(calls)==1
 
 
 def test_native_provider_cannot_override_credential_routing():
@@ -117,7 +143,7 @@ def test_republication_preserves_server_assigned_name(tmp_path, monkeypatch):
         def __enter__(self): return self
         def __exit__(self, *args): pass
         def get(self, path):
-            return SimpleNamespace(raise_for_status=lambda: None, json=lambda: {'id':'flow','name':'Tool Guide (1)','data':data})
+            return SimpleNamespace(status_code=200, raise_for_status=lambda: None, json=lambda: {'id':'flow','name':'Tool Guide (1)','data':data})
         def patch(self, path, json):
             assert 'name' not in json
             return self.get(path)

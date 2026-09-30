@@ -15,6 +15,23 @@ def seed(store):
     return seed_region(store, "A source with a theorem")
 
 
+def test_implicit_refresh_tracks_source_changes(tmp_path):
+    from conftest import seed_region
+    store = GraphStore(tmp_path)
+    try:
+        seed(store)
+        service = GraphProjectionService(store)
+        request = GraphProjectionRequest(corpus_id="papers", project_id="research")
+        first = service.rebuild(request)
+        seed_region(store, "Another newly indexed theorem")
+        second = service.rebuild(request)
+        assert first.projection_id != second.projection_id
+        assert service.get_current(second.projection_id, corpus_id="papers", project_id="research") == second.manifest
+        assert service.rebuild(request) == second
+    finally:
+        store.close()
+
+
 def test_projection_rebuilds_all_views_and_replays(tmp_path):
     store = GraphStore(tmp_path)
     try:
@@ -56,3 +73,17 @@ def test_projection_rejects_stale_projection_reads(tmp_path):
             service.get_current(result.projection_id, corpus_id="papers")
     finally:
         store.close()
+def test_lexical_hashes_each_region_once():
+    from nima_semantica.graph_projection import GraphProjectionService
+    class Region:
+        content = {"text":"alpha beta alpha " * 500}
+        hashes = 0
+        @property
+        def id(self):
+            self.hashes += 1
+            return "exact-region"
+    region = Region()
+    value = GraphProjectionService(None)._lexical([region], 2000)
+    assert value["token_count"] == 1500
+    assert value["terms"] == {"alpha":["exact-region"],"beta":["exact-region"]}
+    assert region.hashes == 1

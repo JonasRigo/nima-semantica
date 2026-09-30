@@ -66,7 +66,9 @@ def test_disabled_writes_and_real_graph_execution(configured):
 
 @pytest.mark.parametrize("extra",[{"allow_audit_writes":True},{"project_id":"private"},{"rules":[]},{"max_facts":99999}])
 def test_public_override_denied(configured,extra):
-    with pytest.raises(Exception):execute(extra)
+    result = execute(extra)
+    assert result["status"] == "failed" and result["data"]["executed"] is False
+    assert result["diagnostics"][0]["code"] == "request.invalid_field"
 
 
 def test_policy_mismatch_rejected(configured):

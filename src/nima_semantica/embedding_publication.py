@@ -8,6 +8,7 @@ from .providers import ModelManifest
 from .corpus import validate_vectors
 from .evidence_contracts import validate_reference
 from .okf_contracts import EvidenceReference
+from .source_quality import evidence_locator
 Identifier = Annotated[str, Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_.-]+$")]
 Digest = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
 Vector = Annotated[tuple[FiniteFloat, ...], Field(min_length=1, max_length=4096)]
@@ -49,7 +50,7 @@ def SourceIndex(payload: dict, store) -> dict:
             content = regions[region_id].content
             reference = EvidenceReference(corpus_id=request.corpus_id, project_id=regions[region_id].project_id,
                 artifact_id=content["artifact_id"], region_id=region_id, content_hash=content["artifact_id"],
-                source_revision=content["source_revision"], quotation=content["text"])
+                source_revision=content["source_revision"], quotation=None, locator=evidence_locator(content))
             if validate_reference(store, reference, corpus_id=request.corpus_id,
                                   project_id=request.project_id, target_id=region_id):
                 raise NimaError("embedding source region failed exact evidence validation")

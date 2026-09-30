@@ -46,8 +46,8 @@ def test_named_input_and_explicit_json_override(override, expected):
 def test_invalid_transport_fails_closed(override):
     from lfx.schema import Message
     component = builder.load_component("GuideFields")().set(tool="", mcp_request=Message(text=override))
-    with pytest.raises(ValueError):
-        asyncio.run(component.request_data())
+    result = asyncio.run(component.request_data()).data
+    assert result["status"] == "failed" and result["data"]["executed"] is False
 
 
 def test_preview_table_and_json_share_one_execution(monkeypatch):
@@ -88,6 +88,6 @@ def test_full_canvas_rejects_attempted_execution():
     graph = Graph.from_payload(json.loads(builder.CANVAS.read_text())["data"])
     async def run():
         return await graph.arun(inputs=[{"input_value": '{"tool":"Save Ontology","execute":true}'}], outputs=["ChatOutput-omYFS"])
-    with pytest.raises(Exception):
-        asyncio.run(run())
-    assert not graph.get_vertex("ToolGuide-EBGd-").built
+    asyncio.run(run())
+    result = asyncio.run(graph.get_vertex("ToolGuide-EBGd-").custom_component.result_data()).data
+    assert result["status"] == "failed" and result["data"]["executed"] is False

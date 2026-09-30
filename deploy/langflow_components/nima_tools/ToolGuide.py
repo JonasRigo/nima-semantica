@@ -24,17 +24,20 @@ class ToolGuide(BaseComponent):
         return tool_guide(request).model_dump(mode="json")
 
     async def table_data(self) -> DataFrame:
-        tools = (await self.result_data()).data["data"]["tools"]
+        tools = (await self.result_data()).data["data"].get("tools", [])
         return DataFrame([{key: item[key] for key in ("tool_id", "name", "implementation", "visual_approval", "boundary")} for item in tools])
 
     async def preview_message(self) -> Message:
         import json
         result = (await self.result_data()).data
+        if result["status"] == "failed" and result["data"].get("executed") is False:
+            return Message(text=json.dumps(result, ensure_ascii=False))
         lines = ["# NIMA Tool Guide", result["note"], "", result["data"]["contract_note"]]
         for item in result["data"]["tools"]:
             lines.extend(["", "## " + item["name"],
                 f"ID: {item['tool_id']} | Implementation: {item['implementation']} | Visual approval: {item['visual_approval']}",
                 item["description"], "Boundary: " + item["boundary"]])
+            lines.extend(["Usage and recovery:", "```json", json.dumps(item["usage"], indent=2), "```"])
             if item["input_schema"] is not None:
                 lines.extend(["Input schema:", "```json", json.dumps(item["input_schema"], indent=2), "```",
                     "Examples:", "```json", json.dumps(item["examples"], indent=2), "```"])

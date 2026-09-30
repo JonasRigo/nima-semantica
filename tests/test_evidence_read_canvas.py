@@ -32,7 +32,7 @@ def execute(payload,project="research"):
         assert preview.text.count("```")==2
         assert "<script>" not in preview.text
         assert json.loads(preview.text[8:-4])==result.data
-        assert len(table)==bool(result.data["data"])
+        assert len(table)==("kind" in result.data["data"])
         return result.data
     return asyncio.run(run())
 
@@ -99,8 +99,8 @@ def test_foreign_project_and_corpus_only_denied(configured):
 @pytest.mark.parametrize("extra", [{"corpus_id":"foreign"},{"project_id":"private"},{"store_path":"/tmp/secret"},
     {"allow_writes":True},{"max_bytes":False},{"render":"execute"}])
 def test_public_authority_and_invalid_inputs_rejected(configured,extra):
-    with pytest.raises(Exception):
-        execute({"artifact_id":"0"*64}|extra)
+    result = execute({"artifact_id":"0"*64}|extra)
+    assert result["status"] == "failed" and result["data"]["executed"] is False
 
 
 def test_native_reference_preserves_latex_quotation():

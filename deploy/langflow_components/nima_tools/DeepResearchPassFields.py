@@ -7,7 +7,7 @@ from lfx.schema import Data
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.deep_research_passes import PassResearchRequest
 from nima_semantica.orchestration.langflow.adapter_support import native
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent
+from nima_semantica.orchestration.langflow.stages.base import RequestFields as BaseComponent
 from nima_semantica.providers import strict_json_object
 
 

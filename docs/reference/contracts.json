@@ -2676,6 +2676,27 @@
         "type": "object"
       },
       "tool_id": "tool_guide",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Use an empty request to list tools; select tool by exact name or ID for its schema and examples.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 128
+            },
+            "schema_path": [
+              "properties",
+              "tool"
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -3066,6 +3087,252 @@
         "type": "object"
       },
       "tool_id": "research_run",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Inspect using next_run_revision and next_receipt_id while more_transitions or more_attempts is true. Re-read current run revision before transitions.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "create requires creation and operation_id; transition requires transition and operation_id. inspect accepts run_id and pagination only, not write controls. Payload must match the selected mode.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 20000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "RunCreation",
+              "properties",
+              "objective"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "RunCreation",
+              "properties",
+              "skill_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "RunCreation",
+              "properties",
+              "skill_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "RunCreation",
+              "properties",
+              "registry_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "RunTransition",
+              "properties",
+              "transition_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "RunTransition",
+              "properties",
+              "from_run_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 4000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "RunTransition",
+              "properties",
+              "reason"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 4000
+            },
+            "schema_path": [
+              "$defs",
+              "RunTransition",
+              "properties",
+              "doubt_or_review",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 100
+            },
+            "schema_path": [
+              "$defs",
+              "RunTransition",
+              "properties",
+              "receipt_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "RunTransition",
+              "properties",
+              "receipt_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "expected_store_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 200,
+              "minimum": 1
+            },
+            "schema_path": [
+              "properties",
+              "limit"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "properties",
+              "after_run_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256
+            },
+            "schema_path": [
+              "properties",
+              "after_receipt_id"
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -3220,6 +3487,49 @@
         "type": "object"
       },
       "tool_id": "load_ontology",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "List with {}; load a returned name/version or digest. A missing profile requires selecting or explicitly saving an ontology, not inventing an identity.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "name",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "properties",
+              "offset"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 200,
+              "minimum": 1
+            },
+            "schema_path": [
+              "properties",
+              "limit"
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -3383,6 +3693,54 @@
         "type": "object"
       },
       "tool_id": "save_ontology",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Validate first if useful; save an immutable profile explicitly. Resolve version conflicts by inspecting the existing profile, not overwriting it.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "expected_store_revision",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -3396,6 +3754,17 @@
           "sources": [
             {
               "name": "paper.md",
+              "text": "A source statement."
+            }
+          ]
+        },
+        {
+          "index_mode": "lexical",
+          "mode": "prepare_index",
+          "operation_id": "prepare-1",
+          "sources": [
+            {
+              "name": "paper.txt",
               "text": "A source statement."
             }
           ]
@@ -3548,6 +3917,15 @@
             "default": null,
             "title": "Operation Id"
           },
+          "preparation_mode": {
+            "default": "full",
+            "enum": [
+              "full",
+              "fast"
+            ],
+            "title": "Preparation Mode",
+            "type": "string"
+          },
           "run_id": {
             "anyOf": [
               {
@@ -3654,6 +4032,126 @@
         "type": "object"
       },
       "tool_id": "prepare_and_index_sources",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Prepare explicit sources in bounded groups. Inspect each source outcome and failed_stage; resume only failed work with a new operation ID. Index readiness does not certify source fidelity.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "AcquiredSourceInput",
+              "properties",
+              "name"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 1024,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "AcquiredSourceInput",
+              "properties",
+              "acquired_name"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "SourceInput",
+              "properties",
+              "name"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000000
+            },
+            "schema_path": [
+              "$defs",
+              "SourceInput",
+              "properties",
+              "text",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2800000
+            },
+            "schema_path": [
+              "$defs",
+              "SourceInput",
+              "properties",
+              "data_base64",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16,
+              "minItems": 1
+            },
+            "schema_path": [
+              "properties",
+              "sources"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "expected_store_revision",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -3772,6 +4270,49 @@
         "type": "object"
       },
       "tool_id": "inspect_corpus",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Follow returned pagination using offset/limit and the expected store revision. If the revision changes, restart inventory discovery rather than combining inconsistent pages.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "properties",
+              "offset"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 100,
+              "minimum": 1
+            },
+            "schema_path": [
+              "properties",
+              "limit"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "expected_store_revision",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -3804,6 +4345,11 @@
             ],
             "default": null,
             "title": "Expected Store Revision"
+          },
+          "include_provisional": {
+            "default": true,
+            "title": "Include Provisional",
+            "type": "boolean"
           },
           "limit": {
             "default": 8,
@@ -3992,6 +4538,146 @@
         "type": "object"
       },
       "tool_id": "retrieve_research_context",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Choose lexical/vector/hybrid explicitly. Inspect readiness when projections or embeddings are unavailable. Narrow or reformulate queries when context limits truncate results; ranked retrieval is not exhaustive pagination.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 20000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "query"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "projection_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "expected_store_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 32,
+              "minimum": 1
+            },
+            "schema_path": [
+              "properties",
+              "limit"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 4,
+              "minimum": 0
+            },
+            "schema_path": [
+              "properties",
+              "max_hops"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 256,
+              "minimum": 1
+            },
+            "schema_path": [
+              "properties",
+              "max_nodes"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 1024,
+              "minimum": 1
+            },
+            "schema_path": [
+              "properties",
+              "max_edges"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 128,
+              "minimum": 1
+            },
+            "schema_path": [
+              "properties",
+              "max_neighbors"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 64,
+              "minimum": 1
+            },
+            "schema_path": [
+              "properties",
+              "max_results"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 100000,
+              "minimum": 1
+            },
+            "schema_path": [
+              "properties",
+              "max_chars"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -4269,6 +4955,137 @@
         "type": "object"
       },
       "tool_id": "read_evidence",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Read returned exact region or artifact references. Preserve hashes, offsets and quality labels. Follow provenance links explicitly; a bounded link list is not complete lineage.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "region_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "source_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 20000
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "quotation",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "region_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 5000000,
+              "minimum": 1
+            },
+            "schema_path": [
+              "properties",
+              "max_bytes"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 128,
+              "minimum": 0
+            },
+            "schema_path": [
+              "properties",
+              "max_links"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "expected_store_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "expected_source_revision",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -4541,6 +5358,148 @@
         "type": "object"
       },
       "tool_id": "calculate_mathematics",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Discover every nima_math_* operation through nima_math_tools and atomic operations through nima_math_operations. Continue the same session with current revisions; inspect rejected actions before changing work.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxItems": 16,
+              "minItems": 2
+            },
+            "schema_path": [
+              "$defs",
+              "IndexedSet",
+              "properties",
+              "members"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32,
+              "minItems": 1
+            },
+            "schema_path": [
+              "$defs",
+              "IndexedSet",
+              "properties",
+              "required_paths"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "MathTaskFact",
+              "properties",
+              "quote"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 200
+            },
+            "schema_path": [
+              "$defs",
+              "MathTaskFact",
+              "properties",
+              "symbol",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 1000
+            },
+            "schema_path": [
+              "$defs",
+              "MathTaskFact",
+              "properties",
+              "expression",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 160
+            },
+            "schema_path": [
+              "$defs",
+              "MathTaskFact",
+              "properties",
+              "machine_expression",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 160
+            },
+            "schema_path": [
+              "$defs",
+              "MathTaskFact",
+              "properties",
+              "machine_condition",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32,
+              "minItems": 1
+            },
+            "schema_path": [
+              "$defs",
+              "MathTaskFact",
+              "properties",
+              "required_paths"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "request_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 24000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "task"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 128,
+              "minItems": 1
+            },
+            "schema_path": [
+              "properties",
+              "required_paths"
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "typed request object"
+      },
       "visual_approval": "approved"
     },
     {
@@ -4986,6 +5945,224 @@
         "type": "object"
       },
       "tool_id": "search_for_counterexamples",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Supply the scoped statement and domain. Exhausted search budgets mean no witness was found within that search, not that a proof exists. Change scope or request operator budget changes deliberately.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 8
+            },
+            "schema_path": [
+              "$defs",
+              "IntegerSearch",
+              "properties",
+              "assumptions"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 1000000,
+              "minimum": -1000000
+            },
+            "schema_path": [
+              "$defs",
+              "IntegerSearch",
+              "properties",
+              "lower"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 1000000,
+              "minimum": -1000000
+            },
+            "schema_path": [
+              "$defs",
+              "IntegerSearch",
+              "properties",
+              "upper"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 10000,
+              "minimum": 1
+            },
+            "schema_path": [
+              "$defs",
+              "IntegerSearch",
+              "properties",
+              "max_evaluations"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 4000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "IntegerSearch",
+              "properties",
+              "correspondence"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 12000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "statement"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "properties",
+              "assumptions"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "domain"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "target_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "parent_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 8
+            },
+            "schema_path": [
+              "properties",
+              "context_region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "context_region_ids",
+              "items"
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -5300,6 +6477,193 @@
         "type": "object"
       },
       "tool_id": "verify_lean",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Supply pinned sources, imports and targets. Repair from verifier diagnostics without silently changing the theorem or environment. Oversized coherent proof submissions need operator review, not arbitrary splitting.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "properties",
+              "module_order"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 64,
+              "minItems": 1
+            },
+            "schema_path": [
+              "properties",
+              "targets"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32,
+              "minItems": 1
+            },
+            "schema_path": [
+              "properties",
+              "imports"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "proof_target_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 64
+            },
+            "schema_path": [
+              "properties",
+              "parent_node_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "parent_node_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 64
+            },
+            "schema_path": [
+              "properties",
+              "definition_node_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "definition_node_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids",
+              "items"
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -5317,11 +6681,172 @@
           "source_region_ids": [
             "prepared-region-id"
           ]
+        },
+        {
+          "mode": "plan",
+          "ontology_profile": "literature_review@1.0.0",
+          "source_id": "prepared-source-id"
         }
       ],
       "implementation": "implemented",
       "input_schema": {
         "$defs": {
+          "ConsolidationSelection": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact_ids": {
+                "description": "Saved graph candidates. Continue with the previous consolidated artifact plus new candidates; no fixed total paper count.",
+                "items": {
+                  "pattern": "^[a-f0-9]{64}$",
+                  "type": "string"
+                },
+                "maxItems": 128,
+                "minItems": 1,
+                "title": "Artifact Ids",
+                "type": "array"
+              },
+              "edge_limit": {
+                "default": 64,
+                "maximum": 256,
+                "minimum": 1,
+                "title": "Edge Limit",
+                "type": "integer"
+              },
+              "edge_offset": {
+                "default": 0,
+                "minimum": 0,
+                "title": "Edge Offset",
+                "type": "integer"
+              },
+              "include_project_graph": {
+                "default": true,
+                "title": "Include Project Graph",
+                "type": "boolean"
+              },
+              "limit": {
+                "default": 32,
+                "maximum": 128,
+                "minimum": 1,
+                "title": "Limit",
+                "type": "integer"
+              },
+              "links": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/CrossPaperLink"
+                },
+                "maxItems": 256,
+                "title": "Links",
+                "type": "array"
+              },
+              "merges": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/IdentityMerge"
+                },
+                "maxItems": 256,
+                "title": "Merges",
+                "type": "array"
+              },
+              "offset": {
+                "default": 0,
+                "minimum": 0,
+                "title": "Offset",
+                "type": "integer"
+              },
+              "plan_hash": {
+                "anyOf": [
+                  {
+                    "pattern": "^[a-f0-9]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Plan Hash"
+              },
+              "query": {
+                "default": "",
+                "maxLength": 1000,
+                "title": "Query",
+                "type": "string"
+              },
+              "unresolved": {
+                "default": [],
+                "description": "Identity ambiguities, missing batches, unsupported links and scope limitations; never a completeness claim.",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 256,
+                "title": "Unresolved",
+                "type": "array"
+              }
+            },
+            "required": [
+              "artifact_ids"
+            ],
+            "title": "ConsolidationSelection",
+            "type": "object"
+          },
+          "CrossPaperLink": {
+            "additionalProperties": false,
+            "properties": {
+              "rationale": {
+                "maxLength": 4000,
+                "minLength": 1,
+                "title": "Rationale",
+                "type": "string"
+              },
+              "region_ids": {
+                "items": {
+                  "description": "Stable logical identifier without whitespace.",
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "pattern": "^\\S+$",
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "minItems": 1,
+                "title": "Region Ids",
+                "type": "array"
+              },
+              "relation": {
+                "description": "Registered lowercase snake_case node or relation name.",
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[a-z](?:[a-z0-9_]{0,63})$",
+                "title": "Relation",
+                "type": "string"
+              },
+              "source_id": {
+                "description": "Stable logical identifier without whitespace.",
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^\\S+$",
+                "title": "Source Id",
+                "type": "string"
+              },
+              "target_id": {
+                "description": "Stable logical identifier without whitespace.",
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^\\S+$",
+                "title": "Target Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_id",
+              "target_id",
+              "relation",
+              "region_ids",
+              "rationale"
+            ],
+            "title": "CrossPaperLink",
+            "type": "object"
+          },
           "GraphRevision": {
             "additionalProperties": false,
             "description": "A view containing a corpus head and optional project head.",
@@ -5375,10 +6900,60 @@
             ],
             "title": "GraphRevision",
             "type": "object"
+          },
+          "IdentityMerge": {
+            "additionalProperties": false,
+            "properties": {
+              "canonical_id": {
+                "description": "Stable logical identifier without whitespace.",
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^\\S+$",
+                "title": "Canonical Id",
+                "type": "string"
+              },
+              "node_ids": {
+                "items": {
+                  "description": "Stable logical identifier without whitespace.",
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "pattern": "^\\S+$",
+                  "type": "string"
+                },
+                "maxItems": 128,
+                "minItems": 2,
+                "title": "Node Ids",
+                "type": "array"
+              },
+              "rationale": {
+                "maxLength": 4000,
+                "minLength": 1,
+                "title": "Rationale",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_ids",
+              "canonical_id",
+              "rationale"
+            ],
+            "title": "IdentityMerge",
+            "type": "object"
           }
         },
         "additionalProperties": false,
         "properties": {
+          "consolidation": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ConsolidationSelection"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "graph_revision": {
             "anyOf": [
               {
@@ -5394,9 +6969,12 @@
             "default": "preview",
             "enum": [
               "preview",
+              "plan",
               "regional",
               "document",
-              "document_to_proposal"
+              "document_to_proposal",
+              "consolidation_plan",
+              "consolidate"
             ],
             "title": "Mode",
             "type": "string"
@@ -5441,6 +7019,23 @@
             ],
             "default": null,
             "title": "Parent Record Id"
+          },
+          "plan_attempt_id": {
+            "anyOf": [
+              {
+                "description": "Stable logical identifier without whitespace.",
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^\\S+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Plan only: change for a deliberate new extraction attempt; omit for replay-stable batch IDs.",
+            "title": "Plan Attempt Id"
           },
           "question": {
             "default": "Extract source-attributed claims, definitions, obligations and their relations.",
@@ -5581,6 +7176,404 @@
         "type": "object"
       },
       "tool_id": "deep_extraction",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Plan with source_id, then submit each returned regional batch unchanged. Track coverage and artifacts; re-plan with a new plan_attempt_id only for deliberate new attempts. For coherent multi-batch/paper graphs use consolidation_plan with saved artifact_ids and exact graph_revision, inspect all relevant pages/evidence, then consolidate with plan_hash, explicit same-type identity merges and ontology-valid links. No label-based auto-merging or graph commits. Continue with the consolidated artifact plus new candidates, not overlapping originals. Preserve uncertainty and preparation quality; connectivity is not completeness.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "regional requires operation_id and 1\u201332 source_region_ids; optional source_id checks membership. plan requires source_id only, optionally plan_attempt_id. document modes require source_id and operation_id. consolidation_plan/consolidate require graph_revision and consolidation.artifact_ids, not source selection. consolidate also requires operation_id and consolidation.plan_hash from planning; merges/links belong to consolidate only. Project links require graph_revision.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxItems": 128,
+              "minItems": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ConsolidationSelection",
+              "properties",
+              "artifact_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "ConsolidationSelection",
+              "properties",
+              "offset"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 128,
+              "minimum": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ConsolidationSelection",
+              "properties",
+              "limit"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "ConsolidationSelection",
+              "properties",
+              "edge_offset"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 256,
+              "minimum": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ConsolidationSelection",
+              "properties",
+              "edge_limit"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 1000
+            },
+            "schema_path": [
+              "$defs",
+              "ConsolidationSelection",
+              "properties",
+              "query"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "ConsolidationSelection",
+              "properties",
+              "merges"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "ConsolidationSelection",
+              "properties",
+              "links"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "ConsolidationSelection",
+              "properties",
+              "unresolved"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "CrossPaperLink",
+              "properties",
+              "source_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "CrossPaperLink",
+              "properties",
+              "target_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "CrossPaperLink",
+              "properties",
+              "relation"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32,
+              "minItems": 1
+            },
+            "schema_path": [
+              "$defs",
+              "CrossPaperLink",
+              "properties",
+              "region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "CrossPaperLink",
+              "properties",
+              "region_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 4000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "CrossPaperLink",
+              "properties",
+              "rationale"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 128,
+              "minItems": 2
+            },
+            "schema_path": [
+              "$defs",
+              "IdentityMerge",
+              "properties",
+              "node_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "IdentityMerge",
+              "properties",
+              "node_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "IdentityMerge",
+              "properties",
+              "canonical_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 4000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "IdentityMerge",
+              "properties",
+              "rationale"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 12000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "question"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "source_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "plan_attempt_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "ontology_profile"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "target_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "parent_record_id",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -5591,6 +7584,16 @@
       "examples": [
         {
           "mode": "preview"
+        },
+        {
+          "graph_revision": {
+            "corpus_id": "papers",
+            "corpus_revision": 0,
+            "project_id": "research",
+            "project_revision": 0
+          },
+          "mode": "strict",
+          "operation_id": "example-attempt-1"
         }
       ],
       "implementation": "implemented",
@@ -5822,6 +7825,116 @@
         "type": "object"
       },
       "tool_id": "analyze_graph",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Select an existing scoped revision and analysis mode. If analysis exceeds bounds, use an explicitly selected smaller graph candidate artifact or request an operator budget change; this request has no seed selector. Do not infer global conclusions from partial analysis.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Execution requires operation_id and the exact graph_revision from Inspect Corpus; artifact_id optionally selects a saved graph candidate.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "target_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "parent_record_id",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -5832,6 +7945,21 @@
       "examples": [
         {
           "mode": "preview"
+        },
+        {
+          "claim": {
+            "corpus_id": "papers",
+            "local_id": "selected-claim",
+            "project_id": "research"
+          },
+          "graph_revision": {
+            "corpus_id": "papers",
+            "corpus_revision": 0,
+            "project_id": "research",
+            "project_revision": 0
+          },
+          "mode": "trace",
+          "operation_id": "example-attempt-1"
         }
       ],
       "implementation": "implemented",
@@ -6122,6 +8250,154 @@
         "type": "object"
       },
       "tool_id": "trace_claim_dependencies",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Select a scoped claim and revision. Report traversal boundaries and unresolved dependencies. Independently traced subgraphs do not automatically establish complete closure.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "trace requires operation_id, exact graph_revision, and claim with corpus_id, optional project_id and local_id.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "local_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "target_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "parent_record_id",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -6132,6 +8408,26 @@
       "examples": [
         {
           "mode": "preview"
+        },
+        {
+          "graph_revision": {
+            "corpus_id": "papers",
+            "corpus_revision": 0,
+            "project_id": "research",
+            "project_revision": 0
+          },
+          "mode": "substantiate",
+          "operation_id": "example-attempt-1",
+          "targets": [
+            {
+              "finding": "Support for this selected claim was not located in the examined evidence.",
+              "ref": {
+                "corpus_id": "papers",
+                "local_id": "selected-claim",
+                "project_id": "research"
+              }
+            }
+          ]
         }
       ],
       "implementation": "implemented",
@@ -6458,6 +8754,195 @@
         "type": "object"
       },
       "tool_id": "substantiate_graph_snapshot",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Select existing targets and exact evidence. Split independent target groups within the schema limits, retaining shared revision and per-target findings. Missing support is limited to examined scope.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "substantiate requires operation_id, graph_revision and nonempty targets containing exact ref and finding. Targets and regions must be unique.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "local_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 4000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "SubstantiationTarget",
+              "properties",
+              "finding"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "properties",
+              "targets"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "target_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "parent_record_id",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -6468,6 +8953,17 @@
       "examples": [
         {
           "mode": "preview"
+        },
+        {
+          "artifact_id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "graph_revision": {
+            "corpus_id": "papers",
+            "corpus_revision": 0,
+            "project_id": "research",
+            "project_revision": 0
+          },
+          "mode": "prepare",
+          "operation_id": "example-attempt-1"
         }
       ],
       "implementation": "implemented",
@@ -7481,6 +9977,720 @@
         "type": "object"
       },
       "tool_id": "update_project_graph",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Preview does not persist a proposal or commit. Prepare an exact delta or reference a saved proposal artifact, then obtain exact scoped approval before commit. Re-prepare after revision conflicts; never split an approved delta implicitly.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "prepare/commit require operation_id, graph_revision and exactly one of delta, artifact_id or progress_proposal_ids. rebuild_projection requires operation_id and graph_revision without a delta. Public input cannot grant commit approval.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxItems": 16,
+              "minItems": 1
+            },
+            "schema_path": [
+              "$defs",
+              "CorrectionBinding",
+              "properties",
+              "target_indices"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "region_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "source_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 20000
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "quotation",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "local_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFDelta",
+              "properties",
+              "delta_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFDelta",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFDelta",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFDelta",
+              "properties",
+              "ontology_profile",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 100000
+            },
+            "schema_path": [
+              "$defs",
+              "OKFDelta",
+              "properties",
+              "upsert_nodes"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 100000
+            },
+            "schema_path": [
+              "$defs",
+              "OKFDelta",
+              "properties",
+              "remove_node_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 200000
+            },
+            "schema_path": [
+              "$defs",
+              "OKFDelta",
+              "properties",
+              "add_edges"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 200000
+            },
+            "schema_path": [
+              "$defs",
+              "OKFDelta",
+              "properties",
+              "remove_edge_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "OKFDelta",
+              "properties",
+              "provenance"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 4000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFDelta",
+              "properties",
+              "reason"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFDelta",
+              "properties",
+              "producer",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFDelta",
+              "properties",
+              "producer_version",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFEdge",
+              "properties",
+              "edge_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFEdge",
+              "properties",
+              "relation"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFEdge",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFEdge",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "OKFEdge",
+              "properties",
+              "provenance"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "OKFEdge",
+              "properties",
+              "evidence"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFEdge",
+              "properties",
+              "ontology_profile",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFEdge",
+              "properties",
+              "producer",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFEdge",
+              "properties",
+              "producer_version",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFNode",
+              "properties",
+              "node_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFNode",
+              "properties",
+              "node_type"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFNode",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFNode",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "OKFNode",
+              "properties",
+              "provenance"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "OKFNode",
+              "properties",
+              "evidence"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "OKFNode",
+              "properties",
+              "parents"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFNode",
+              "properties",
+              "ontology_profile",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFNode",
+              "properties",
+              "producer",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFNode",
+              "properties",
+              "producer_version",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFReference",
+              "properties",
+              "target_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFReference",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFReference",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFReference",
+              "properties",
+              "revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "PromotionOrigin",
+              "properties",
+              "proposal_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "PromotionOrigin",
+              "properties",
+              "source_project_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "PromotionOrigin",
+              "properties",
+              "source_snapshot_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "PromotionOrigin",
+              "properties",
+              "source_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "properties",
+              "progress_proposal_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "progress_proposal_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "properties",
+              "correction_bindings"
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -7491,6 +10701,19 @@
       "examples": [
         {
           "mode": "preview"
+        },
+        {
+          "graph_revision": {
+            "corpus_id": "papers",
+            "corpus_revision": 0,
+            "project_id": "research",
+            "project_revision": 0
+          },
+          "mode": "generate",
+          "operation_id": "example-attempt-1",
+          "source_region_ids": [
+            "prepared-region-id"
+          ]
         }
       ],
       "implementation": "implemented",
@@ -7873,6 +11096,255 @@
         "type": "object"
       },
       "tool_id": "hypothesis_generation",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Choose the mode and its required evidence or existing target. Results are proposals. Continue with explicitly selected follow-up questions, not an automatic fixed number of hypothesis rounds.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Non-preview modes require operation_id and graph_revision. restate also requires prior_hypothesis_ids. Scope lists must be unique.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "local_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisConstraint",
+              "properties",
+              "constraint_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisConstraint",
+              "properties",
+              "text"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 12000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "objective"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "properties",
+              "graph_targets"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 8
+            },
+            "schema_path": [
+              "properties",
+              "prior_hypothesis_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "prior_hypothesis_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 8
+            },
+            "schema_path": [
+              "properties",
+              "required_assumptions"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "properties",
+              "constraints"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "target_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "parent_record_id",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -7883,6 +11355,40 @@
       "examples": [
         {
           "mode": "preview"
+        },
+        {
+          "criteria": [
+            {
+              "criterion_id": "equality",
+              "description": "Under what assumptions are the expressions equal?"
+            }
+          ],
+          "graph_revision": {
+            "corpus_id": "papers",
+            "corpus_revision": 0,
+            "project_id": "research",
+            "project_revision": 0
+          },
+          "mode": "mathematical_objects",
+          "objects": [
+            {
+              "inline": {
+                "domain": "integers",
+                "kind": "mathematical_object",
+                "statement": "x squared"
+              },
+              "object_id": "a"
+            },
+            {
+              "inline": {
+                "domain": "integers",
+                "kind": "mathematical_object",
+                "statement": "x"
+              },
+              "object_id": "b"
+            }
+          ],
+          "operation_id": "example-attempt-1"
         }
       ],
       "implementation": "implemented",
@@ -8818,6 +12324,649 @@
         "type": "object"
       },
       "tool_id": "compare_research_objects",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Use caller-supplied objects for private/unadmitted work, or real scoped graph identities for graph modes. Do not split a joint comparison into independent groups and claim the same result.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Non-preview modes require operation_id, graph_revision, at least two objects and explicit criteria. Proof comparisons require the exact common target; each object selects exactly one binding.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ComparisonCriterion",
+              "properties",
+              "criterion_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ComparisonCriterion",
+              "properties",
+              "description"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ComparisonObject",
+              "properties",
+              "object_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ComparisonObject",
+              "properties",
+              "hypothesis_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ComparisonObject",
+              "properties",
+              "record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "region_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "source_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 20000
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "quotation",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "local_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "proposal_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "corpus_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 20000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "statement"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "supporting_references"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "contradicting_references"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "evidence"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "assumptions"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "expected_consequences"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "unresolved_obligations"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "verification_plans"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "provenance"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "provenance",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 256
+            },
+            "schema_path": [
+              "$defs",
+              "HypothesisProposal",
+              "properties",
+              "diagnostics"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFReference",
+              "properties",
+              "target_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFReference",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFReference",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "OKFReference",
+              "properties",
+              "revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 12000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchObject",
+              "properties",
+              "statement"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchObject",
+              "properties",
+              "domain"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchObject",
+              "properties",
+              "assumptions"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchObject",
+              "properties",
+              "predictions"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchObject",
+              "properties",
+              "unresolved_obligations"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchObject",
+              "properties",
+              "dependencies"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchObject",
+              "properties",
+              "source_region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchObject",
+              "properties",
+              "source_region_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "WorkflowDiagnostic",
+              "properties",
+              "message"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 6
+            },
+            "schema_path": [
+              "properties",
+              "objects"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 6
+            },
+            "schema_path": [
+              "properties",
+              "criteria"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 12000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "objective"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "target_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "parent_record_id",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -8829,6 +12978,24 @@
         {
           "research": {
             "mode": "preview"
+          }
+        },
+        {
+          "research": {
+            "graph_revision": {
+              "corpus_id": "papers",
+              "corpus_revision": 0,
+              "project_id": "research",
+              "project_revision": 0
+            },
+            "mode": "research",
+            "operation_id": "example-attempt-1",
+            "questions": [
+              {
+                "question": "What assumptions support the selected claim?",
+                "question_id": "q1"
+              }
+            ]
           }
         }
       ],
@@ -9277,6 +13444,311 @@
         "type": "object"
       },
       "tool_id": "deep_research",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Choose research scope and bounded passes. Preserve temporary-read provenance and remaining questions; further passes are agent decisions. Temporary fast reads do not become prepared corpus evidence automatically.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Continue with input_graph_artifact_id without initial search_phrases; research carries the scoped request and operation ID.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "CoverageFacet",
+              "properties",
+              "source_question_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minLength": 8
+            },
+            "schema_path": [
+              "$defs",
+              "CoverageFacet",
+              "properties",
+              "question"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "DeepResearchRequest",
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "DeepResearchRequest",
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 6
+            },
+            "schema_path": [
+              "$defs",
+              "DeepResearchRequest",
+              "properties",
+              "questions"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 8
+            },
+            "schema_path": [
+              "$defs",
+              "DeepResearchRequest",
+              "properties",
+              "graph_targets"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "$defs",
+              "DeepResearchRequest",
+              "properties",
+              "source_region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "DeepResearchRequest",
+              "properties",
+              "source_region_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "DeepResearchRequest",
+              "properties",
+              "required_assumptions"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "DeepResearchRequest",
+              "properties",
+              "target_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "DeepResearchRequest",
+              "properties",
+              "parent_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "local_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchQuestion",
+              "properties",
+              "question_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 6000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchQuestion",
+              "properties",
+              "question"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 96,
+              "minLength": 3
+            },
+            "schema_path": [
+              "$defs",
+              "ShortQuery",
+              "properties",
+              "query"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ShortQuery",
+              "properties",
+              "purpose"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 3
+            },
+            "schema_path": [
+              "properties",
+              "search_phrases"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 3
+            },
+            "schema_path": [
+              "properties",
+              "focus_question",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -9287,6 +13759,35 @@
       "examples": [
         {
           "mode": "preview"
+        },
+        {
+          "graph_revision": {
+            "corpus_id": "papers",
+            "corpus_revision": 0,
+            "project_id": "research",
+            "project_revision": 0
+          },
+          "mode": "argument_review",
+          "operation_id": "example-attempt-1",
+          "targets": [
+            {
+              "argument": "The selected argument.",
+              "assumptions": [],
+              "content_revision": "0a08f37d76d7509a0ac8c5f7df87478320cc0579faeb8864f21ac54087edad42",
+              "dependencies": [],
+              "domain": "Selected domain",
+              "quantifier": "forall",
+              "ref": {
+                "corpus_id": "papers",
+                "local_id": "selected-claim",
+                "project_id": "research"
+              },
+              "source_region_ids": [],
+              "statement": "The selected claim.",
+              "target_id": "selected-claim",
+              "unresolved_obligations": []
+            }
+          ]
         }
       ],
       "implementation": "implemented",
@@ -9684,6 +14185,287 @@
         "type": "object"
       },
       "tool_id": "review_research",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Review independent target groups within request limits. Preserve each target's findings, evidence and outstanding obligations; partial target coverage is not a complete paper review.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Non-preview modes require operation_id, graph_revision and exact targets with content_revision. proof_assessment also requires each target's argument. Do not invent target hashes or graph identities.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "local_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ReviewTarget",
+              "properties",
+              "target_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 12000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ReviewTarget",
+              "properties",
+              "statement"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 16000
+            },
+            "schema_path": [
+              "$defs",
+              "ReviewTarget",
+              "properties",
+              "argument"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ReviewTarget",
+              "properties",
+              "domain"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "ReviewTarget",
+              "properties",
+              "assumptions"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "ReviewTarget",
+              "properties",
+              "dependencies"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "ReviewTarget",
+              "properties",
+              "unresolved_obligations"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "ReviewTarget",
+              "properties",
+              "source_region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ReviewTarget",
+              "properties",
+              "source_region_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 8
+            },
+            "schema_path": [
+              "properties",
+              "targets"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "target_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "parent_record_id",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -9694,6 +14476,29 @@
       "examples": [
         {
           "mode": "preview"
+        },
+        {
+          "bundle": {
+            "limitations": [
+              "Not independently verified."
+            ],
+            "sections": [
+              {
+                "category": "summary",
+                "section_id": "summary",
+                "text": "Caller-authored summary."
+              }
+            ],
+            "title": "Scoped research report"
+          },
+          "graph_revision": {
+            "corpus_id": "papers",
+            "corpus_revision": 0,
+            "project_id": "research",
+            "project_revision": 0
+          },
+          "mode": "save",
+          "operation_id": "example-attempt-1"
         }
       ],
       "implementation": "implemented",
@@ -10212,6 +15017,328 @@
         "type": "object"
       },
       "tool_id": "save_research_analysis",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Persist the explicitly selected report and evidence, then read its artifact back. Resolve missing substantiation prerequisites rather than dropping adverse findings or their uncertainty.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "save requires operation_id, graph_revision and bundle with sections or artifacts and explicit limitations.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "AnalysisSection",
+              "properties",
+              "section_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 20000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "AnalysisSection",
+              "properties",
+              "text"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "$defs",
+              "AnalysisSection",
+              "properties",
+              "evidence_indices"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "$defs",
+              "AnalysisSection",
+              "properties",
+              "artifact_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "region_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "source_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 20000
+            },
+            "schema_path": [
+              "$defs",
+              "EvidenceReference",
+              "properties",
+              "quotation",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchAnalysisBundle",
+              "properties",
+              "title"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 128
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchAnalysisBundle",
+              "properties",
+              "sections"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 128
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchAnalysisBundle",
+              "properties",
+              "evidence"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 64
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchAnalysisBundle",
+              "properties",
+              "artifact_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 128
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchAnalysisBundle",
+              "properties",
+              "receipt_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchAnalysisBundle",
+              "properties",
+              "receipt_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchAnalysisBundle",
+              "properties",
+              "model_manifests"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchAnalysisBundle",
+              "properties",
+              "workflow"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32,
+              "minItems": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ResearchAnalysisBundle",
+              "properties",
+              "limitations"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "target_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "parent_record_id",
+              "anyOf",
+              0
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     },
     {
@@ -10271,6 +15398,38 @@
         "type": "object"
       },
       "tool_id": "draft_proof",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Discover nima_proof_* operations through nima_proof_tools. Continue private session state with current revisions and explicit obligations; exporting or submitting private work does not admit project claims.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "request_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 24000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "target"
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "typed request object"
+      },
       "visual_approval": "not_ready"
     },
     {
@@ -10330,6 +15489,38 @@
         "type": "object"
       },
       "tool_id": "conduct_proof",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Discover nima_proof_* operations through nima_proof_tools. Let the objective determine further steps, not a fixed round count. Retain failed attempts and obligations; project changes require separate approval.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "request_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 24000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "target"
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "typed request object"
+      },
       "visual_approval": "not_ready"
     },
     {
@@ -10340,6 +15531,36 @@
       "examples": [
         {
           "mode": "preview"
+        },
+        {
+          "environment_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+          "graph_revision": {
+            "corpus_id": "papers",
+            "corpus_revision": 0,
+            "project_id": "research",
+            "project_revision": 0
+          },
+          "mode": "draft",
+          "operation_id": "example-attempt-1",
+          "target": {
+            "argument": "The selected argument.",
+            "assumptions": [],
+            "content_revision": "1391f30bfe02785bc65843ea33f075f13f1d6726c9200e52a608a20b365e883b",
+            "definitions": [],
+            "dependencies": [],
+            "domain": "Selected domain",
+            "granularity": "lemma",
+            "quantifier": "forall",
+            "ref": {
+              "corpus_id": "papers",
+              "local_id": "selected-claim",
+              "project_id": "research"
+            },
+            "source_region_ids": [],
+            "statement": "The selected claim.",
+            "target_id": "selected-claim",
+            "unresolved_obligations": []
+          }
         }
       ],
       "implementation": "implemented",
@@ -11009,6 +16230,506 @@
         "type": "object"
       },
       "tool_id": "draft_lean",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Pin the target and environment. Use retrieval and verifier feedback for repairs within operator budgets; report unresolved goals when exhausted. A draft is not verified merely because generation completed.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "draft/repair require operation_id, graph_revision, exact target and environment_digest. Target dependency inventory must match supplied dependencies; repair requires prior attempts as specified in the schema.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "DeclarationCheckObligation",
+              "properties",
+              "obligation_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 240
+            },
+            "schema_path": [
+              "$defs",
+              "DeclarationCheckObligation",
+              "properties",
+              "declaration"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphIdentity",
+              "properties",
+              "local_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_id"
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "corpus_revision"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "minimum": 0
+            },
+            "schema_path": [
+              "$defs",
+              "GraphRevision",
+              "properties",
+              "project_revision",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 240
+            },
+            "schema_path": [
+              "$defs",
+              "LeanSourceModule",
+              "properties",
+              "name"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2097152,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "LeanSourceModule",
+              "properties",
+              "source"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ProofDependency",
+              "properties",
+              "dependency_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 4000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ProofDependency",
+              "properties",
+              "statement"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ProofDependency",
+              "properties",
+              "domain"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "ProofDependency",
+              "properties",
+              "assumptions"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ProofDependency",
+              "properties",
+              "assumptions",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 8
+            },
+            "schema_path": [
+              "$defs",
+              "ProofDependency",
+              "properties",
+              "artifact_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ProofTarget",
+              "properties",
+              "target_id"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 12000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ProofTarget",
+              "properties",
+              "statement"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 16000
+            },
+            "schema_path": [
+              "$defs",
+              "ProofTarget",
+              "properties",
+              "argument"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ProofTarget",
+              "properties",
+              "domain"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "ProofTarget",
+              "properties",
+              "assumptions"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "ProofTarget",
+              "properties",
+              "dependencies"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "ProofTarget",
+              "properties",
+              "unresolved_obligations"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "ProofTarget",
+              "properties",
+              "source_region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ProofTarget",
+              "properties",
+              "source_region_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "$defs",
+              "ProofTarget",
+              "properties",
+              "definitions"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "ProofTarget",
+              "properties",
+              "definitions",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "operation_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "run_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "properties",
+              "dependencies"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "proof_dag_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 4
+            },
+            "schema_path": [
+              "properties",
+              "prior_artifact_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 32
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "source_region_ids",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "target_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "parent_record_id",
+              "anyOf",
+              0
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16,
+              "minItems": 1
+            },
+            "schema_path": [
+              "properties",
+              "targets"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 240
+            },
+            "schema_path": [
+              "properties",
+              "targets",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "properties",
+              "initial_modules"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "properties",
+              "initial_root_modules"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 240
+            },
+            "schema_path": [
+              "properties",
+              "initial_root_modules",
+              "items"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 16
+            },
+            "schema_path": [
+              "properties",
+              "declaration_check_obligations"
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
       "visual_approval": "approved"
     }
   ]

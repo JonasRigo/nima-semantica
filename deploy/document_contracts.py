@@ -15,4 +15,14 @@ def catalog():
 
 
 if __name__ == "__main__":
-    print(json.dumps(catalog(), indent=2, sort_keys=True))
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--write", action="store_true", help="Refresh generated checked-in contract references")
+    args = parser.parse_args()
+    value = catalog()
+    if args.write:
+        root = Path(__file__).resolve().parents[1] / "docs/reference"
+        (root / "contracts.json").write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+        (root / "tools.json").write_text(json.dumps(value["tools"], indent=2) + "\n")
+    else:
+        print(json.dumps(value, indent=2, sort_keys=True))

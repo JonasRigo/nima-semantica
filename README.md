@@ -34,7 +34,7 @@ Install the release wheel, then run the setup wizard:
 
 ```sh
 python -m venv .venv
-.venv/bin/pip install 'nima_semantica-0.1.1-py3-none-any.whl[mcp]'
+.venv/bin/pip install 'nima_semantica-0.1.2-py3-none-any.whl[mcp]'
 .venv/bin/nima setup --provision --pdf --lean
 .venv/bin/nima project init my-research --corpus papers --path /path/to/project
 ```
@@ -59,11 +59,12 @@ See [workflow contribution](docs/CONTRIBUTING_WORKFLOWS.md) to add your own Lang
 ## Research skills
 
 Skills give your coding agent adaptable procedures for using the tools and retaining useful results.
-Project initialization installs all nine for your selected harnesses.
+Project initialization installs all ten for your selected harnesses.
 
 | Skill | What you can ask for |
 | --- | --- |
 | [Chat with the knowledge base](docs/skills/nima-corpus-chat.md) | Answers from corpus literature and private project notes, with exact citations. |
+| [Ingest papers](docs/skills/nima-ingest.md) | Full or provisional fast ingestion, ontology-guided extraction, and approved graph updates. |
 | [Research](docs/skills/nima-research.md) | An investigation combining evidence and specialist checks. |
 | [Literature review](docs/skills/nima-literature-review.md) | Literature discovery, synthesis and comparison. |
 | [Review](docs/skills/nima-review.md) | A focused assessment of a claim, proof or artifact. |
@@ -83,5 +84,5 @@ python -m pytest -q
 ```
 
 NIMA is under active development; contributions, including custom Langflow workflows, are welcome.
-Use [CITATION.cff](CITATION.cff) for author and release metadata. The [v0.1.0 archive](https://doi.org/10.5281/zenodo.22998905) remains available; v0.1.1 has not yet been assigned a versioned DOI.
+Use [CITATION.cff](CITATION.cff) for author and release metadata. The [v0.1.0 archive](https://doi.org/10.5281/zenodo.22998905) remains available; no versioned DOI is asserted for v0.1.2 before publication.
 See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for project and third-party terms.

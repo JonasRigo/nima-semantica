@@ -1,5 +1,7 @@
 # v0.1.1 platform qualification
 
+For the current release candidate, see [v0.1.2 platform qualification](PLATFORM_SUPPORT_v0.1.2.md). The evidence below is retained for v0.1.1 and does not substitute for testing the new candidate.
+
 Status: qualified for v0.1.1 under the tested configurations below. All 12 hosted CI jobs passed; the operator authorized release on 2026-09-28.
 
 The release targets Ubuntu/Linux and macOS Apple silicon, with native Python 3.11–3.13. macOS runs Langflow natively in a dedicated Python 3.11 environment and uses Docker Desktop for PDF, symbolic and Lean workers. Other Linux distributions must supply the documented prerequisites; they are not verified merely because Ubuntu passes. Intel Macs and Rosetta are outside the macOS support claim.

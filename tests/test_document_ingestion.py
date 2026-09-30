@@ -52,3 +52,28 @@ def test_document_ingestion_persists_normalized_artifact_regions_and_receipt(tmp
         assert EvidenceProvenanceService(store).validate_reference(reference, corpus_id="papers", project_id=None, target_id="claim").valid
     finally:
         store.close()
+
+
+def test_dense_math_diagnostics_are_linked_completely_not_truncated(tmp_path):
+    from test_source_pipeline import pipeline, request
+    store = GraphStore(tmp_path)
+    try:
+        CorpusRegistry(store).register_corpus(CorpusDescriptor(corpus_id="papers", name="Dense math", corpus_revision="1"))
+        text = "\n\n".join(f"Equation {i}: $x_{i}=1$." for i in range(1030))
+        prepared, _, indexed = pipeline(store, request(sources=[{"name":"dense.md","text":text}]))
+        assert indexed.status == "complete"
+        assert prepared.data["sources"][0]["diagnostic_count"] == 1030
+        _, normalized = store.records("NormalizedDocument", corpus_id="papers")[0]
+        assert len(normalized.content["diagnostics"]) == 1030
+        covered = set()
+        for key in prepared.data["region_ids"]:
+            region = store.get(key)
+            meta = region.content["metadata"]
+            assert meta["normalization_record_id"] == normalized.id
+            assert len(meta["normalization_diagnostics"]) < 1024
+            covered.update(d["start"] for d in meta["normalization_diagnostics"])
+        assert len(covered) == 1030
+        receipt = next(r for _,r in store.records("ExecutionReceipt") if r.content["stage"] == "document_ingestion")
+        assert receipt.content["diagnostics"][0]["record_id"] == normalized.id
+    finally:
+        store.close()

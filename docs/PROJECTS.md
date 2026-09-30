@@ -1,5 +1,26 @@
 # Projects and harness connections
 
+The project binding `.nima/project.json` includes `cli_command`, an argument array
+using the installation's Python interpreter. Use it when `nima` is not on PATH.
+`nima project refresh PROJECT --corpus CORPUS` rebuilds the current project retrieval
+projection and updates future-session pins without committing scientific graph changes.
+
+List registered corpora and projects in the configured installation:
+
+```sh
+nima list
+nima project list
+nima project list --corpus papers
+```
+
+These commands emit JSON (`corpora` or `projects` arrays), sorted by corpus and
+project ID. Empty installations and unmatched corpus filters return empty arrays.
+They read local registrations without calling Langflow, LLMs, or workers, and do
+not acquire the corpus writer lock. Project entries include the registration
+directory and configured MCP URL; listing does not check service health.
+Use `nima --config /path/to/installation.json ...` to select another installation.
+Project folders without a `project.json` registration are not listed.
+
 A corpus is shared within one NIMA installation; a project holds private notes and investigation-specific knowledge.
 A private mathematics or proof session belongs to that project but does not itself become project knowledge.
 
@@ -19,6 +40,19 @@ Codex configuration lives in `.codex/config.toml`; Claude Code uses `.mcp.json`;
 Skills are installed under `.agents/skills` and, for Claude Code, `.claude/skills`.
 Start your preferred harness in that workspace and complete its normal trust/connection prompts.
 Its discovered tools include the project toolbox plus `nima_math_*` and `nima_proof_*`.
+
+## Share project knowledge with the corpus
+
+Preview all project-owned graph nodes/edges (no commit):
+
+```sh
+nima project promote my-research --corpus papers --rationale "Share reusable results"
+```
+
+Review the exact proposal, then repeat with `--approve-proposal HASH --approved-by OPERATOR`.
+A changed graph produces another hash and requires a new approval. Source evidence must be
+visible in corpus scope; this command does not publish private supporting documents.
+Fast/provisional citations and scientific status are preserved. Promotion is sharing, not verification.
 
 ## Resume a new session
 

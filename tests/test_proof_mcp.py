@@ -109,7 +109,12 @@ def test_real_stdio_proof_lifecycle_and_resume(tmp_path):
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as client:
                 await client.initialize()
-                assert {t.name for t in (await client.list_tools()).tools} == {"nima_proof_" + op for op in TOOLS}
+                assert {t.name for t in (await client.list_tools()).tools} == {"nima_proof_" + op for op in TOOLS} | {"nima_proof_tools"}
+                discovery = await client.call_tool("nima_proof_tools", {})
+                assert set(json.loads(discovery.content[0].text)["operations"]) == set(TOOLS)
+                invalid = await client.call_tool("nima_proof_open", {"request": {"unexpected": "SECRET"}})
+                assert invalid.isError and "request.invalid_field" in invalid.content[0].text
+                assert "SECRET" not in invalid.content[0].text
                 async def call(op, request):
                     response = await client.call_tool("nima_proof_" + op, {"request": request})
                     assert not response.isError, response

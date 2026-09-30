@@ -251,7 +251,12 @@ async def _stdio_lifecycle(tmp_path):
         async with ClientSession(read, write) as client:
             await client.initialize()
             listed = await client.list_tools()
-            assert len(listed.tools) == 15
+            assert len(listed.tools) == 16
+            discovery = await client.call_tool("nima_math_tools", {})
+            assert "run_calculation_graph" in json.loads(discovery.content[0].text)["operations"]
+            invalid = await client.call_tool("nima_math_open", {"request": {"unexpected": "SECRET"}})
+            assert invalid.isError and "request.invalid_field" in invalid.content[0].text
+            assert "SECRET" not in invalid.content[0].text
             result = await client.call_tool("nima_math_open", {"request": {"request_id": "create", "task": "Compute two", "required_paths": ["answer"]}})
             assert not result.isError
             payload = json.loads(result.content[0].text)

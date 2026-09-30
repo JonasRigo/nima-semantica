@@ -68,5 +68,5 @@ def test_inventory_and_read_only(configured):
 
 @pytest.mark.parametrize("payload", [{"project_id": "secret"}, {"corpus_id": "secret"}, {"allow_writes": True}, {"limit": 101}])
 def test_invalid_public_inputs(configured, payload):
-    with pytest.raises(Exception):
-        execute(payload)
+    result = execute(payload)
+    assert result["status"] == "failed" and result["data"]["executed"] is False

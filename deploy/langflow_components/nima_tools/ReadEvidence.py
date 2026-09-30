@@ -35,4 +35,4 @@ class ReadEvidence(BaseComponent):
 
     async def table_data(self) -> DataFrame:
         data = (await self.result_data()).data.get("data",{})
-        return DataFrame([{key:data[key] for key in ("kind","artifact_id","bytes","content_complete","exact_source_checked")}] if data else [])
+        return DataFrame([{key:data[key] for key in ("kind","artifact_id","bytes","content_complete","exact_source_checked")}] if "kind" in data else [])

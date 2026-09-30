@@ -13,6 +13,7 @@ from .models import StrictModel, NimaError, ConflictError, canonical
 from .okf_contracts import Digest, GraphIdentifier, EvidenceReference
 from .source_corpus import SourceRegion, SourceCorpusService
 from .tool_contracts import ToolResult
+from .source_quality import evidence_locator
 
 
 class ReadEvidenceRequest(StrictModel):
@@ -80,7 +81,7 @@ def read_evidence(store, request: ReadEvidenceRequest, context: ReadEvidenceCont
                 reference = EvidenceReference(corpus_id=context.corpus_id, project_id=region.project_id,
                     region_id=region_id, artifact_id=region.artifact_id, content_hash=region.artifact_id,
                     source_revision=region.source_revision,
-                    locator={"start":region.start,"end":region.end,"ordinal":region.ordinal})
+                    locator=evidence_locator(region))
             else:
                 envelope, data = service.read(request.artifact_id, **scope)
                 returned_bytes = data

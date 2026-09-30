@@ -71,9 +71,9 @@ def exclusive_owner(service):
 
 
 def create_server(service):
-    from mcp.server.fastmcp import FastMCP
+    from .request_diagnostics import request_server
     import anyio
-    server = FastMCP("NIMA Calculate Mathematics · Candidate")
+    server = request_server("NIMA Calculate Mathematics · Candidate", "nima_math_", TOOLS)
 
     def register(operation, schema, description):
         async def call(request):
@@ -86,6 +86,12 @@ def create_server(service):
 
     for operation, (schema, description) in TOOLS.items():
         register(operation, schema, description)
+
+    @server.tool()
+    def nima_math_tools() -> dict:
+        """Discover every session operation, typed input contract, limits and continuation."""
+        from .tool_usage import private_catalog
+        return private_catalog(TOOLS)
 
     @server.tool()
     def nima_math_operations() -> dict:

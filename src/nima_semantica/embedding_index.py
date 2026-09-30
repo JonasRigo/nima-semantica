@@ -96,7 +96,8 @@ class EmbeddingIndexService:
             result = {}
             output_ids = ()
             status = "failed"
-            diagnostics = ({"code": type(exc).__name__},)
+            from .ingestion_diagnostics import diagnostic
+            diagnostics = (diagnostic(exc),)
             error = "embedding index publication failed"
 
         execution_receipt = ExecutionReceipt(

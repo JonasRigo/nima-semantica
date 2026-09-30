@@ -111,8 +111,8 @@ def test_unconfigured_live_canvas_is_explicitly_unavailable(monkeypatch):
 
 @pytest.mark.parametrize("field", ["project_id", "corpus_id", "actor", "allow_writes", "store_path", "approved"])
 def test_full_canvas_rejects_public_authority_override(run_store, field):
-    with pytest.raises(Exception):
-        execute({"run_id":"inspection-run", field:"forged"}, writes=True)
+    result = execute({"run_id":"inspection-run", field:"forged"}, writes=True)
+    assert result["status"] == "failed" and result["data"]["executed"] is False
 
 
 def test_concurrent_preview_ports_record_once(run_store):

@@ -11,6 +11,18 @@ from .models import ConfigurationError, NimaError, Record, canonical
 from .providers import validate_manifest
 
 
+class _QuietChunkProgress:
+    """Silence only this chunker's cosmetic progress, not global output."""
+    def start_tracking(self, **kwargs):
+        return None
+
+    def update_tracking(self, *args, **kwargs):
+        pass
+
+    def stop_tracking(self, *args, **kwargs):
+        pass
+
+
 def normalize(data: bytes, name: str, pdf_normalizer=None) -> tuple[str, list[dict]]:
     suffix = Path(name).suffix.lower()
     if suffix == ".pdf":
@@ -28,19 +40,8 @@ def normalize(data: bytes, name: str, pdf_normalizer=None) -> tuple[str, list[di
     text = data.decode("utf-8", errors="strict")
     diagnostics = []
     if suffix in (".html", ".htm"):
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(text, "html.parser")
-        for item in soup(["script", "style"]):
-            item.decompose()
-        # Preserve MathML bytes alongside readable body text.
-        for formula in soup.find_all("math"):
-            latex = formula.find("annotation", attrs={"encoding": "application/x-tex"})
-            original = str(formula)
-            value = latex.get_text() if latex else original
-            diagnostics.append({"original": original, "latex": latex.get_text() if latex else None,
-                                "status": "decoded" if latex else "ambiguous"})
-            formula.replace_with("\n" + value + "\n")
-        text = soup.get_text("\n")
+        from .html_preparation import normalize_html
+        text, diagnostics = normalize_html(text)
     elif suffix == ".json":
         json.loads(text)  # Validate without changing source-relative character offsets.
     for match in re.finditer(r"\$\$(.*?)\$\$|\\\[(.*?)\\\]|(?<!\$)\$(?!\$)(.*?)(?<!\$)\$(?!\$)", text, re.S):
@@ -59,7 +60,9 @@ def regions(text: str, normalized_artifact: str, document_id: str, corpus_id: st
                 "use the pinned NIMA environment"
             ) from None
         raise
-    chunks = StructuralChunker(max_chunk_size=1800).chunk(text)
+    chunker = StructuralChunker(max_chunk_size=1800)
+    chunker.progress_tracker = _QuietChunkProgress()
+    chunks = chunker.chunk(text)
     result = []
     cursor = 0
     for chunk in chunks:
@@ -90,7 +93,21 @@ def regions(text: str, normalized_artifact: str, document_id: str, corpus_id: st
             "text": text, "document_id": document_id, "normalized_artifact": normalized_artifact,
             "start": 0, "end": len(text), "ordinal": 0,
         }))
-    return result
+    # Structural boundaries are suggestions, not a hard size guarantee.
+    bounded = []
+    for record in result:
+        start, stop = record.content["start"], record.content["end"]
+        while start < stop:
+            end = min(start + 1800, stop)
+            if end < stop:
+                boundaries = list(re.finditer(r"\s+", text[start:end]))
+                if boundaries and boundaries[-1].end() >= 900:
+                    end = start + boundaries[-1].end()
+            bounded.append(record.model_copy(update={"content": {
+                **record.content, "start": start, "end": end,
+                "text": text[start:end], "ordinal": len(bounded)}}))
+            start = end
+    return bounded
 
 
 def validate_vectors(vectors, count, manifest):

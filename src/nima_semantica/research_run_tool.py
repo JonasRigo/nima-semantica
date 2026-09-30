@@ -92,6 +92,10 @@ def inspect_run(store, request, context):
         "more_transitions": len(transitions) > request.limit, "more_attempts": len(receipts) > request.limit,
         "next_run_revision": transition_page[-1].to_run_revision if transition_page else request.after_run_revision,
         "next_receipt_id": receipt_page[-1].receipt_id if receipt_page else request.after_receipt_id,
+        "next_request": {"mode": "inspect", "run_id": request.run_id, "limit": request.limit,
+            "after_run_revision": transition_page[-1].to_run_revision if transition_page else request.after_run_revision,
+            "after_receipt_id": receipt_page[-1].receipt_id if receipt_page else request.after_receipt_id
+        } if len(transitions) > request.limit or len(receipts) > request.limit else None,
     }, note="Read-only audit history, not evidence that a claim is true. Receipts retain their original outcomes; metadata payloads are omitted.")
 
 

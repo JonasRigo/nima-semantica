@@ -1,6 +1,21 @@
 name: tests
 on: [push, pull_request]
 jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install build
+      - run: python deploy/stage_release.py /tmp/nima-release-source
+      - run: python -m build --outdir /tmp/nima-artifacts /tmp/nima-release-source
+      - run: python deploy/check_release.py /tmp/nima-artifacts/nima_semantica-*.tar.gz /tmp/nima-artifacts/nima_semantica-*.whl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate
+          path: /tmp/nima-artifacts/*
   contracts:
     runs-on: ${{ matrix.os }}
     strategy:

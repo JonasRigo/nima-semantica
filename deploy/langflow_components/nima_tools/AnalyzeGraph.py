@@ -18,9 +18,9 @@ class AnalyzeGraph(BaseComponent):
         StrInput(name="corpus_id",display_name="Authorized corpus (operator)",value="papers"),
         StrInput(name="project_id",display_name="Authorized project; blank for corpus (operator)",value="research"),
         BoolInput(name="allow_audit_writes",display_name="Allow receipts and outcome artifacts (operator)",value=False),
-        IntInput(name="max_nodes",display_name="Maximum nodes (operator)",value=128),
-        IntInput(name="max_edges",display_name="Maximum edges (operator)",value=256),
-        IntInput(name="max_facts",display_name="Maximum closure facts (operator)",value=2000),
+        IntInput(name="max_nodes",display_name="Maximum nodes (operator)",value=4096),
+        IntInput(name="max_edges",display_name="Maximum edges (operator)",value=8192),
+        IntInput(name="max_facts",display_name="Maximum closure facts (operator)",value=20000),
         IntInput(name="max_matches",display_name="Maximum inference supports (operator)",value=10000),
         IntInput(name="max_rounds",display_name="Maximum inference rounds (operator)",value=64),
         IntInput(name="timeout_seconds",display_name="Inference timeout (operator)",value=30)]

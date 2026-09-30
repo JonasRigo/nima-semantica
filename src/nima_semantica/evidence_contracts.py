@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import Field
 
 from .models import ConflictError, StrictModel, identity, now
+from .source_quality import evidence_locator, preparation_quality, provisional_object, provisional_nodes, PROVISIONAL
 from .okf_contracts import Digest, EvidenceReference, GraphIdentifier, GraphRevision, OKFDelta, OKFEdge, OKFNode, OKFSnapshot, PromotionOrigin
 
 if TYPE_CHECKING:
@@ -69,6 +70,8 @@ def validate_reference(store, reference, *, corpus_id, project_id, target_id):
         return failure("evidence.scope_mismatch", "Stored region scope differs from reference.")
     try:
         region = SourceRegion.model_validate(record.content)
+        if preparation_quality(region) == PROVISIONAL and reference.locator.get("preparation_quality") != PROVISIONAL:
+            return failure("evidence.quality_label_missing", "Fast evidence must retain its provisional preparation label.")
         source = SourceCorpusService(store).get_source(region.source_id, corpus_id=corpus_id, project_id=project_id)
         if source is None or source.source_revision != region.source_revision or source.artifact_id != (region.source_artifact_id or region.artifact_id):
             return failure("evidence.source_mismatch", "Region does not bind the registered source revision.")
@@ -113,35 +116,55 @@ def require_source_region(store, region_id, *, corpus_id, project_id):
     reference = EvidenceReference(
         corpus_id=corpus_id, project_id=record.project_id, region_id=region_id,
         artifact_id=region.artifact_id, content_hash=region.artifact_id,
-        source_revision=region.source_revision, quotation=None,
+        source_revision=region.source_revision, quotation=None, locator=evidence_locator(region),
     )
     if validate_reference(store, reference, corpus_id=corpus_id, project_id=project_id, target_id=region_id):
         raise ConflictError("source region failed exact-source validation")
     return record
 
 
-def validate_snapshot_evidence(store, snapshot: OKFSnapshot) -> EvidenceValidationReport:
-    """Validate all node and edge evidence bindings against immutable storage."""
+def _validate_item_evidence(store, items, *, corpus_id):
+    """Check each exact binding once per invocation, never cache across calls.
+
+    Large graphs repeat the same immutable region on many nodes and edges.
+    Scope, quotation and every locator field remain part of the cache key;
+    failures are still reported separately against every affected graph object.
+    """
     issues: list[EvidenceValidationIssue] = []
     checked = 0
-    for item in (*snapshot.nodes, *snapshot.edges):
+    cache = {}
+    for item in items:
         for reference in item.evidence:
             checked += 1
             target_id = item.node_id if isinstance(item, OKFNode) else item.edge_id
-            issues.extend(validate_reference(store, reference, corpus_id=snapshot.corpus_id, project_id=item.project_id, target_id=target_id))
+            key = (corpus_id, item.project_id, identity(reference))
+            if key not in cache:
+                cache[key] = validate_reference(store, reference, corpus_id=corpus_id,
+                    project_id=item.project_id, target_id=target_id)
+            issues.extend(issue.model_copy(update={"target_id": target_id}) for issue in cache[key])
     return EvidenceValidationReport(valid=not issues, issues=tuple(issues), checked_references=checked)
+
+
+def validate_snapshot_evidence(store, snapshot: OKFSnapshot) -> EvidenceValidationReport:
+    """Validate all node and edge evidence bindings against immutable storage."""
+    return _validate_item_evidence(store, (*snapshot.nodes, *snapshot.edges), corpus_id=snapshot.corpus_id)
 
 
 def validate_delta_evidence(store, delta: OKFDelta) -> EvidenceValidationReport:
     """Validate evidence attached to a proposed delta before graph admission."""
     issues: list[EvidenceValidationIssue] = []
-    checked = 0
-    for item in (*delta.upsert_nodes, *delta.add_edges):
-        for reference in item.evidence:
-            checked += 1
-            target_id = item.node_id if isinstance(item, OKFNode) else item.edge_id
-            issues.extend(validate_reference(store, reference, corpus_id=delta.corpus_id, project_id=item.project_id, target_id=target_id))
-    return EvidenceValidationReport(valid=not issues, issues=tuple(issues), checked_references=checked)
+    existing = store.read_okf_snapshot(corpus_id=delta.corpus_id, project_id=delta.project_id)
+    nodes = {node.ref: node for node in existing.nodes}
+    nodes.update({node.ref: node for node in delta.upsert_nodes})
+    affected = provisional_nodes(nodes.values())
+    for node in delta.upsert_nodes:
+        if node.ref in affected and not provisional_object(node):
+            issues.append(EvidenceValidationIssue(code="evidence.inherited_quality_missing",
+                message="A claim derived from fast evidence must retain preparation_quality=fast_provisional.",
+                target_id=node.node_id))
+    evidence = _validate_item_evidence(store, (*delta.upsert_nodes, *delta.add_edges), corpus_id=delta.corpus_id)
+    issues.extend(evidence.issues)
+    return EvidenceValidationReport(valid=not issues, issues=tuple(issues), checked_references=evidence.checked_references)
 
 
 def build_promotion_proposal(

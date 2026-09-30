@@ -24,7 +24,7 @@ from .embedding_index import EmbeddingIndexRequest, EmbeddingIndexService
 from .evidence_contracts import require_source_region
 from .execution_receipts import ExecutionReceiptService
 from .graph_projection import GraphProjectionRequest, GraphProjectionService
-from .models import ConflictError, NimaError, StrictModel, identity
+from .models import ConflictError, NimaError, StrictModel, identity, Record
 from .okf_contracts import GraphIdentifier
 from .providers import ModelManifest, validate_manifest
 from .receipts import ExecutionReceipt
@@ -108,6 +108,7 @@ class PrepareSourcesRequest(StrictModel):
     mode: Literal["preview", "prepare_index"] = "preview"
     sources: tuple[SourceInput | AcquiredSourceInput, ...] = Field(min_length=1, max_length=16)
     index_mode: Literal["lexical", "vector"] = "lexical"
+    preparation_mode: Literal["full", "fast"] = "full"
     operation_id: GraphIdentifier | None = None
     run_id: GraphIdentifier | None = None
     expected_store_revision: GraphIdentifier | None = None
@@ -180,6 +181,10 @@ def _attempt(store, context, stage, operation_id, payload, work, *, run_id=None,
             status="partial" if previous is not None else "failed",
             data={**(previous.data if previous else {}), "failed_stage": stage, "index_ready": False},
             receipts=(*(previous.receipt_ids if previous else ()), identifier))
+        from .ingestion_diagnostics import EmbeddingStageError
+        if isinstance(exc, EmbeddingStageError):
+            result = result.model_copy(update={"diagnostics": tuple(exc.diagnostics),
+                "data": {**result.data, "retry_hint": "After correcting the cause, use CLI --retry for a new receipted attempt; existing provenance is retained."}})
         receipts.record(ExecutionReceipt(receipt_id=identifier, operation_id=operation_id, stage=stage,
             **_scope(context), run_id=run_id, status="interrupted" if interrupted else "failed",
             error="source pipeline stage failed", diagnostics=result.diagnostics, tool_version="source-tools-v1",
@@ -189,9 +194,17 @@ def _attempt(store, context, stage, operation_id, payload, work, *, run_id=None,
         return result
 
 
-def _normalize(source, pdf_normalizer, *, store=None, context=None):
+def _normalize(source, pdf_normalizer, *, store=None, context=None, preparation_mode="full"):
     data = _source_bytes(source, store, context)
-    text, diagnostics = normalize(data, source.name, pdf_normalizer)
+    if preparation_mode == "fast":
+        from .deep_research_fast import fast_text
+        from .source_quality import WARNING
+        text, method = fast_text(data, source.name)
+        text = "[" + WARNING + "]\n\n" + text
+        diagnostics = [{"kind": "fast_preparation", "method": method, "status": "unresolved",
+                        "warning": WARNING, "provenance": [{"source": source.name}]}]
+    else:
+        text, diagnostics = normalize(data, source.name, pdf_normalizer)
     if not text.strip() or len(text.encode("utf-8")) > 4_000_000:
         raise NimaError("empty or oversized normalized source")
     diagnostics = copy.deepcopy(diagnostics)
@@ -224,7 +237,7 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
                     return failure("sources.acquired_requires_receipted_preparation", status="unavailable")
                 if source.name.lower().endswith(".pdf"):
                     return failure("sources.pdf_requires_receipted_preparation", status="unavailable")
-                data, text, diagnostics, _ = _normalize(source, None)
+                data, text, diagnostics, _ = _normalize(source, None, preparation_mode=request.preparation_mode)
                 chunks = regions(text, hashlib.sha256(text.encode()).hexdigest(), "preview", context.corpus_id)
                 previews.append({"name": source.name, "original_sha256": hashlib.sha256(data).hexdigest(),
                     "normalized_sha256": hashlib.sha256(text.encode()).hexdigest(), "region_count": len(chunks),
@@ -241,12 +254,14 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
         source_project = context.project_id if context.source_scope == "project" else None
         if registry.corpus(context.corpus_id) is None:
             raise ConflictError("corpus must be registered before preparation")
-        if any(s.name.lower().endswith(".pdf") for s in request.sources) and (not context.allow_pdf or pdf_normalizer is None):
+        if any(s.name.lower().endswith(".pdf") for s in request.sources) and (not context.allow_pdf or
+                (request.preparation_mode == "full" and pdf_normalizer is None)):
             raise NimaError("PDF worker is not explicitly configured and authorized")
         all_regions, prepared, service_receipts = [], [], []
         unresolved_region_count = 0
         for source in request.sources:
-            data, text, diagnostics, artifacts = _normalize(source, pdf_normalizer, store=store, context=context)
+            data, text, diagnostics, artifacts = _normalize(source, pdf_normalizer, store=store, context=context,
+                                                           preparation_mode=request.preparation_mode)
             unresolved = sum(item.get("status") == "unresolved" for item in diagnostics)
             if source.name.lower().endswith(".pdf"):
                 manifests = [item for item in diagnostics if item.get("kind") == "parser_manifest"]
@@ -259,19 +274,31 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
             original = hashlib.sha256(data).hexdigest()
             normalized = hashlib.sha256(text.encode()).hexdigest()
             source_identity = {"corpus_id": context.corpus_id, "artifact": original, "name": source.name}
+            quality = {"preparation_quality": "fast_provisional"} if request.preparation_mode == "fast" else {}
+            if quality:
+                source_identity.update(quality)
+            metadata = dict(quality)
+            if quality:
+                metadata["extraction_method"] = diagnostics[0]["method"]
+                metadata["warning"] = diagnostics[0]["warning"]
+            if isinstance(source, AcquiredSourceInput):
+                acquisition = store.get(source.acquisition_id, **_scope(context))
+                if acquisition and acquisition.content.get("provenance_artifact_id"):
+                    metadata["acquisition_id"] = source.acquisition_id
+                    metadata["provenance_artifact_id"] = acquisition.content["provenance_artifact_id"]
             if source_project is not None:
                 source_identity["project_id"] = source_project
             source_id = identity(source_identity)
             # A single immutable source identity owns normalization and region locators.
             descriptor = SourceDescriptor(source_id=source_id, corpus_id=context.corpus_id, project_id=source_project, artifact_id=original,
-                source_revision=original, name=source.name, media_type=MEDIA[PurePath(source.name).suffix.lower()])
+                source_revision=original, name=source.name, media_type=MEDIA[PurePath(source.name).suffix.lower()], metadata=metadata)
             resource_ids = tuple(dict.fromkeys((original, normalized, *artifacts)))
             existing = [registry.resolve(i, corpus_id=context.corpus_id, project_id=source_project, exact_scope=True) for i in resource_ids]
             revisions = {entry.registry_revision for entry in existing if entry is not None}
-            if revisions:
-                if len(revisions) != 1 or any(e is None or e.project_id != source_project for e in existing):
+            if revisions and all(e is not None for e in existing):
+                if any(e.project_id != source_project for e in existing):
                     raise ConflictError("source artifacts have incompatible existing publication bindings")
-                revision_id = revisions.pop()
+                revision_id = sorted(revisions)[0]
             else:
                 revisions = [RegistryRevision.model_validate(r.content) for _, r in store.records(
                     registry.REVISION_KIND, corpus_id=context.corpus_id)]
@@ -289,12 +316,22 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
             result = DocumentIngestionService(store).ingest(data, descriptor,
                 ArtifactEnvelope(artifact_id=original, content_hash=original, artifact_kind="source",
                     media_type=descriptor.media_type, corpus_id=context.corpus_id, project_id=source_project, source_revision=original),
-                registry_revision=revision_id, pdf_normalizer=lambda _: (text, diagnostics))
+                registry_revision=revision_id, pdf_normalizer=lambda _: (text, diagnostics),
+                normalized_result=(text, diagnostics))
             if result.normalized_artifact_id != normalized:
                 raise NimaError("normalization identity changed before publication")
             for identifier in result.region_ids:
                 require_source_region(store, identifier, **_scope(context))
             all_regions.extend(result.region_ids)
+            if request.preparation_mode == "full":
+                for old_id, old in store.records("SourceDescriptor", corpus_id=context.corpus_id):
+                    if (old.project_id == source_project and old.content.get("artifact_id") == original
+                        and old.content.get("name") == source.name
+                        and old.content.get("metadata", {}).get("preparation_quality") == "fast_provisional"):
+                        store.put(Record(kind="SourcePreparationUpgrade", corpus_id=context.corpus_id,
+                            project_id=source_project, content={"from_source_id": old.content["source_id"],
+                            "to_source_id": source_id, "region_ids": list(result.region_ids),
+                            "status": "requires_evidence_reconciliation", "graph_updated": False}))
             if len(all_regions) > 4096:
                 raise NimaError("too many regions in one preparation request")
             service_receipts.append(result.receipt_id)
@@ -302,6 +339,7 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
                 "normalized_artifact_id": normalized, "region_count": len(result.region_ids),
                 "diagnostic_count": len(diagnostics), "unresolved_region_count": unresolved,
                 "normalization_complete": unresolved == 0, "registry_revision": revision_id})
+            prepared[-1]["preparation_quality"] = "fast_provisional" if quality else "full"
         return ToolResult(operation="Prepare and Index Sources", status="complete", receipt_ids=tuple(service_receipts),
             data={"mode": request.mode, "stage": "source_preparation", "operation_id": request.operation_id,
                 "run_id": request.run_id, "scope": _scope(context), "index_mode": request.index_mode,
@@ -351,7 +389,8 @@ def embed_sources(store, incoming: ToolResult, context: SourceToolContext, *, pr
                         "manifest": manifest, "offset": start, "stage": "source_embeddings"}))
                 result = EmbeddingIndexService(store).embed_and_index(request, provider)
                 if result.status != "completed":
-                    raise NimaError("embedding publication failed; no new batches committed")
+                    from .ingestion_diagnostics import EmbeddingStageError
+                    raise EmbeddingStageError(result.diagnostics)
                 batches.append(result.result["embedding_batch_id"])
                 receipts.append(result.receipt_id)
         return ToolResult(operation="Prepare and Index Sources", status="complete", receipt_ids=tuple(receipts),

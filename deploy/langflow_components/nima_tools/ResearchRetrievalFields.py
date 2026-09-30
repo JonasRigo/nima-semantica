@@ -1,11 +1,11 @@
 """Visible public retrieval request; authority and providers are operator-owned."""
-from lfx.io import DropdownInput, IntInput, MessageTextInput, StrInput, HandleInput, Output
+from lfx.io import BoolInput, DropdownInput, IntInput, MessageTextInput, StrInput, HandleInput, Output
 from lfx.schema import Data
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.research_retrieval import ResearchRetrievalRequest
 from nima_semantica.providers import strict_json_object
 from nima_semantica.orchestration.langflow.adapter_support import native
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent
+from nima_semantica.orchestration.langflow.stages.base import RequestFields as BaseComponent
 
 
 class ResearchRetrievalFields(BaseComponent):
@@ -15,6 +15,7 @@ class ResearchRetrievalFields(BaseComponent):
     nima_manifest = manifest_for_component("ResearchRetrievalFields")
     inputs = [MessageTextInput(name="query", display_name="Research query", value="x"),
         DropdownInput(name="mode", display_name="Retrieval mode", options=["lexical", "vector", "hybrid"], value="lexical"),
+        BoolInput(name="include_provisional", display_name="Include provisional fast evidence", value=True),
         StrInput(name="projection_id", display_name="Exact projection ID (optional)", value=""),
         StrInput(name="expected_store_revision", display_name="Expected store revision (optional)", value=""),
         StrInput(name="operation_id", display_name="Model attempt ID", value=""),

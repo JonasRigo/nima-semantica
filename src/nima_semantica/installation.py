@@ -133,3 +133,47 @@ def project_binding(installation, corpus, project):
     if data["corpus_id"] != corpus or data["project_id"] != project:
         raise ValueError("project manifest scope mismatch")
     return data
+
+
+def list_projects(installation, corpus=None):
+    """List local registrations without opening private databases or services."""
+    root = Path(installation.data_root) / "projects"
+    directories = [root / identifier(corpus)] if corpus is not None else sorted(root.glob("*"))
+    projects = []
+    for directory in directories:
+        if not directory.is_dir() or directory.is_symlink():
+            continue
+        for path in sorted(directory.glob("*/project.json")):
+            if path.is_symlink() or path.parent.is_symlink():
+                continue
+            binding = project_binding(installation, directory.name, path.parent.name)
+            projects.append({"corpus_id": binding["corpus_id"], "project_id": binding["project_id"],
+                             "directory": str(path.parent), "mcp_url": binding.get("mcp_url", "")})
+    return projects
+
+
+def list_corpora(installation):
+    """Read registered descriptors without acquiring the corpus writer lease."""
+    import sqlite3
+    from contextlib import closing
+    from .registry_contracts import CorpusDescriptor
+
+    root = store_path(installation)
+    if (root / "graph.json").exists():
+        raise ValueError("incompatible store; migration is unsupported")
+    database = root / "graph.sqlite3"
+    if not database.exists():
+        return []
+    with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)) as db:
+        if db.execute("PRAGMA user_version").fetchone()[0] != 2:
+            raise ValueError("incompatible store schema")
+        rows = db.execute("SELECT corpus_id, payload FROM records WHERE kind=? ORDER BY corpus_id",
+                          ("CorpusDescriptor",)).fetchall()
+    corpora = []
+    for scope, payload in rows:
+        descriptor = CorpusDescriptor.model_validate(json.loads(payload)["content"])
+        if descriptor.corpus_id != scope:
+            raise ValueError("corpus descriptor scope mismatch")
+        corpora.append({"corpus_id": descriptor.corpus_id, "name": descriptor.name,
+                        "corpus_revision": descriptor.corpus_revision})
+    return corpora

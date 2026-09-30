@@ -115,7 +115,7 @@ class HornRule(StrictModel):
 
 class ContextPolicy(StrictModel):
     allow_assumptions: bool = False
-    max_facts: int = Field(default=2000, ge=1, le=10000)
+    max_facts: int = Field(default=2000, ge=1, le=100000)
     max_matches: int = Field(default=10000, ge=1, le=100000)
     max_rounds: int = Field(default=64, ge=1, le=256)
     timeout_seconds: float = Field(default=30, gt=0, le=120)
@@ -127,9 +127,9 @@ class GraphSnapshot(StrictModel):
     context_id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,79}$")
     policy: ContextPolicy = Field(default_factory=ContextPolicy)
     predicates: tuple[Predicate, ...] = Field(default=(), max_length=200)
-    entities: dict[Symbol, Symbol] = Field(default_factory=dict, max_length=2000,
+    entities: dict[Symbol, Symbol] = Field(default_factory=dict, max_length=30000,
         description="Entity identifier to type identifier, matching predicate argument_types; not entity descriptions.")
-    assertions: tuple[Assertion, ...] = Field(default=(), max_length=2000)
+    assertions: tuple[Assertion, ...] = Field(default=(), max_length=100000)
     rules: tuple[HornRule, ...] = Field(default=(), max_length=200)
     parent_revision: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
 

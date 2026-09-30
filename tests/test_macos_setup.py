@@ -98,8 +98,8 @@ def test_flow_uses_container_endpoints_without_changing_host_config(tmp_path):
         flow, _ = configure_flow(json.loads(path.read_text()), name, config, "papers", "project")
         for node in flow["data"]["nodes"]:
             template = node["data"]["node"]["template"]
-            if node["data"]["type"] == "OpenAIModel":
-                assert template["openai_api_base"]["value"] == config.llm.container_url
+            if node["data"]["type"] == "ConfiguredModel":
+                assert json.loads(template["profile_json"]["value"])["container_url"] == config.llm.container_url
                 seen_model = True
             if "pdf_url" in template:
                 assert template["pdf_url"]["value"] == "http://pdf:8791"

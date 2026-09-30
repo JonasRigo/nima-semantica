@@ -19,7 +19,12 @@ class OntologyLoad(BaseComponent):
     ]
 
     async def run(self):
-        request = LoadOntologyRequest.model_validate(_value(self.payload))
+        payload = _value(self.payload)
+        if payload.get("request_error"):
+            from nima_semantica.tool_contracts import ToolResult
+            return ToolResult(operation="Load Ontology", status="failed", diagnostics=({
+                "code": "request.invalid_json", "message": payload["request_error"]},)).model_dump(mode="json")
+        request = LoadOntologyRequest.model_validate(payload)
         context = OntologyContext(corpus_id=self.corpus_id, project_id=self.project_id or None)
         with configured_store(required=False) as store:
             return load_ontology(store, request, context).model_dump(mode="json")

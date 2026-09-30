@@ -351,9 +351,9 @@ class ProofService(PrivateGraphSessionStore):
 
 
 def create_server(service):
-    from mcp.server.fastmcp import FastMCP
+    from .request_diagnostics import request_server
     import anyio
-    server = FastMCP("NIMA private proof graph")
+    server = request_server("NIMA private proof graph", "nima_proof_", TOOLS)
     def register(operation, schema, description):
         async def call(request):
             return await anyio.to_thread.run_sync(lambda: service.invoke(operation, request.model_dump(mode="json")))
@@ -363,6 +363,11 @@ def create_server(service):
         server.tool(name=call.__name__, description=description)(call)
     for operation, (schema, description) in TOOLS.items():
         register(operation, schema, description)
+    @server.tool()
+    def nima_proof_tools() -> dict:
+        """Discover every private proof operation, typed contract, limits and continuation."""
+        from .tool_usage import private_catalog
+        return private_catalog(TOOLS)
     return server
 
 

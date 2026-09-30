@@ -91,3 +91,24 @@ def test_extraction_rejects_fabricated_region_and_records_failure(tmp_path):
         assert len(store.records("ExecutionReceipt", corpus_id="papers", project_id="project-a")) == 1
     finally:
         store.close()
+
+
+def test_candidate_ontology_feedback_identifies_bad_edge_and_type(tmp_path):
+    import pytest
+    from nima_semantica.graph_extraction import CandidateOntologyError
+    store = GraphStore(tmp_path)
+    try:
+        region = source_region(store)
+        req = request(store, region).model_copy(update={"ontology_profile":"literature_review@1.0.0"})
+        bad = GraphExtractionCandidate(nodes=(
+            ExtractedNode(node_id="claim", node_type="claim", source_region_ids=(region.id,)),
+            ExtractedNode(node_id="method", node_type="method", source_region_ids=(region.id,))),
+            edges=(ExtractedEdge(edge_id="wrong-endpoint", relation="about", source_id="claim", target_id="method", source_region_ids=(region.id,)),))
+        service = GraphExtractionService(store)
+        with pytest.raises(CandidateOntologyError, match="wrong-endpoint.*Target type 'method'.*'about'"):
+            service.prepare_candidate(req, bad)
+        result = service.execute(req, lambda _: bad)
+        assert result.status == "failed" and result.diagnostics[0]["edge_id"] == "wrong-endpoint"
+        assert not store.records("GraphArtifactProposal")
+    finally:
+        store.close()

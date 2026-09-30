@@ -30,6 +30,7 @@ class PublicToolDescriptor(StrictModel):
     examples: tuple[dict, ...] = ()
     boundary: str
     canvas_path: str | None = None
+    usage: dict = Field(default_factory=dict)
 
 
 # This is the approved inventory, not a dispatch registry. Add schemas only when
@@ -193,7 +194,13 @@ def public_tool_catalog() -> tuple[PublicToolDescriptor, ...]:
             details = dict(implementation="implemented",visual_approval="approved",contract_version="11",
                 input_schema=PassResearchRequest.model_json_schema(),output_schema=ToolResult.model_json_schema(),
                 examples=({"research":{"mode":"preview"}},),canvas_path="examples/langflow_replacement/deep_research_simple.json")
-        tools.append(PublicToolDescriptor(tool_id=tool_id, name=name, description=description, boundary=boundary, **details))
+        from .tool_usage import usage
+        from .tool_examples import execution_example
+        example = execution_example(tool_id)
+        if example is not None:
+            details["examples"] = (*details.get("examples", ()), example)
+        tools.append(PublicToolDescriptor(tool_id=tool_id, name=name, description=description, boundary=boundary,
+            usage=usage(tool_id, details.get("input_schema") or {}), **details))
     return tuple(tools)
 
 

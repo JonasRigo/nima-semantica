@@ -4,6 +4,7 @@ from .models import identity
 from .okf_contracts import EvidenceReference, OKFDelta, OKFNode, OKFEdge
 from .ontology_services import OntologyService
 from .source_corpus import SourceRegion
+from .source_quality import evidence_locator
 
 
 def reference_graph_delta(raw, context, store):
@@ -37,7 +38,7 @@ def reference_graph_delta(raw, context, store):
             region = SourceRegion.model_validate(record.content)
             ref = EvidenceReference(corpus_id=region.corpus_id, project_id=region.project_id,
                 artifact_id=region.artifact_id, region_id=region_id, source_revision=region.source_revision,
-                content_hash=region.artifact_id, locator={"start": region.start, "end": region.end},
+                content_hash=region.artifact_id, locator=evidence_locator(region),
                 quotation=region.text if len(region.text) <= 20_000 else None)
             if validate_reference(store, ref, corpus_id=request.corpus_id,
                                   project_id=request.project_id, target_id=request.request_id):

@@ -51,6 +51,7 @@ class DocumentIngestionService:
         *,
         registry_revision: str,
         pdf_normalizer=None,
+        normalized_result=None,
         expected_store_revision: str | None = None,
     ) -> DocumentIngestionResult:
         self.sources.register_source(
@@ -58,7 +59,7 @@ class DocumentIngestionService:
             registry_revision=registry_revision,
             expected_store_revision=expected_store_revision,
         )
-        text, diagnostics = normalize(data, descriptor.name, pdf_normalizer)
+        text, diagnostics = normalized_result if normalized_result is not None else normalize(data, descriptor.name, pdf_normalizer)
         normalized_bytes = text.encode("utf-8")
         normalized_id = hashlib.sha256(normalized_bytes).hexdigest()
         normalized_envelope = ArtifactEnvelope(
@@ -69,12 +70,15 @@ class DocumentIngestionService:
             corpus_id=descriptor.corpus_id,
             project_id=descriptor.project_id,
             source_revision=descriptor.source_revision,
-            content={"policy": "nima-normalize-v1", "source_id": descriptor.source_id},
+            content={"policy": "nima-normalize-v1", "source_id": descriptor.source_id, **descriptor.metadata},
             source_artifact_ids=(descriptor.artifact_id,),
         )
         if normalized_id != descriptor.artifact_id:
+            existing_normalized = self.artifacts.registry.resolve(normalized_id,
+                corpus_id=descriptor.corpus_id, project_id=descriptor.project_id, exact_scope=True)
             self.artifacts.publish(
-                normalized_bytes, normalized_envelope, registry_revision=registry_revision,
+                normalized_bytes, normalized_envelope,
+                registry_revision=existing_normalized.registry_revision if existing_normalized else registry_revision,
             )
 
         document = Record(
@@ -86,7 +90,7 @@ class DocumentIngestionService:
             kind="NormalizedDocument", corpus_id=descriptor.corpus_id, project_id=descriptor.project_id,
             parents=(document.id,),
             content={"artifact_id": normalized_id, "policy": "nima-normalize-v1",
-                     "diagnostics": diagnostics},
+                     "diagnostics": diagnostics, **descriptor.metadata},
         )
         selected = regions(text, normalized_id, document.id, descriptor.corpus_id, project_id=descriptor.project_id)
         if not selected and text.strip():
@@ -96,6 +100,15 @@ class DocumentIngestionService:
             self._put_idempotent(normalized)
         region_ids = []
         for item in selected:
+            regional_diagnostics = diagnostics
+            diagnostic_links = {}
+            if len(diagnostics) > 1024:
+                start, end = item.content["start"], item.content["end"]
+                regional_diagnostics = [d for d in diagnostics
+                    if not (type(d.get("start")) is int and type(d.get("end")) is int)
+                    or (d["start"] < end and d["end"] > start)]
+                diagnostic_links = {"normalization_record_id": normalized.id,
+                                    "document_diagnostic_count": len(diagnostics)}
             region = SourceRegion(
                 source_id=descriptor.source_id,
                 corpus_id=descriptor.corpus_id,
@@ -105,7 +118,7 @@ class DocumentIngestionService:
                 source_revision=descriptor.source_revision,
                 start=item.content["start"], end=item.content["end"],
                 ordinal=item.content["ordinal"], text=item.content["text"],
-                metadata={"normalization_diagnostics": diagnostics},
+                metadata={"normalization_diagnostics": regional_diagnostics, **diagnostic_links, **descriptor.metadata},
             )
             region_ids.append(self.sources.register_region(region, parent_ids=(document_record_id,)))
 
@@ -116,6 +129,14 @@ class DocumentIngestionService:
             "region_ids": region_ids,
         }
         receipt_id = identity(receipt_payload)
+        # Dense mathematics can contain thousands of notation diagnostics.
+        # Keep every diagnostic in the immutable NormalizedDocument; reference
+        # that complete record in bounded receipts/results instead of truncating
+        # or rejecting an otherwise valid long source.
+        reported_diagnostics = diagnostics if len(diagnostics) <= 1024 else [{
+            "kind": "normalization_diagnostics_reference", "record_id": normalized.id,
+            "diagnostic_count": len(diagnostics), "complete": True,
+            "message": "Full diagnostics are preserved in the referenced NormalizedDocument record."}]
         execution_receipt = ExecutionReceipt(
             receipt_id=receipt_id,
             operation_id=receipt_payload["operation_id"],
@@ -126,7 +147,7 @@ class DocumentIngestionService:
             output_ids=(normalized_id, *region_ids),
             source_revision=descriptor.source_revision,
             status="completed",
-            diagnostics=tuple(diagnostics),
+            diagnostics=tuple(reported_diagnostics),
             metadata={"source_id": descriptor.source_id},
         )
         self.receipts.record(execution_receipt)
@@ -136,7 +157,7 @@ class DocumentIngestionService:
             document_record_id=document_record_id,
             normalized_artifact_id=normalized_id,
             region_ids=tuple(region_ids),
-            diagnostics=tuple(diagnostics),
+            diagnostics=tuple(reported_diagnostics),
             receipt_id=receipt_id,
         )
 

@@ -10,7 +10,7 @@ from nima_semantica.component_contracts import manifest_for_component
 class ConfiguredModel(Component):
     name = "ConfiguredModel"
     display_name = "NIMA Configured Model"
-    description = "Native Anthropic, Gemini or Ollama model from the installation profile."
+    description = "Provider-aware OpenAI, OpenRouter, compatible, Anthropic, Gemini or Ollama model; embeddings are configured separately."
     nima_manifest = manifest_for_component("ConfiguredModel")
     inputs = [StrInput(name="profile_json", display_name="Model profile", value="{}"),
               SecretStrInput(name="api_key", display_name="Model credential", value="", required=False)]

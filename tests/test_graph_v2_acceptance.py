@@ -252,7 +252,8 @@ def test_extraction_and_embedding_do_not_send_out_of_scope_text_to_provider(stor
     result = EmbeddingIndexService(store).embed_and_index(EmbeddingIndexRequest(corpus_id="papers",
         region_ids=(region.id,), manifest=manifest), Provider())
     assert result.status == "failed"
-    assert result.diagnostics == ({"code": "ConflictError"},)
+    assert result.diagnostics[0]["code"] == "ConflictError"
+    assert result.diagnostics[0]["message"]
     assert not store.records("EmbeddingBatch", corpus_id="papers")
     assert store.records("ExecutionReceipt", corpus_id="papers")[0][1].content["status"] == "failed"
     request = GraphExtractionRequest(corpus_id="papers", project_id="authorized", graph_revision=store.graph_revision("papers", "authorized"),

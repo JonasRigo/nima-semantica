@@ -63,7 +63,7 @@ class InspectableStage(Component):
     async def result_data(self) -> Data:
         if not hasattr(self, "_stage_task"):
             # Shared task prevents concurrent preview branches from duplicating a write.
-            self._stage_task = asyncio.create_task(self.run())
+            self._stage_task = asyncio.create_task(self._checked_run())
         value = await self._stage_task
         raw = getattr(self, "raw_response", None)
         properties = getattr(raw, "properties", None)
@@ -81,6 +81,18 @@ class InspectableStage(Component):
                 },
             }
         return Data(data=value)
+
+    async def _checked_run(self):
+        # Propagate a rejected public request through the canvas without executing
+        # downstream services. Do not catch internal/model/operator failures here.
+        from nima_semantica.request_diagnostics import is_request_rejection
+        for field in self.inputs:
+            value = getattr(self, field.name, None)
+            if isinstance(value, Data):
+                value = value.data
+            if is_request_rejection(value):
+                return value
+        return await self.run()
 
     async def preview_message(self) -> Message:
         return Message(
@@ -105,3 +117,17 @@ class InspectableStage(Component):
             [],
         )
         return DataFrame(rows)
+
+
+class RequestFields(InspectableStage):
+    """Public input parsing only; errors become inert downstream envelopes."""
+
+    async def _checked_run(self):
+        from pydantic import ValidationError
+        from nima_semantica.request_diagnostics import invalid_request
+        try:
+            # Raw public requests must always be parsed; they cannot impersonate
+            # an internal rejection envelope to bypass input validation.
+            return await self.run()
+        except (ValidationError, ValueError, TypeError) as exc:
+            return invalid_request(self.display_name, exc)

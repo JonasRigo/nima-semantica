@@ -4,7 +4,7 @@ from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.source_tools import SourceToolContext, project_sources
 from nima_semantica.tool_contracts import ToolResult
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -20,7 +20,7 @@ class BuildSourceProjection(BaseComponent):
         BoolInput(name="allow_corpus_writes", display_name="Allow projection writes (operator)", value=False),
     ]
 
-    async def run(self):
+    def run_sync(self):
         incoming = ToolResult.model_validate(_value(self.payload))
         context = SourceToolContext(corpus_id=self.corpus_id, project_id=self.project_id or None,
             actor=self.actor, allow_corpus_writes=self.allow_corpus_writes)

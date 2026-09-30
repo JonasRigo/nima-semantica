@@ -11,7 +11,7 @@ from nima_semantica.providers import ModelManifest, completion_envelope
 from nima_semantica.symbolic_transport import configured_symbolic_worker
 from nima_semantica.tool_contracts import ToolResult
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -39,7 +39,7 @@ class ReviewResearch(BaseComponent):
         StrInput(name="model_manifest_json",display_name="Model identity JSON (operator)",value="{}",advanced=True),
         HandleInput(name="model",display_name="Review language model (operator)",input_types=["LanguageModel"],required=False)]
 
-    async def run(self):
+    def run_sync(self):
         policy = getattr(self,"policy",None)
         if policy and _value(policy).get("policy_digest") != POLICY_DIGEST:
             raise ValueError("canvas policy differs from pinned controller policy")

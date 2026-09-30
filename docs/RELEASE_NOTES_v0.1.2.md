@@ -21,7 +21,9 @@ This release improves source ingestion, agent-facing tool contracts and consolid
 
 See [v0.1.2 qualification](PLATFORM_SUPPORT_v0.1.2.md) for exact candidate evidence and remaining release gates. Recorded live campaigns include the Pauli consolidation and a 20-source literature graph; the latter contains explicitly deferred regions and unverified scientific proposals.
 
-The setup wizard preserves independent LLM and embedding choices, native Anthropic/Gemini/Ollama adapters, and OpenAI-compatible endpoints including local servers. Live agentic qualification uses OpenRouter; local Ollama is qualified for embeddings, not for the capabilities of arbitrary local chat models. Native Anthropic/Gemini live qualification and improved responsiveness/context budgeting for slow local chat remain limitations unless separately qualified; configuration and adapter tests are not live API certification.
+The setup wizard preserves independent LLM and embedding choices, native Anthropic/Gemini/Ollama adapters, and OpenAI-compatible endpoints including local servers. Context preflight, configurable SDK timeouts and off-event-loop tool execution improve local-chat failure feedback and responsiveness without discarding evidence or changing providers. These safeguards do not make a weak local model capable of agentic work.
+
+Live provider qualification targets OpenRouter, including Anthropic and Gemini models through that API, with local Ollama embeddings. Direct native Anthropic/Gemini APIs have adapter tests, not live certification; testing their models through OpenRouter does not qualify the direct APIs. See the qualification report for the exact tested models and results.
 
 ## Upgrade
 

@@ -29,6 +29,8 @@ class ModelProfile(Config):
     container_url: str = ""
     credential: str = "NIMA_MODEL_API_KEY"
     max_tokens: int = Field(default=8192, ge=1)
+    context_window: int | None = Field(default=None, ge=512)
+    request_timeout_seconds: float = Field(default=180, ge=1, le=3600)
     parameters: dict = Field(default_factory=dict)
 
     @model_validator(mode="before")
@@ -41,9 +43,19 @@ class ModelProfile(Config):
                 raise ValueError("Unsupported provider; use compatible for an OpenAI-compatible endpoint")
             value.setdefault("base_url", MODEL_ENDPOINTS[provider])
             value.setdefault("credential", "" if provider == "ollama" else "NIMA_MODEL_API_KEY")
+            if provider == "ollama" and value.get('context_window') is None:
+                value['context_window'] = value.get('parameters', {}).get('num_ctx', 32768)
             if not value["base_url"]:
                 raise ValueError("A compatible provider requires an explicit base_url")
         return value
+
+    @model_validator(mode='after')
+    def generation_limits(self):
+        if self.context_window is not None and self.max_tokens + 1024 >= self.context_window:
+            raise ValueError('Context window must leave room for input, framing and max_tokens output')
+        if self.provider == 'ollama' and 'num_ctx' in self.parameters and self.parameters['num_ctx'] != self.context_window:
+            raise ValueError('Ollama num_ctx must match context_window')
+        return self
 
 
 class EmbeddingProfile(Config):

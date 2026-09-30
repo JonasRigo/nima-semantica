@@ -5,7 +5,7 @@ from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.flow_adapters import AdapterContext, retrieve_context
 from nima_semantica.workflow_contracts import GraphRetrievalPolicy
 from nima_semantica.orchestration.langflow.adapter_support import native, configured_store, EmbeddingProvider
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent
 
 
 class GraphRetrievalNormalizer(BaseComponent):
@@ -28,7 +28,7 @@ class GraphRetrievalNormalizer(BaseComponent):
         Output(name="context_out", display_name="NIMA context", method="context_data", group_outputs=True),
     ]
 
-    async def run(self):
+    def run_sync(self):
         context = AdapterContext.model_validate(native(self.context))
         provider = EmbeddingProvider(self.embeddings, native(self.embedding_manifest))
         with configured_store() as store:

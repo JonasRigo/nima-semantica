@@ -5,7 +5,7 @@ from lfx.schema import Message, DataFrame
 from nima_semantica.graph_analysis import AnalyzeGraphRequest,AnalyzeGraphContext,analyze_graph,POLICY_DIGEST
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent,handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent,handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -25,7 +25,7 @@ class AnalyzeGraph(BaseComponent):
         IntInput(name="max_rounds",display_name="Maximum inference rounds (operator)",value=64),
         IntInput(name="timeout_seconds",display_name="Inference timeout (operator)",value=30)]
 
-    async def run(self):
+    def run_sync(self):
         if getattr(self,"policy",None) and _value(self.policy).get("policy_digest")!=POLICY_DIGEST:
             raise ValueError("canvas policy differs from native policy")
         request=AnalyzeGraphRequest.model_validate(_value(self.payload))

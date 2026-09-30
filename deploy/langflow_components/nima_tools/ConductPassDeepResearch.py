@@ -10,7 +10,7 @@ from nima_semantica.deep_research_passes import PassResearchRequest, deep_resear
 from nima_semantica.models import AcquisitionPolicy, canonical
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
 from nima_semantica.orchestration.langflow.pdf_client import PdfNormalizerClient
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 from nima_semantica.paper_discovery import PaperDiscoveryPolicy
 from nima_semantica.providers import ModelManifest, completion_envelope
@@ -43,7 +43,7 @@ class ConductPassDeepResearch(BaseComponent):
         StrInput(name="model_manifest_json", display_name="Model identity JSON (operator)", value="{}", advanced=True),
         HandleInput(name="model", display_name="Review language model (operator)", input_types=["LanguageModel"], required=False)]
 
-    async def run(self):
+    def run_sync(self):
         packet = PassResearchRequest.model_validate(_value(self.payload))
         paper = getattr(self, "paper_discovery", None)
         stock = getattr(self, "stock_arxiv", None)
@@ -71,7 +71,7 @@ class ConductPassDeepResearch(BaseComponent):
         def check_pdf_worker():
             return PdfNormalizerClient(self.pdf_url, self.pdf_token_file).health()
         with configured_store(required=False) as store:
-            result = await asyncio.to_thread(deep_research_passes, store, packet, context,
+            result = deep_research_passes(store, packet, context,
                 model=invoke if language_model is not None else None,
                 arxiv_search=(lambda query: stock.invoke({"query": query})) if stock else None,
                 paper_search=(lambda provider, query: paper.invoke({"provider": provider, "query": query})) if paper else None,

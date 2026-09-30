@@ -5,7 +5,7 @@ from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.providers import ModelManifest, strict_json_object
 from nima_semantica.research_retrieval import ResearchRetrievalRequest, ResearchRetrievalContext, retrieve_research_context
 from nima_semantica.orchestration.langflow.adapter_support import configured_store, EmbeddingProvider
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -25,7 +25,7 @@ class RetrieveResearchContext(BaseComponent):
         StrInput(name="manifest_json", display_name="Pinned embedding manifest (operator)", value="{}",
             info="Must exactly match the indexed provider/model/revision/parameters/dimension/normalization. Never include credentials.")]
 
-    async def run(self):
+    def run_sync(self):
         request = ResearchRetrievalRequest.model_validate(_value(self.payload))
         context = ResearchRetrievalContext(corpus_id=self.corpus_id, project_id=self.project_id or None,
             actor=self.actor, allow_embeddings=self.allow_embeddings, allow_attempt_writes=self.allow_attempt_writes)

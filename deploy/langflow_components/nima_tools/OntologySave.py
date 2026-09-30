@@ -3,7 +3,7 @@ from lfx.io import BoolInput, StrInput
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.ontology_tools import OntologyContext, SaveOntologyRequest, save_ontology
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -20,7 +20,7 @@ class OntologySave(BaseComponent):
         BoolInput(name="allow_writes", display_name="Allow ontology writes (operator)", value=False),
     ]
 
-    async def run(self):
+    def run_sync(self):
         payload = _value(self.payload)
         request = SaveOntologyRequest.model_validate(payload["request"])
         context = OntologyContext(corpus_id=self.corpus_id, project_id=self.project_id or None,

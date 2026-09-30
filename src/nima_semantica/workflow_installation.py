@@ -129,7 +129,8 @@ def configure_flow(flow, name, installation, corpus, project):
         profile = installation.overrides.get(role, installation.overrides.get(name, installation.llm))
         wire_model(flow, node, field, profile, role)
         manifest = {"provider": profile.provider, "model": profile.model, "revision": profile.model,
-                    "parameters": {"max_tokens": profile.max_tokens, **profile.parameters}}
+                    "parameters": {"max_tokens": profile.max_tokens, **profile.parameters,
+                        "context_window": profile.context_window, "request_timeout_seconds": profile.request_timeout_seconds}}
         template = node["data"]["node"]["template"]
         if "model_manifest_json" in template:
             template["model_manifest_json"]["value"] = json.dumps(manifest)

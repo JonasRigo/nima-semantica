@@ -7,7 +7,7 @@ from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.flow_adapters import input_context
 from nima_semantica.normalization_contracts import FieldMapping
 from nima_semantica.orchestration.langflow.adapter_support import native, readable, configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent
 
 
 class InputNormalizer(BaseComponent):
@@ -35,7 +35,7 @@ class InputNormalizer(BaseComponent):
         Output(name="context", display_name="NIMA context", method="context_data", group_outputs=True),
     ]
 
-    async def run(self):
+    def run_sync(self):
         source = native(self.source_bindings) or {}
         with configured_store(required=False) as store:
             revision = store.graph_revision(self.corpus_id, self.project_id or None) if store else None

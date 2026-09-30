@@ -5,7 +5,7 @@ from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.flow_adapters import AdapterContext, normalize_output
 from nima_semantica.normalization_contracts import FieldMapping
 from nima_semantica.orchestration.langflow.adapter_support import native, configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent
 
 
 class OutputNormalizer(BaseComponent):
@@ -28,7 +28,7 @@ class OutputNormalizer(BaseComponent):
         Output(name="preview", display_name="Preview", method="preview_message", group_outputs=True),
     ]
 
-    async def run(self):
+    def run_sync(self):
         context = AdapterContext.model_validate(native(self.context))
         with configured_store(required=False) as store:
             output = normalize_output(native(self.input_value), context, preset=self.preset, store=store,

@@ -445,6 +445,8 @@ def main(argv=None):
     install.add_argument("--base-url"); install.add_argument("--data-root")
     install.add_argument("--credential", help="Credential environment variable name; '-' means no authentication")
     install.add_argument("--max-tokens", type=int, default=8192)
+    install.add_argument('--context-window', type=int, help='Model context tokens, including input and reserved output; Ollama default: 32768')
+    install.add_argument('--model-timeout', type=float, help='Provider request timeout in seconds (default: 180)')
     install.add_argument("--model-parameters", help="Provider-specific generation parameters as a JSON object")
     install.add_argument("--embedding-provider", choices=["none", "ollama", "openai", "compatible"])
     install.add_argument("--embedding-model"); install.add_argument("--embedding-base-url")

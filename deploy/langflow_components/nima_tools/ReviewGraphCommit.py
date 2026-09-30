@@ -7,7 +7,7 @@ from lfx.schema import Message
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.graph_commit import OKFCommitApproval
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 from nima_semantica.project_update import UpdateProjectContext, UpdateProjectRequest, update_project_graph
 
@@ -27,7 +27,7 @@ class ReviewGraphCommit(BaseComponent):
         BoolInput(name="allow_audit_writes", display_name="Allow commit receipts (operator)", value=False),
         BoolInput(name="allow_projection_writes", display_name="Allow projection rebuild (operator)", value=False)]
 
-    async def run(self):
+    def run_sync(self):
         prior = _value(self.payload)
         data = prior.get("data", {})
         proposal = data.get("project_graph_prepare_request")

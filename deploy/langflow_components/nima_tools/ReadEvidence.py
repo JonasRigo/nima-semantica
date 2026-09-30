@@ -5,7 +5,7 @@ from lfx.schema import DataFrame, Message
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.evidence_reader import ReadEvidenceRequest, ReadEvidenceContext, read_evidence
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -19,7 +19,7 @@ class ReadEvidence(BaseComponent):
         StrInput(name="project_id", display_name="Authorized project (operator)", value="research",
             info="Empty means corpus-only; private artifacts from other projects are never read.")]
 
-    async def run(self):
+    def run_sync(self):
         request = ReadEvidenceRequest.model_validate(_value(self.payload))
         context = ReadEvidenceContext(corpus_id=self.corpus_id, project_id=self.project_id or None)
         with configured_store(required=False) as store:

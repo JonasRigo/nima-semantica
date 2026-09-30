@@ -356,6 +356,9 @@ def simple_deep_research(store, request, context, *, model=None, arxiv_rows=(), 
     except (Exception, CancelledError, KeyboardInterrupt) as exc:
         interrupted = exc if isinstance(exc, (CancelledError, KeyboardInterrupt)) else None
         data["error"] = type(exc).__name__
+        from .model_runtime import model_diagnostic
+        if diagnostic := model_diagnostic(exc):
+            data["model_diagnostic"] = diagnostic
         data["diagnostic"] = str(exc)[:2000]
         status = "failed"
     terminal = "interrupted" if interrupted else status

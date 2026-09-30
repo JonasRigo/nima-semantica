@@ -119,6 +119,14 @@ class InspectableStage(Component):
         return DataFrame(rows)
 
 
+class BlockingStage(InspectableStage):
+    """Controllers own synchronous IO and store lifetime off the server loop."""
+
+    async def run(self):
+        from nima_semantica.model_runtime import run_blocking
+        return await run_blocking(self.run_sync)
+
+
 class RequestFields(InspectableStage):
     """Public input parsing only; errors become inert downstream envelopes."""
 

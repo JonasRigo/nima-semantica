@@ -311,6 +311,9 @@ def substantiate_graph_snapshot(store,request,context,*,model=None):
     except (Exception,CancelledError,KeyboardInterrupt) as exc:
         interrupted=exc if isinstance(exc,(CancelledError,KeyboardInterrupt)) else None
         data["error"]=type(exc).__name__
+        from .model_runtime import model_diagnostic
+        if diagnostic := model_diagnostic(exc):
+            data["model_diagnostic"] = diagnostic
         if isinstance(exc,RejectedAction):data["diagnostic"]=str(exc)
         status="failed"
     if controller:

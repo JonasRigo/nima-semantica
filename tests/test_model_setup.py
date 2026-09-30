@@ -48,6 +48,7 @@ def test_interactive_local_compatible_llm_and_embeddings(tmp_path, monkeypatch):
     from nima_semantica import workflow_installation
     monkeypatch.setattr(workflow_installation, 'model_inventory', lambda: {})
     answers = iter(['compatible','cheap-local','http://localhost:1234/v1','-',
+                    '', '',
                     'compatible','local-embed','http://localhost:8080/v1','revision-1','768','-'])
     monkeypatch.setattr('builtins.input', lambda prompt: next(answers))
     path = tmp_path/'config.json'
@@ -108,7 +109,10 @@ def test_compatible_route_uses_chat_completions_not_model_name_inference(monkeyp
         assert 'seed' not in payload
         return httpx.Response(200,json={'id':'fixture','choices':[{'index':0,'message':{'role':'assistant','content':'ok'},'finish_reason':'stop'}],
             'usage':{'prompt_tokens':1,'completion_tokens':1,'total_tokens':2}})
-    monkeypatch.setattr(langchain_openai,'ChatOpenAI',lambda **kw:ChatOpenAI(**kw,http_client=httpx.Client(transport=httpx.MockTransport(reply))))
+    class MockChat(ChatOpenAI):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs, http_client=httpx.Client(transport=httpx.MockTransport(reply)))
+    monkeypatch.setattr(langchain_openai,'ChatOpenAI',MockChat)
     try:
         import lfx.base.models.provider_ssrf as ssrf
     except ImportError:

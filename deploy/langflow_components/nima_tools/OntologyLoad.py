@@ -3,7 +3,7 @@ from lfx.io import StrInput
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.ontology_tools import LoadOntologyRequest, OntologyContext, load_ontology
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -18,7 +18,7 @@ class OntologyLoad(BaseComponent):
             info="Empty means corpus-only; never lists other projects."),
     ]
 
-    async def run(self):
+    def run_sync(self):
         payload = _value(self.payload)
         if payload.get("request_error"):
             from nima_semantica.tool_contracts import ToolResult

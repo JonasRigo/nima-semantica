@@ -5,7 +5,7 @@ from nima_semantica.providers import ModelManifest, strict_json_object
 from nima_semantica.source_tools import SourceToolContext, embed_sources
 from nima_semantica.tool_contracts import ToolResult
 from nima_semantica.orchestration.langflow.adapter_support import configured_store, EmbeddingProvider
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -25,7 +25,7 @@ class EmbedSourceRegions(BaseComponent):
             info="Set provider, model, revision, parameters, dimension, and normalization to match the connected model; never include credentials."),
     ]
 
-    async def run(self):
+    def run_sync(self):
         incoming = ToolResult.model_validate(_value(self.payload))
         context = SourceToolContext(corpus_id=self.corpus_id, project_id=self.project_id or None,
             actor=self.actor, allow_corpus_writes=self.allow_corpus_writes, allow_embeddings=self.allow_embeddings)

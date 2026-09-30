@@ -181,10 +181,13 @@ def _attempt(store, context, stage, operation_id, payload, work, *, run_id=None,
             status="partial" if previous is not None else "failed",
             data={**(previous.data if previous else {}), "failed_stage": stage, "index_ready": False},
             receipts=(*(previous.receipt_ids if previous else ()), identifier))
-        from .ingestion_diagnostics import EmbeddingStageError
+        from .ingestion_diagnostics import EmbeddingStageError, preparation_diagnostic
         if isinstance(exc, EmbeddingStageError):
             result = result.model_copy(update={"diagnostics": tuple(exc.diagnostics),
                 "data": {**result.data, "retry_hint": "After correcting the cause, use CLI --retry for a new receipted attempt; existing provenance is retained."}})
+        elif stage == "source_preparation" and (detail := preparation_diagnostic(exc)):
+            result = result.model_copy(update={"diagnostics": (detail,),
+                "data": {**result.data, "retry_hint": "After correcting the cause, use CLI --retry or a new operation_id; the failed attempt is retained."}})
         receipts.record(ExecutionReceipt(receipt_id=identifier, operation_id=operation_id, stage=stage,
             **_scope(context), run_id=run_id, status="interrupted" if interrupted else "failed",
             error="source pipeline stage failed", diagnostics=result.diagnostics, tool_version="source-tools-v1",

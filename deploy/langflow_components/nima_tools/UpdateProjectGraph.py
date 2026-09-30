@@ -6,7 +6,7 @@ from nima_semantica.project_update import UpdateProjectRequest,UpdateProjectCont
 from nima_semantica.graph_commit import OKFCommitApproval
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent,handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent,handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -27,7 +27,7 @@ class UpdateProjectGraph(BaseComponent):
         IntInput(name="max_regions",display_name="Maximum indexed regions (operator)",value=100000),
         IntInput(name="max_tokens",display_name="Maximum lexical tokens (operator)",value=1000000)]
 
-    async def run(self):
+    def run_sync(self):
         if getattr(self,"policy",None) and _value(self.policy).get("policy_digest")!=POLICY_DIGEST:raise ValueError("canvas policy differs from native policy")
         request=UpdateProjectRequest.model_validate(_value(self.payload))
         raw=json.loads(self.approval_json)

@@ -5,7 +5,7 @@ from lfx.schema import Message, DataFrame
 from nima_semantica.research_analysis import SaveAnalysisRequest, SaveAnalysisContext, save_research_analysis
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 
 class SaveResearchAnalysis(BaseComponent):
@@ -17,7 +17,7 @@ class SaveResearchAnalysis(BaseComponent):
         StrInput(name="corpus_id",display_name="Authorized corpus (operator)",value="papers"),
         StrInput(name="project_id",display_name="Authorized project (operator)",value="research"),
         BoolInput(name="allow_artifact_writes",display_name="Allow report and audit publication (operator)",value=False)]
-    async def run(self):
+    def run_sync(self):
         request=SaveAnalysisRequest.model_validate(_value(self.payload))
         context=SaveAnalysisContext(corpus_id=self.corpus_id,project_id=self.project_id,
             allow_artifact_writes=self.allow_artifact_writes)

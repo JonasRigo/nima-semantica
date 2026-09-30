@@ -22,8 +22,18 @@ def model_profile(args, *, provider=None, model=None):
     if provider in {"openrouter", "openai", "anthropic", "gemini"} and not credential:
         raise ValueError("Hosted native providers require a named credential environment variable")
     parameters = json.loads(args.model_parameters or "{}")
+    context_window = getattr(args, 'context_window', None)
+    timeout = getattr(args, 'model_timeout', None)
+    if interactive:
+        if context_window is None:
+            answer = input('LLM context window tokens (blank: 32768 for Ollama, otherwise provider default): ').strip()
+            context_window = int(answer) if answer else None
+        if timeout is None:
+            answer = input('LLM request timeout seconds (180): ').strip()
+            timeout = float(answer) if answer else 180
     return ModelProfile(provider=provider, model=model, base_url=base_url,
-                        credential=credential, parameters=parameters, max_tokens=args.max_tokens)
+                        credential=credential, parameters=parameters, max_tokens=args.max_tokens,
+                        context_window=context_window, request_timeout_seconds=180 if timeout is None else timeout)
 
 
 def embedding_profile(args):
@@ -59,6 +69,7 @@ def embedding_profile(args):
 def native_chat_model(profile, credential_value=None):
     """Construct the chosen native protocol; never route local traffic to cloud."""
     import os
+    from .model_runtime import guarded_model_class
     token = credential_value or (os.environ.get(profile.credential) if profile.credential else None)
     if hasattr(token, "get_secret_value"):
         token = token.get_secret_value()
@@ -67,7 +78,8 @@ def native_chat_model(profile, credential_value=None):
     endpoint = profile.container_url or profile.base_url
     options = dict(profile.parameters)
     reserved = {"model", "model_name", "base_url", "api_key", "anthropic_api_key", "google_api_key",
-                "anthropic_api_url", "client", "credentials", "client_kwargs", "http_client", "http_async_client"}
+                "anthropic_api_url", "client", "credentials", "client_kwargs", "http_client", "http_async_client",
+                "timeout", "request_timeout", "num_predict", "max_output_tokens", "max_tokens"}
     if reserved & options.keys():
         raise ValueError("Model parameters must not override provider, endpoint or credential routing")
     if profile.provider in {"openai", "openrouter", "compatible"}:
@@ -82,32 +94,35 @@ def native_chat_model(profile, credential_value=None):
             pass  # Core SDK usage has no Langflow dependency.
         else:
             transport = openai_compatible_client_kwargs(endpoint, default_url="https://api.openai.com/v1")
-        return ChatOpenAI(model=profile.model, api_key=token or "local", base_url=endpoint,
+        return guarded_model_class(ChatOpenAI, profile)(model=profile.model, api_key=token or "local", base_url=endpoint,
             max_tokens=profile.max_tokens, max_retries=0, use_responses_api=responses,
+            timeout=profile.request_timeout_seconds,
             model_kwargs=options, **transport)
     if profile.provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
-        class AnthropicModel(ChatAnthropic):
+        class AnthropicModel(guarded_model_class(ChatAnthropic, profile)):
             def bind_tools(self, tools, *, tool_choice=None, **kwargs):
                 return super().bind_tools(tools, tool_choice="any" if tool_choice == "required" else tool_choice, **kwargs)
         return AnthropicModel(model=profile.model, anthropic_api_key=token, anthropic_api_url=endpoint,
-            max_tokens=profile.max_tokens, max_retries=0, **options)
+            max_tokens=profile.max_tokens, max_retries=0, timeout=profile.request_timeout_seconds, **options)
     if profile.provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
-        class GeminiModel(ChatGoogleGenerativeAI):
+        class GeminiModel(guarded_model_class(ChatGoogleGenerativeAI, profile)):
             def bind_tools(self, tools, **kwargs):
                 kwargs.pop("parallel_tool_calls", None)
                 return super().bind_tools(tools, **kwargs)
         return GeminiModel(model=profile.model, google_api_key=token, base_url=endpoint,
-            max_output_tokens=profile.max_tokens, max_retries=0, vertexai=False, **options)
+            max_output_tokens=profile.max_tokens, max_retries=0, timeout=profile.request_timeout_seconds, vertexai=False, **options)
     if profile.provider == "ollama":
         from langchain_ollama import ChatOllama
-        class OllamaModel(ChatOllama):
+        class OllamaModel(guarded_model_class(ChatOllama, profile)):
             def bind_tools(self, tools, **kwargs):
                 # Ollama cannot enforce tool_choice or parallel-tool limits;
                 # NIMA still rejects anything other than one authorized call.
                 kwargs.pop("parallel_tool_calls", None)
                 return super().bind_tools(tools, **kwargs)
+        options.pop('num_ctx', None)
         return OllamaModel(model=profile.model, base_url=endpoint.rstrip('/').removesuffix('/v1'),
-            num_predict=profile.max_tokens, **options)
+            num_predict=profile.max_tokens, num_ctx=profile.context_window,
+            client_kwargs={'timeout': profile.request_timeout_seconds}, **options)
     raise ValueError("Not a native-protocol provider")

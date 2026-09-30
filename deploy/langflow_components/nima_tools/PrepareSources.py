@@ -4,7 +4,7 @@ from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.source_tools import PrepareSourcesRequest, SourceToolContext, prepare_sources
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
 from nima_semantica.orchestration.langflow.pdf_client import PdfNormalizerClient
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -24,7 +24,7 @@ class PrepareSources(BaseComponent):
         StrInput(name="pdf_token_file", display_name="PDF worker token file (operator)", value=""),
     ]
 
-    async def run(self):
+    def run_sync(self):
         request = PrepareSourcesRequest.model_validate(_value(self.payload))
         context = SourceToolContext(corpus_id=self.corpus_id, project_id=self.project_id or None,
             actor=self.actor, allow_corpus_writes=self.allow_corpus_writes, allow_pdf=self.allow_pdf)

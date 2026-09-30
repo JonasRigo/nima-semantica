@@ -10,7 +10,7 @@ from nima_semantica.source_corpus import SourceRegion
 from nima_semantica.evidence_contracts import validate_reference, build_promotion_proposal, commit_promotion, PromotionApproval
 from nima_semantica.okf_contracts import EvidenceReference, OKFNode
 from nima_semantica.models import identity
-from test_source_pipeline import store, pipeline, request, Provider
+from test_source_pipeline import store, pipeline, request, context, Provider
 from test_research_retrieval import retrieve, QueryProvider, MANIFEST
 from test_rewrite_audit_regressions import commit
 
@@ -19,6 +19,18 @@ TEXT = "The paper states a claim about Pauli operator propagation under explicit
 
 def fast_request(**kw):
     return request(preparation_mode="fast", sources=[{"name":"paper.md", "text":TEXT}], **kw)
+
+
+def test_short_fast_source_reports_limit_and_retains_failure(store):
+    from nima_semantica.source_tools import prepare_sources
+    req = request(preparation_mode="fast", sources=[{"name":"short.md", "text":"Private short text"}])
+    result = prepare_sources(store, req, context())
+    assert result.status == "failed"
+    assert result.diagnostics[0]["code"] == "sources.fast_text_insufficient"
+    assert "200" in result.diagnostics[0]["message"]
+    assert "Private" not in result.model_dump_json()
+    assert result.receipt_ids and not store.records("SourceDescriptor")
+    assert prepare_sources(store, req, context()) == result
 
 
 def test_fast_source_searchable_labelled_and_filterable(store):

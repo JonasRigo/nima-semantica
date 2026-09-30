@@ -52,7 +52,8 @@ def test_reference_nodes_and_internal_edges_are_unchanged(route):
     assert len(adapted["data"]["nodes"]) == len(original["data"]["nodes"]) + 3
     for name in ("InputNormalizer", "OutputNormalizer", "GraphRetrievalNormalizer"):
         code = by_id[name + "-nima-adapter"]["data"]["node"]["template"]["code"]["value"]
-        assert "async def run" in code
+        assert "BlockingStage as BaseComponent" in code
+        assert "def run_sync" in code
         assert "from nima_semantica" in code
 
 

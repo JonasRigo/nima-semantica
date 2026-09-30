@@ -5,7 +5,7 @@ from lfx.schema import Message, DataFrame
 from nima_semantica.verify_lean_tool import VerifyLeanRequest, VerifyLeanContext, verify_lean
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -21,7 +21,7 @@ class VerifyLean(BaseComponent):
         BoolInput(name="allow_audit_writes",display_name="Allow proof attempts and artifacts (operator)",value=False),
         HandleInput(name="verifier",display_name="Pinned Lean verifier (optional operator injection)",input_types=["LeanVerifier"],required=False)]
 
-    async def run(self):
+    def run_sync(self):
         request=VerifyLeanRequest.model_validate(_value(self.payload))
         context=VerifyLeanContext(corpus_id=self.corpus_id,project_id=self.project_id,
             allow_execution=self.allow_execution,allow_audit_writes=self.allow_audit_writes)

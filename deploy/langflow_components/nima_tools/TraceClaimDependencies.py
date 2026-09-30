@@ -5,7 +5,7 @@ from lfx.schema import Message,DataFrame
 from nima_semantica.claim_dependencies import TraceDependenciesRequest,TraceDependenciesContext,trace_claim_dependencies,POLICY_DIGEST
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent,handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent,handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -27,7 +27,7 @@ class TraceClaimDependencies(BaseComponent):
         IntInput(name="max_steps",display_name="Maximum traversal steps (operator)",value=10000),
         IntInput(name="timeout_seconds",display_name="Traversal timeout (operator)",value=30)]
 
-    async def run(self):
+    def run_sync(self):
         if getattr(self,"policy",None) and _value(self.policy).get("policy_digest")!=POLICY_DIGEST:
             raise ValueError("canvas policy differs from native policy")
         request=TraceDependenciesRequest.model_validate(_value(self.payload))

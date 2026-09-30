@@ -972,7 +972,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Inspectable explicit immutable-write boundary; preview cannot authorize a save.\"\"\"\nfrom lfx.io import BoolInput, StrInput\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.ontology_tools import OntologyContext, SaveOntologyRequest, save_ontology\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass OntologySave(BaseComponent):\n    name = \"OntologySave\"\n    display_name = \"Save Immutable Ontology\"\n    description = \"Revalidate, check operator permission, then atomically publish artifact, registry binding, and attempt receipt. No graph mutation.\"\n    nima_manifest = manifest_for_component(\"OntologySave\")\n    inputs = [handle(\"payload\", \"Request and validation\"),\n        StrInput(name=\"corpus_id\", display_name=\"Authorized corpus (operator)\", value=\"papers\"),\n        StrInput(name=\"project_id\", display_name=\"Authorized project (operator)\", value=\"research\",\n            info=\"Empty authorizes corpus scope only; never set from agent JSON.\"),\n        StrInput(name=\"actor\", display_name=\"Actor (operator)\", value=\"harness\"),\n        BoolInput(name=\"allow_writes\", display_name=\"Allow ontology writes (operator)\", value=False),\n    ]\n\n    async def run(self):\n        payload = _value(self.payload)\n        request = SaveOntologyRequest.model_validate(payload[\"request\"])\n        context = OntologyContext(corpus_id=self.corpus_id, project_id=self.project_id or None,\n            actor=self.actor, allow_writes=self.allow_writes)\n        # Never trust payload[\"validation\"]. It is informational, not a capability.\n        if request.mode == \"validate\":\n            return save_ontology(None, request, context).model_dump(mode=\"json\")\n        with configured_store(required=False) as store:\n            return save_ontology(store, request, context).model_dump(mode=\"json\")\n",
+                "value": "\"\"\"Inspectable explicit immutable-write boundary; preview cannot authorize a save.\"\"\"\nfrom lfx.io import BoolInput, StrInput\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.ontology_tools import OntologyContext, SaveOntologyRequest, save_ontology\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass OntologySave(BaseComponent):\n    name = \"OntologySave\"\n    display_name = \"Save Immutable Ontology\"\n    description = \"Revalidate, check operator permission, then atomically publish artifact, registry binding, and attempt receipt. No graph mutation.\"\n    nima_manifest = manifest_for_component(\"OntologySave\")\n    inputs = [handle(\"payload\", \"Request and validation\"),\n        StrInput(name=\"corpus_id\", display_name=\"Authorized corpus (operator)\", value=\"papers\"),\n        StrInput(name=\"project_id\", display_name=\"Authorized project (operator)\", value=\"research\",\n            info=\"Empty authorizes corpus scope only; never set from agent JSON.\"),\n        StrInput(name=\"actor\", display_name=\"Actor (operator)\", value=\"harness\"),\n        BoolInput(name=\"allow_writes\", display_name=\"Allow ontology writes (operator)\", value=False),\n    ]\n\n    def run_sync(self):\n        payload = _value(self.payload)\n        request = SaveOntologyRequest.model_validate(payload[\"request\"])\n        context = OntologyContext(corpus_id=self.corpus_id, project_id=self.project_id or None,\n            actor=self.actor, allow_writes=self.allow_writes)\n        # Never trust payload[\"validation\"]. It is informational, not a capability.\n        if request.mode == \"validate\":\n            return save_ontology(None, request, context).model_dump(mode=\"json\")\n        with configured_store(required=False) as store:\n            return save_ontology(store, request, context).model_dump(mode=\"json\")\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -1094,7 +1094,7 @@
             "metadata": {
               "nima_component_id": "ontology_save",
               "contract_version": "1",
-              "source_sha256": "f4dcd8c85215ef2d727689abb7d477ad807562510db52fedaf4d16348127aebc"
+              "source_sha256": "ace3166d203df9e9097643b89cd9e3b1530a77f535d01195cd502fd79cd9b6c6"
             },
             "tool_mode": false
           },
@@ -1244,7 +1244,7 @@
       "OntologySave": {
         "nima_component_id": "ontology_save",
         "contract_version": "1",
-        "source_sha256": "f4dcd8c85215ef2d727689abb7d477ad807562510db52fedaf4d16348127aebc"
+        "source_sha256": "ace3166d203df9e9097643b89cd9e3b1530a77f535d01195cd502fd79cd9b6c6"
       }
     }
   }

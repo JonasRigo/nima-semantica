@@ -9,7 +9,7 @@ from nima_semantica.deep_research_contracts import DeepResearchRequest
 from nima_semantica.models import AcquisitionPolicy, canonical
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
 from nima_semantica.orchestration.langflow.pdf_client import PdfNormalizerClient
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 from nima_semantica.paper_discovery import PaperDiscoveryPolicy
 from nima_semantica.providers import ModelManifest, completion_envelope
@@ -38,7 +38,7 @@ class SimpleDeepResearch(BaseComponent):
         StrInput(name="model_manifest_json", display_name="Model identity JSON (operator)", value="{}", advanced=True),
         HandleInput(name="model", display_name="Review language model (operator)", input_types=["LanguageModel"], required=False)]
 
-    async def run(self):
+    def run_sync(self):
         request = DeepResearchRequest.model_validate(_value(self.payload))
         stock = _value(getattr(self, "arxiv_packet", None)) if getattr(self, "arxiv_packet", None) else {}
         discovery = getattr(self, "paper_discovery", None)

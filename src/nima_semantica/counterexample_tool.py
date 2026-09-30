@@ -357,6 +357,9 @@ def search_counterexamples(store, request, context, *, model=None, worker=None):
     except (Exception, CancelledError, KeyboardInterrupt) as exc:
         interrupted = exc if isinstance(exc,(CancelledError,KeyboardInterrupt)) else None
         data["error"] = type(exc).__name__
+        from .model_runtime import model_diagnostic
+        if diagnostic := model_diagnostic(exc):
+            data["model_diagnostic"] = diagnostic
         status = "failed"
     if controller is not None:
         data.update(searches=controller.searches, context_packets=controller.context_packets, policy_digest=POLICY_DIGEST)

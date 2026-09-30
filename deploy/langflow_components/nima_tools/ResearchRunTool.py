@@ -6,7 +6,7 @@ from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.research_run_tool import ResearchRunContext, ResearchRunRequest, research_run
 from nima_semantica.tool_contracts import ToolResult
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
-from nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent, handle
+from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle
 from nima_semantica.orchestration.langflow.values import _value
 
 
@@ -29,7 +29,7 @@ class ResearchRunTool(BaseComponent):
         Output(name="table", display_name="Attempt history", method="table_data", group_outputs=True),
     ]
 
-    async def run(self):
+    def run_sync(self):
         request = ResearchRunRequest.model_validate(_value(self.payload))
         context = ResearchRunContext(corpus_id=self.corpus_id, project_id=self.project_id,
             actor=self.actor, allow_writes=self.allow_writes)

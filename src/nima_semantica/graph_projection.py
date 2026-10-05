@@ -205,9 +205,14 @@ class GraphProjectionService:
         return graph_revision == self.store.graph_revision(graph_revision.corpus_id, graph_revision.project_id)
 
     def _regions(self, request: GraphProjectionRequest) -> list[Record]:
-        return [record for _, record in self.store.records(
-            "SourceRegion", corpus_id=request.corpus_id, project_id=request.project_id
-        ) if record.project_id in (None, request.project_id)]
+        # Validate immutable records one at a time and retain only the original
+        # canonical ID and text consumed by indexing. Book parser diagnostics
+        # must not accumulate across thousands of regions.
+        from types import SimpleNamespace
+        return [SimpleNamespace(id=key, content={"text": record.content.get("text", "")})
+            for key, record in self.store.iter_records("SourceRegion",
+                corpus_id=request.corpus_id, project_id=request.project_id)
+            if record.project_id in (None, request.project_id)]
 
     def _source_revision(self, corpus_id: str) -> str:
         return str(self.store.embedding_revision(corpus_id))

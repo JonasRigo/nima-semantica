@@ -224,6 +224,8 @@ def consolidate_graph(store, request, context):
                 raise NimaError("New links must cite exact prepared evidence from their endpoints")
             key = "cl-" + identity((a, b, link.relation, link.rationale, link.region_ids))[:32]
             properties = {"rationale": link.rationale, "semantic_status": "harness_proposed_unverified"}
+            if profile.name == "beyond_iid_mathematics" and any(r.name.casefold() == link.relation.casefold() and r.necessary_dependency for r in profile.relation_types):
+                properties["dependency_scope"] = "explicit_condition" if link.relation.casefold() == "has_assumption" else "proof_specific"
             if any(provisional_object(nodes[k]) for k in (a, b)):
                 properties.update(preparation_quality=PROVISIONAL, warning=WARNING)
             edges[key] = OKFEdge(edge_id=key, relation=link.relation, source_id=nodes[a].ref, target_id=nodes[b].ref,

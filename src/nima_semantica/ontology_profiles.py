@@ -52,6 +52,6 @@ class OntologyProfile(StrictModel):
 def saved_profile(name="claim_obligation") -> OntologyProfile:
     """Immutable packaged profiles; custom profiles use the same JSON contract."""
     from importlib.resources import files
-    if name not in ("claim_obligation", "theorem_dependencies", "literature_evidence", "literature_review"):
+    if name not in ("claim_obligation", "theorem_dependencies", "literature_evidence", "literature_review", "beyond_iid_mathematics"):
         raise NimaError("unknown saved ontology profile")
     return OntologyProfile.model_validate_json(files("nima_semantica.profiles").joinpath(name + ".json").read_text())

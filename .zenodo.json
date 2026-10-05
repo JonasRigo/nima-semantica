@@ -1,6 +1,6 @@
 {
   "title": "NIMA-Semantica",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "upload_type": "software",
   "description": "NIMA-Semantica is a foundation for auditable scientific investigations with language models and coding-agent harnesses. Researchers compose specialized workflows visually in Langflow and expose them through the Model Context Protocol, while retaining control over research questions, interpretation and admission to the scientific record. A shared corpus preserves prepared source knowledge; a project knowledge graph records an investigation's claims, relationships and unresolved questions with their evidence and execution histories. Private calculation and proof graphs let the harness develop and inspect arguments separately from accepted project knowledge. Ontology-constrained extraction makes proposed scientific objects and relationships explicit, while retrieval, isolated computation and optional Lean verification retain their distinct scopes of evidence. The library provides a setup wizard, project and ingestion commands, portable research skills and an extensible workflow interface. Generated scientific results remain uncertified unless independently verified within a stated scope.",
   "creators": [
@@ -21,7 +21,7 @@
   ],
   "related_identifiers": [
     {
-      "identifier": "https://github.com/JonasRigo/nima-semantica/releases/tag/v0.1.2",
+      "identifier": "https://github.com/JonasRigo/nima-semantica/releases/tag/v0.1.3",
       "relation": "isIdenticalTo",
       "resource_type": "software"
     }

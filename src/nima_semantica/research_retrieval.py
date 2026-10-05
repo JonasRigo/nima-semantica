@@ -137,13 +137,19 @@ def _read_json(store, artifact):
 
 def _search(store, request, context, manifest, provider, configured_manifest):
     regions = {}
-    for key, record in store.records("SourceRegion", **_scope(context)):
+    for key, record in store.iter_records("SourceRegion", **_scope(context)):
         if record.project_id not in (None, context.project_id):
             continue
         region = SourceRegion.model_validate(record.content)
         if region.corpus_id != context.corpus_id or region.project_id != record.project_id:
             raise ConflictError("region payload scope differs")
-        regions[key] = region
+        # Keep only metadata consumed by preparation_quality/evidence_locator.
+        # Full immutable records are still decoded and integrity-checked above;
+        # repeated book conversion diagnostics must not accumulate in this view.
+        regions[key] = region.model_copy(update={"metadata": {
+            name: region.metadata[name] for name in (
+                "preparation_quality", "extraction_method", "acquisition_id", "provenance_artifact_id")
+            if name in region.metadata}})
     lexical_scores, vector_scores = {}, {}
     model = None
     if request.mode in ("lexical", "hybrid"):

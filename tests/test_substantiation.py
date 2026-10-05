@@ -112,7 +112,7 @@ def test_new_observation_or_assessment_invalidates_analysis(store,change):
     extra=copy.deepcopy(seq[1]);extra["arguments"]["correction_reason"]="Reconsider"
     if change=="read":extra=seq[0]
     if change=="retrieval":extra={"name":"retrieve_context","arguments":{"query":"claim obligation","purpose":"Seek counterevidence"}}
-    result=run(store,r,[*seq[:3],extra,seq[3]],max_actions=5,retrieval=MathRetrievalPolicy(enabled=True))
+    result=run(store,r,[*seq[:3],extra,seq[3]],max_actions=5,retrieval=MathRetrievalPolicy(mode="lexical",enabled=True))
     assert result.status=="failed" and "result" not in result.data
 
 
@@ -120,7 +120,7 @@ def test_real_retrieval_can_supply_previously_unattached_evidence(store):
     from nima_semantica.math_retrieval import MathRetrievalPolicy
     seed(store);r=region(store,"The appendix supplies the missing premise for the claim.")
     seq=[{"name":"retrieve_context","arguments":{"query":"appendix premise","purpose":"Seek subtle support or counterevidence"}},*actions(r)[1:]]
-    result=substantiate_graph_snapshot(store,request(store),context(retrieval=MathRetrievalPolicy(enabled=True)),model=Model(seq))
+    result=substantiate_graph_snapshot(store,request(store),context(retrieval=MathRetrievalPolicy(mode="lexical",enabled=True)),model=Model(seq))
     assert result.status=="partial",result
     assert result.data["context_packets"][0]["passages"][0]["region_id"]==r.id
     assert result.data["result"]["assessments"][0]["grounding"][0]["receipt_id"]
@@ -250,7 +250,7 @@ def test_unavailable_retrieval_can_end_with_honest_unresolved_assessment(store):
     from nima_semantica.math_retrieval import MathRetrievalPolicy
     seed(store)
     seq=[{"name":"retrieve_context","arguments":{"query":"missing lemma","purpose":"Seek support"}},*actions()]
-    result=run(store,None,seq,retrieval=MathRetrievalPolicy(enabled=True,projection_id="unavailable"))
+    result=run(store,None,seq,retrieval=MathRetrievalPolicy(mode="lexical",enabled=True,projection_id="unavailable"))
     assert result.status=="partial",result
     assert result.data["result"]["assessments"][0]["source_substantiation"]=="unresolved"
     assert result.data["result"]["coverage"]["searches"]==0

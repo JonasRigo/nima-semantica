@@ -112,7 +112,7 @@ def test_new_evidence_or_revision_invalidates_analysis(store,change):
     extra=proposal(r,correction_reason="Reconsider")
     if change=="read":extra=seq[0]
     if change=="retrieval":extra={"name":"retrieve_context","arguments":{"query":"claim obligation","purpose":"Seek counterevidence"}}
-    result=run(store,r,[*seq[:3],extra,seq[3]],max_actions=5,retrieval=MathRetrievalPolicy(enabled=True))
+    result=run(store,r,[*seq[:3],extra,seq[3]],max_actions=5,retrieval=MathRetrievalPolicy(mode="lexical",enabled=True))
     assert result.status=="failed" and not store.records("HypothesisProposal")
 
 
@@ -120,7 +120,7 @@ def test_real_retrieval_supplies_unattached_evidence(store):
     from nima_semantica.math_retrieval import MathRetrievalPolicy
     seed(store);r=region(store,"Integer examples motivate a conjecture.")
     seq=[{"name":"retrieve_context","arguments":{"query":"integer examples","purpose":"Ground a conjecture"}},*actions(r)[1:]]
-    result=run(store,None,seq,retrieval=MathRetrievalPolicy(enabled=True))
+    result=run(store,None,seq,retrieval=MathRetrievalPolicy(mode="lexical",enabled=True))
     assert result.status=="partial",result
     assert result.data["result"]["proposals"][0]["evidence"][0]["region_id"]==r.id
 

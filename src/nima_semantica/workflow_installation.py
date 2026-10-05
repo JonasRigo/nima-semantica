@@ -153,6 +153,11 @@ def configure_flow(flow, name, installation, corpus, project):
                 template[field]["value"] = True
         if node["data"]["type"].endswith("Retrieval") and "enabled" in template:
             template["enabled"]["value"] = True
+            if "embedding_profile_json" in template:
+                template["mode"]["value"] = "hybrid"
+                template["allow_embeddings"]["value"] = installation.embedding is not None
+                template["allow_attempt_writes"]["value"] = True
+                template["embedding_profile_json"]["value"] = installation.embedding.model_dump_json() if installation.embedding else "null"
         if node["data"]["type"] == "LeanDraftVerification":
             template["enabled"]["value"] = bool(installation.lean_url)
         if node["data"]["type"] == "LeanSearch":

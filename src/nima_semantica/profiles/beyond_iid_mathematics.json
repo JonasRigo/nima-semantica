@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "name": "beyond_iid_mathematics",
+  "version": "1.0.0",
+  "node_types": [
+    {
+      "name": "Source",
+      "role": "source",
+      "description": "Bibliographic attribution only."
+    },
+    {
+      "name": "MathematicalObject",
+      "role": "definition",
+      "description": "A mathematical object with its precise domain and conventions."
+    },
+    {
+      "name": "Definition",
+      "role": "definition",
+      "description": "An exact definition, including notation and normalization."
+    },
+    {
+      "name": "Statement",
+      "role": "statement",
+      "description": "A source-attributed mathematical statement, with exact qualifiers; extraction does not prove it."
+    },
+    {
+      "name": "Assumption",
+      "role": "obligation",
+      "description": "An explicit condition required for a statement or argument; unresolved applicability remains open."
+    },
+    {
+      "name": "ProofArgument",
+      "role": "statement",
+      "description": "One particular source proof or derivation, distinct from its conclusion."
+    },
+    {
+      "name": "ProofStep",
+      "role": "statement",
+      "description": "A particular justified step of a particular proof."
+    },
+    {
+      "name": "ProofObligation",
+      "role": "obligation",
+      "description": "A mathematical prerequisite whose discharge is separately evidenced."
+    },
+    {
+      "name": "ProjectRequirement",
+      "role": "statement",
+      "description": "A desired project property, never a literature fact or proved result."
+    },
+    {
+      "name": "Hypothesis",
+      "role": "statement",
+      "description": "An unproved candidate with exact scope and parameters."
+    },
+    {
+      "name": "Counterexample",
+      "role": "statement",
+      "description": "An evidenced construction that violates a precise statement under stated conditions."
+    }
+  ],
+  "relation_types": [
+    {
+      "name": "attributed_to",
+      "source_types": [
+        "MathematicalObject",
+        "Definition",
+        "Statement",
+        "Assumption",
+        "ProofArgument",
+        "ProofStep",
+        "ProofObligation",
+        "ProjectRequirement",
+        "Hypothesis",
+        "Counterexample"
+      ],
+      "target_types": [
+        "Source"
+      ],
+      "description": "Source attribution; no logical entailment.",
+      "necessary_dependency": false
+    },
+    {
+      "name": "defines",
+      "source_types": [
+        "Definition"
+      ],
+      "target_types": [
+        "MathematicalObject"
+      ],
+      "description": "Definition of an object with matching conventions; no prerequisite closure.",
+      "necessary_dependency": false
+    },
+    {
+      "name": "has_assumption",
+      "source_types": [
+        "Statement",
+        "Hypothesis",
+        "ProofArgument",
+        "ProofStep"
+      ],
+      "target_types": [
+        "Assumption"
+      ],
+      "description": "Explicit source condition. Direction: conditioned item to its prerequisite.",
+      "necessary_dependency": true
+    },
+    {
+      "name": "requires",
+      "source_types": [
+        "ProofArgument",
+        "ProofStep",
+        "ProofObligation"
+      ],
+      "target_types": [
+        "Statement",
+        "Definition",
+        "Assumption",
+        "ProofObligation",
+        "ProofStep"
+      ],
+      "description": "Explicit prerequisite of this particular argument, step or obligation. Never theorem-level mathematical necessity inferred from one proof.",
+      "necessary_dependency": true
+    },
+    {
+      "name": "has_step",
+      "source_types": [
+        "ProofArgument"
+      ],
+      "target_types": [
+        "ProofStep"
+      ],
+      "description": "A required step in this particular source proof. Direction argument to required step.",
+      "necessary_dependency": true
+    },
+    {
+      "name": "proves",
+      "source_types": [
+        "ProofArgument"
+      ],
+      "target_types": [
+        "Statement"
+      ],
+      "description": "Source presents this argument for this conclusion. Attribution to a proof is not independent proof verification.",
+      "necessary_dependency": false
+    },
+    {
+      "name": "discharges",
+      "source_types": [
+        "ProofArgument",
+        "ProofStep",
+        "Statement"
+      ],
+      "target_types": [
+        "ProofObligation"
+      ],
+      "description": "Proposed discharge with separately inspectable exact evidence; does not automatically close the obligation.",
+      "necessary_dependency": false
+    },
+    {
+      "name": "uses_definition",
+      "source_types": [
+        "Statement",
+        "ProofArgument",
+        "ProofStep",
+        "Hypothesis",
+        "Counterexample"
+      ],
+      "target_types": [
+        "Definition"
+      ],
+      "description": "Uses this precise definition; navigational, no necessity inferred.",
+      "necessary_dependency": false
+    },
+    {
+      "name": "compares_with",
+      "source_types": [
+        "Statement",
+        "Definition",
+        "MathematicalObject",
+        "Hypothesis"
+      ],
+      "target_types": [
+        "Statement",
+        "Definition",
+        "MathematicalObject",
+        "Hypothesis"
+      ],
+      "description": "Evidence-backed comparison; retains unequal conventions.",
+      "necessary_dependency": false
+    },
+    {
+      "name": "refutes",
+      "source_types": [
+        "Counterexample"
+      ],
+      "target_types": [
+        "Statement",
+        "Hypothesis"
+      ],
+      "description": "Exact violated statement and applicability must be recorded; source-supported assertion, not automatic verification.",
+      "necessary_dependency": false
+    },
+    {
+      "name": "addresses",
+      "source_types": [
+        "Statement",
+        "Hypothesis",
+        "Counterexample"
+      ],
+      "target_types": [
+        "ProjectRequirement"
+      ],
+      "description": "Relevance to a desired property; never establishes fulfillment.",
+      "necessary_dependency": false
+    }
+  ],
+  "predicates": [],
+  "instructions": "Property contract beyond_iid_mathematics@1.0.0: every node except Source has properties.mathematics with nonempty strings exact_statement, quantifiers, domain, parameters, normalization, smoothing, distance, dimension_dependence, attribution, assumptions; and unresolved, an array of strings. Use explicit 'not_applicable' only when justified, or 'unknown' plus an unresolved entry for unavailable/damaged information. Preserve equations, source notation, domains, all quantifiers and parameter ranges exactly. Definitions with different smoothing, distance, normalization, dimensions or domains are distinct. ProjectRequirement mathematics.epistemic_kind must equal desired; Hypothesis must equal hypothesis; Counterexample must equal counterexample; Statement must equal source_statement. Source nodes require properties.attribution. Every necessary_dependency edge requires properties.dependency_scope (proof_specific or explicit_condition), properties.rationale and exact evidence. has_assumption uses explicit_condition; requires and has_step use proof_specific. A lemma used by one proof is a prerequisite of that ProofArgument/ProofStep, never necessary for every proof of its conclusion. Citations, supports, prose similarity, co-occurrence and proves edges do not entail truth. Keep unresolved assumptions open; do not invent missing formulas or dependencies. Properties carry extraction proposals; independent mathematical verification remains separate.",
+  "required_node_types": [],
+  "required_relation_types": []
+}

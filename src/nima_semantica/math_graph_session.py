@@ -16,7 +16,7 @@ from typing import Any
 
 from .math_graph_program import compile_graph_program
 from .math_indexed_count import IndexedSet
-from .math_retrieval import MathRetrievalPolicy, RetrieveMathContext, retrieve_math_context
+from .math_retrieval import MathRetrievalPolicy, installation_retrieval_policy, RetrieveMathContext, retrieve_math_context
 from .math_single_graph_state import SingleCalculationGraph
 from .math_task_contract import MathTaskFact
 
@@ -185,15 +185,14 @@ class PrivateGraphSessionStore:
             from types import SimpleNamespace
             action = RetrieveMathContext.model_validate(args)
             context = SimpleNamespace(project_id=binding.project_id,
-                corpus_id=binding.corpus_id, retrieval=MathRetrievalPolicy(enabled=True,
-                    projection_id=binding.retrieval_projection_id))
+                corpus_id=binding.corpus_id, retrieval=installation_retrieval_policy(projection_id=binding.retrieval_projection_id))
             found = retrieve_math_context(research_store, context, action)
             nodes = [graph.record_source(passage["region_id"], passage["text"],
                 passage.get("evidence", {}).get("source_revision"))
                 for passage in found["passages"]]
             return {"source_nodes": [{"id": node["id"], "region_id": node["origin"]["region_id"],
                 "text": node["value"]} for node in nodes],
-                "projection_revision": found["projection_revision"],
+                "retrieval_context": found, "projection_revision": found["projection_revision"],
                 "truncated": found["truncated"]}, True
         if name in {"run_experiment", "run_calculation_graph"}:
             if not binding.allow_execution:

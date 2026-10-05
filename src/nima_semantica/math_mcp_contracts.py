@@ -99,6 +99,7 @@ class Calculate(Mutation):
 
 
 class Retrieve(Mutation):
+    mode: Literal["lexical", "vector", "hybrid"] | None = None
     query: str = Field(min_length=1, max_length=2000)
     purpose: str = Field(min_length=1, max_length=2000)
     repair_target: NodeReference | None = Field(default=None, description="Open obligation for this targeted evidence search; search alone does not resolve it.")

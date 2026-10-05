@@ -169,7 +169,7 @@ def test_native_retrieval(store):
     from nima_semantica.math_retrieval import MathRetrievalPolicy
     seed(store);_,_,prepared=pipeline(store,source_request())
     r=run(store,[act("retrieve_context",query="Claim",purpose="Check target definitions."),*actions()],
-        retrieval=MathRetrievalPolicy(enabled=True,projection_id=prepared.data["projection"]["projection_id"]))
+        retrieval=MathRetrievalPolicy(mode="lexical",enabled=True,projection_id=prepared.data["projection"]["projection_id"]))
     assert r.status=="partial",r
     assert r.data["context_packets"][0]["passages"]
 

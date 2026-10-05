@@ -40,8 +40,9 @@ def inspect_corpus(store, request: InspectCorpusRequest, context: InspectCorpusC
             if CorpusRegistry(store).corpus(context.corpus_id) is None:
                 return unavailable("corpus.unavailable")
             def visible(kind):
-                return [(key, record) for key, record in store.records(kind, corpus_id=context.corpus_id,
-                    project_id=context.project_id) if record.project_id in (None, context.project_id)]
+                # Keep only IDs and aggregate metadata; book regions can repeat large diagnostics.
+                return ((key, record) for key, record in store.iter_records(kind, corpus_id=context.corpus_id,
+                    project_id=context.project_id) if record.project_id in (None, context.project_id))
             sources = []
             for _, record in visible(SourceCorpusService.SOURCE_KIND):
                 if record.project_id is not None:

@@ -1,4 +1,5 @@
 """Visible public retrieval request; authority and providers are operator-owned."""
+from uuid import uuid4
 from lfx.io import BoolInput, DropdownInput, IntInput, MessageTextInput, StrInput, HandleInput, Output
 from lfx.schema import Data
 from nima_semantica.component_contracts import manifest_for_component
@@ -14,7 +15,7 @@ class ResearchRetrievalFields(BaseComponent):
     description = "Query, explicit lexical/vector/hybrid mode, current projection selection and context limits. Model-backed modes require an attempt ID."
     nima_manifest = manifest_for_component("ResearchRetrievalFields")
     inputs = [MessageTextInput(name="query", display_name="Research query", value="x"),
-        DropdownInput(name="mode", display_name="Retrieval mode", options=["lexical", "vector", "hybrid"], value="lexical"),
+        DropdownInput(name="mode", display_name="Retrieval mode", options=["lexical", "vector", "hybrid"], value="hybrid"),
         BoolInput(name="include_provisional", display_name="Include provisional fast evidence", value=True),
         StrInput(name="projection_id", display_name="Exact projection ID (optional)", value=""),
         StrInput(name="expected_store_revision", display_name="Expected store revision (optional)", value=""),
@@ -45,6 +46,8 @@ class ResearchRetrievalFields(BaseComponent):
         for name in ("projection_id", "expected_store_revision", "operation_id", "run_id"):
             payload[name] = payload[name] or None
         payload.update(override)
+        if payload["mode"] != "lexical" and not payload.get("operation_id"):
+            payload["operation_id"] = "research-retrieval-" + uuid4().hex
         return ResearchRetrievalRequest.model_validate(payload).model_dump(mode="json")
 
     async def request_data(self) -> Data:

@@ -71,12 +71,12 @@ def test_lexical_exact_source_and_empty(configured):
     prepare({"mode":"prepare_index", "operation_id":"source"}, writes=True)
     store = GraphStore(configured)
     before = (store.revision, store.records()); store.close()
-    result = execute({"query":"fixture"})
+    result = execute({"query":"fixture", "mode":"lexical"})
     assert result["status"] == "complete", result
     assert result["data"]["regions"][0]["text"] == "# Inspection fixture\n\nFor x = 2, $x^2 = 4$.\n"
     assert not result["receipt_ids"]
-    assert execute({"query":"no_matching_term"})["data"]["regions"] == []
-    assert execute({"query":"fixture", "max_chars":1})["status"] == "partial"
+    assert execute({"query":"no_matching_term", "mode":"lexical"})["data"]["regions"] == []
+    assert execute({"query":"fixture", "mode":"lexical", "max_chars":1})["status"] == "partial"
     store = GraphStore(configured)
     assert (store.revision, store.records()) == before
     store.close()

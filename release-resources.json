@@ -8,6 +8,8 @@
     "docs/RELEASE_NOTES_v0.1.1.md",
     "docs/RELEASE_NOTES_v0.1.2.md",
     "docs/PLATFORM_SUPPORT_v0.1.2.md",
+    "docs/RELEASE_NOTES_v0.1.3.md",
+    "docs/PLATFORM_SUPPORT_v0.1.3.md",
     "THIRD_PARTY_NOTICES.md",
     "constraints-tested.txt",
     "deploy/build_adapter_example.py",

@@ -97,3 +97,32 @@ def test_partial_vector_coverage_is_not_ready(store):
     assert result.data["readiness"]["lexical_metadata_ready"]
     assert result.data["readiness"]["vector_covered_regions"] > 0
     assert not result.data["readiness"]["vector_metadata_ready"]
+
+
+def test_large_diagnostics_are_streamed_without_payload_materialization(store, monkeypatch):
+    """Many repeated diagnostic payloads must never accumulate in an inventory list."""
+    import tracemalloc
+    from conftest import seed_region
+    from nima_semantica.source_corpus import SourceCorpusService, SourceRegion
+    first = seed_region(store)
+    payload = {**first.content, "metadata": {"diagnostics": ["Conversion gap. " * 20000]}}
+    for ordinal in range(64):
+        SourceCorpusService(store).register_region(SourceRegion.model_validate({**payload, "ordinal": ordinal + 1}))
+    original = store.records
+    def no_region_list(kind=None, *args, **kwargs):
+        if kind == "SourceRegion":
+            raise AssertionError("SourceRegion payloads must be streamed")
+        return original(kind, *args, **kwargs)
+    monkeypatch.setattr(store, "records", no_region_list)
+    before = store.revision
+    tracemalloc.start()
+    try:
+        result = inspect(store)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert result.status == "complete", result
+    assert result.data["total_regions"] == 65
+    assert store.revision == before
+    # A list would retain >19 MB of decoded diagnostics alone. Allow decoding overhead.
+    assert peak < 12_000_000, peak

@@ -1442,6 +1442,48 @@
           "node": {
             "template": {
               "_type": "Component",
+              "allow_attempt_writes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_attempt_writes",
+                "value": false,
+                "display_name": "Allow retrieval receipts (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
+              "allow_embeddings": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_embeddings",
+                "value": false,
+                "display_name": "Allow query embeddings (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
               "code": {
                 "type": "code",
                 "required": true,
@@ -1449,7 +1491,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Operator-authorized method-context retrieval inside search planning.\"\"\"\nfrom lfx.io import BoolInput, StrInput\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\n\n\nclass ExtractionRetrieval(BaseComponent):\n    name = \"ExtractionRetrieval\"\n    display_name = \"Extraction Context Retrieval · Operator Policy\"\n    description = \"Optional scoped background retrieval and exact source reads. Context cannot enlarge the extraction scope or replace selected-source evidence.\"\n    nima_manifest = manifest_for_component(\"ExtractionRetrieval\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Allow context retrieval (operator)\",value=False),\n        StrInput(name=\"projection_id\",display_name=\"Prepared projection ID (operator)\",value=\"\")]\n\n    async def run(self):\n        return MathRetrievalPolicy(enabled=self.enabled,projection_id=self.projection_id.strip() or None).model_dump(mode=\"json\")\n\n",
+                "value": "\"\"\"Operator-authorized method-context retrieval inside search planning.\"\"\"\nfrom lfx.io import BoolInput, StrInput, DropdownInput\nfrom nima_semantica.installation import EmbeddingProfile\nfrom nima_semantica.orchestration.langflow.stages.base import InspectableStage as BaseComponent\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.math_retrieval import MathRetrievalPolicy\n\n\nclass ExtractionRetrieval(BaseComponent):\n    name = \"ExtractionRetrieval\"\n    display_name = \"Extraction Context Retrieval · Operator Policy\"\n    description = \"Optional scoped background retrieval and exact source reads. Context cannot enlarge the extraction scope or replace selected-source evidence.\"\n    nima_manifest = manifest_for_component(\"ExtractionRetrieval\")\n    inputs = [BoolInput(name=\"enabled\",display_name=\"Allow context retrieval (operator)\",value=False),\n        StrInput(name=\"projection_id\",display_name=\"Prepared projection ID (operator)\",value=\"\"),\n        DropdownInput(name=\"mode\",display_name=\"Retrieval mode (operator)\",options=[\"hybrid\",\"vector\",\"lexical\"],value=\"hybrid\"),\n        BoolInput(name=\"allow_embeddings\",display_name=\"Allow query embeddings (operator)\",value=False),\n        BoolInput(name=\"allow_attempt_writes\",display_name=\"Allow retrieval receipts (operator)\",value=False),\n        StrInput(name=\"embedding_profile_json\",display_name=\"Pinned embedding profile (operator)\",value=\"null\")]\n\n    async def run(self):\n        return MathRetrievalPolicy(enabled=self.enabled,projection_id=self.projection_id.strip() or None,\n            mode=self.mode,allow_embeddings=self.allow_embeddings,allow_attempt_writes=self.allow_attempt_writes,\n            embedding_profile=EmbeddingProfile.model_validate_json(self.embedding_profile_json) if self.embedding_profile_json.strip() != \"null\" else None).model_dump(mode=\"json\")\n\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -1460,6 +1502,28 @@
                 "info": "",
                 "load_from_db": false,
                 "title_case": false
+              },
+              "embedding_profile_json": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "embedding_profile_json",
+                "value": "null",
+                "display_name": "Pinned embedding profile (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
               },
               "enabled": {
                 "tool_mode": false,
@@ -1481,6 +1545,35 @@
                 "track_in_telemetry": true,
                 "type": "bool",
                 "_input_type": "BoolInput"
+              },
+              "mode": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "hybrid",
+                  "vector",
+                  "lexical"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "mode",
+                "value": "hybrid",
+                "display_name": "Retrieval mode (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
               },
               "projection_id": {
                 "tool_mode": false,
@@ -1570,7 +1663,7 @@
             "metadata": {
               "nima_component_id": "extraction_retrieval",
               "contract_version": "1",
-              "source_sha256": "50643800215dbdc1323190f3897f98c2455f5c901b51411a2c80ac5afe3d66d1"
+              "source_sha256": "f2cb2a740450ec5b8ec65496f117a504e50b8f32f150c79e0feda74c9888c132"
             },
             "tool_mode": false
           },
@@ -1760,14 +1853,14 @@
     "controller_version": "deep-extraction-v1",
     "policy_digest": "170cb68edd7a058202c4d45e602163f73091852be9244bf46038d7d84f11eb6c",
     "native_sources_sha256": {
-      "extraction_contracts": "97f90c9e385be1bf8ec278f52f2dfa4b7192448f3ed2f673b7ddbe28eead93b2",
+      "extraction_contracts": "491a10960fc0e31af9451e3e3fef0c77a04ca17d89978170ec5a567da0875bd0",
       "consolidation_contracts": "04fd49eb97b477558e9813f72e93e781391d21965f9f80d590d452354450d5e4",
-      "graph_consolidation": "ec23a5c1cd2466cc383351930a6c7f6b9bba90dd24302d8795aceb5e28fa9ecf",
+      "graph_consolidation": "6bf6b1def8895ea84b85221454c3fecd03a174aa0b164d42b802a48ee367b9d2",
       "extraction_state": "a54af5fc04e73c0b13d1337232f015c4d4aa523cd6caa89aa3e401ced0ef3189",
-      "deep_extraction_tool": "db330e4ac8041a6128506ffe5de8e09d31628b4b1b46ccbf66b28031f81191f4",
+      "deep_extraction_tool": "33b163f9a6ce6d3d522105d9f7930765d9861bb3dde2f73d48ca456c467c99af",
       "graph_extraction": "d2b297d4937755fdb8dd2248aa036a1209650521ed2ed07149592efae56d14ba",
       "proposal_service": "3a503d5e82fa130c59dbf39d0c412e578ddf5680265a32abc6702f61f74bac99",
-      "math_retrieval": "85fbfd0f8d6ef4aaec36f025ac1a7c6adefe3d22aab66c8d55d7f04c6b7cdb0f",
+      "math_retrieval": "e14d1c2b66860f5d34d988738ec7156752b615367790bf8ed7ecf4b6885135ff",
       "math_reasoning": "c7eca62e04e55ffb8256b160c755831687ca0348c9ad435ea50337bb356a4728",
       "reasoning_state": "cf22253686c357a8954fd7ed54cae77d5dfaa2da249af60707586e89bf2eaf20",
       "reasoning_kernel": "71a592fe5f12b662bd5731c4d3917fb40f9e12475316f5e7df781a899821bd34"
@@ -1797,7 +1890,7 @@
       "ExtractionRetrieval": {
         "nima_component_id": "extraction_retrieval",
         "contract_version": "1",
-        "source_sha256": "50643800215dbdc1323190f3897f98c2455f5c901b51411a2c80ac5afe3d66d1"
+        "source_sha256": "f2cb2a740450ec5b8ec65496f117a504e50b8f32f150c79e0feda74c9888c132"
       }
     }
   }

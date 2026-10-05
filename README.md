@@ -34,7 +34,7 @@ Install the release wheel, then run the setup wizard:
 
 ```sh
 python -m venv .venv
-.venv/bin/pip install 'nima_semantica-0.1.2-py3-none-any.whl[mcp]'
+.venv/bin/pip install 'nima_semantica-0.1.3-py3-none-any.whl[mcp]'
 .venv/bin/nima setup --provision --pdf --lean
 .venv/bin/nima project init my-research --corpus papers --path /path/to/project
 ```
@@ -84,5 +84,5 @@ python -m pytest -q
 ```
 
 NIMA is under active development; contributions, including custom Langflow workflows, are welcome.
-Use [CITATION.cff](CITATION.cff) for author and release metadata. The [v0.1.0 archive](https://doi.org/10.5281/zenodo.22998905) remains available; no versioned DOI is asserted for v0.1.2 before publication.
+Use [CITATION.cff](CITATION.cff) for author and release metadata. The [v0.1.0 archive](https://doi.org/10.5281/zenodo.22998905) remains available; no versioned DOI is asserted for v0.1.3 before publication.
 See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for project and third-party terms.

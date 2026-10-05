@@ -206,7 +206,7 @@ def test_retrieval_is_native_and_exact(store):
     from nima_semantica.math_retrieval import MathRetrievalPolicy
     seed(store);r=region(store,"Integer cancellation requires assumptions.")
     seq=[{"name":"retrieve_context","arguments":{"query":"integer cancellation","purpose":"Assess evidence"}},*actions(r)[1:]]
-    result=run(store,seq=seq,retrieval=MathRetrievalPolicy(enabled=True))
+    result=run(store,seq=seq,retrieval=MathRetrievalPolicy(mode="lexical",enabled=True))
     assert result.status=="partial",result
     assert result.data["result"]["coverage"]["read_region_ids"]==[r.id]
 

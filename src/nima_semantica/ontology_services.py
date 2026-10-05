@@ -170,6 +170,8 @@ def validate_delta_ontology(delta, registry: OntologyRegistry | None = None) -> 
                 message=f"Node type {node.node_type!r} is not declared by the profile.",
                 node_id=node.node_id,
             ))
+    from .mathematics_contracts import contract_issues
+    issues.extend(OntologyValidationIssue(**v) for v in contract_issues(profile, delta.upsert_nodes, delta.add_edges))
     for edge in delta.add_edges:
         relation = relations.get(edge.relation.casefold())
         if relation is None:
@@ -233,6 +235,8 @@ def validate_okf_snapshot(snapshot: OKFSnapshot, profile: OntologyProfile) -> On
                 node_id=node.node_id,
             ))
 
+    from .mathematics_contracts import contract_issues
+    issues.extend(OntologyValidationIssue(**v) for v in contract_issues(profile, snapshot.nodes, snapshot.edges))
     present_node_types = {node.node_type.casefold() for node in snapshot.nodes}
     for required in profile.required_node_types:
         if required.casefold() not in present_node_types:

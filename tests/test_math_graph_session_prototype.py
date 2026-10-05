@@ -62,7 +62,7 @@ def test_stale_revision_fails_without_changing_graph(tmp_path):
     assert store.act(binding(), "frontier")["revision"] == 1
 
 
-def test_retrieval_action_records_exact_source_without_certifying_it(tmp_path, monkeypatch):
+def test_retrieval_action_records_exact_source_without_certifying_it(tmp_path, monkeypatch, lexical_installation):
     import nima_semantica.math_graph_session as module
 
     observed = []
@@ -75,7 +75,7 @@ def test_retrieval_action_records_exact_source_without_certifying_it(tmp_path, m
     session = PrivateGraphSessionStore(tmp_path / "retrieval.sqlite3")
     bound = GraphSessionBinding(project_id="p", run_id="r", session_id="s", task="Compute beta",
         required_paths=("beta",), allow_retrieval=True)
-    result = session.act(bound, "retrieve_context", {"query": "method", "purpose": "Check a step"},
+    result = session.act(bound, "retrieve_context", {"query": "method", "purpose": "Check a step", "mode": "lexical"},
         research_store=object())
     assert result["status"] == "completed"
     assert observed[0][1:] == ("p", "papers", "method")

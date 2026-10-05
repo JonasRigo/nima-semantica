@@ -19,6 +19,18 @@ from test_claim_dependencies import seed,ref
 CANVAS=ROOT/"examples/langflow_replacement/review_research.json"
 
 
+@pytest.fixture(autouse=True)
+def offline_model_construction(monkeypatch):
+    # Building the disabled canvas must work without DNS or paid provider calls.
+    monkeypatch.setattr("lfx.base.models.provider_ssrf.openai_compatible_client_kwargs",
+        lambda *args, **kwargs: {})
+    from langchain_openai import ChatOpenAI
+    def unexpected_generation(*args, **kwargs):
+        pytest.fail("Preview attempted a remote model call")
+    monkeypatch.setattr(ChatOpenAI, "_generate", unexpected_generation)
+    monkeypatch.setattr(ChatOpenAI, "_agenerate", unexpected_generation)
+
+
 def execute(payload):
     from lfx.graph import Graph
     data=json.loads(CANVAS.read_text())["data"]

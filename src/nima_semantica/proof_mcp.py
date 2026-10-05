@@ -65,6 +65,7 @@ class Attach(Mutation):
 
 
 class Retrieve(Mutation):
+    mode: Literal["lexical", "vector", "hybrid"] | None = None
     query: str = Field(min_length=1, max_length=2000)
     purpose: str = Field(min_length=1, max_length=2000)
 
@@ -292,11 +293,12 @@ class ProofService(PrivateGraphSessionStore):
             if not self.config.allow_retrieval or not self.config.projection_id:
                 raise ValueError("retrieval not configured and authorized")
             from types import SimpleNamespace
-            from .math_retrieval import retrieve_math_context, MathRetrievalPolicy, RetrieveMathContext
+            from .math_retrieval import retrieve_math_context, MathRetrievalPolicy, installation_retrieval_policy, RetrieveMathContext
             context = SimpleNamespace(corpus_id=self.config.corpus_id, project_id=self.config.project_id,
-                                      retrieval=MathRetrievalPolicy(enabled=True, projection_id=self.config.projection_id))
+                                      retrieval=installation_retrieval_policy(projection_id=self.config.projection_id))
             with self._research_store() as store:
-                found = retrieve_math_context(store, context, RetrieveMathContext(query=args["query"], purpose=args["purpose"]))
+                found = retrieve_math_context(store, context, RetrieveMathContext(query=args["query"], purpose=args["purpose"], mode=args.get("mode")))
+            result["retrieval_context"] = found
             result["evidence"] = [{"node_id": add({"kind": "evidence", "statement": passage["text"], "depends_on": [], "source": passage}), **passage} for passage in found["passages"]]
         elif operation == "run_experiment":
             parents(args["depends_on"])

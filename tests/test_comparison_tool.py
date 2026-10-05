@@ -106,7 +106,7 @@ def test_new_evidence_or_revision_invalidates_analysis(store,change):
     seed(store);r=region(store);seq=actions(r);extra=assessment(r)
     extra["arguments"]["correction_reason"]="Reconsider"
     if change=="retrieval":extra={"name":"retrieve_context","arguments":{"query":"claim obligation","purpose":"Find counterevidence"}}
-    result=run(store,r,[*seq[:3],extra,seq[3]],max_actions=5,retrieval=MathRetrievalPolicy(enabled=True))
+    result=run(store,r,[*seq[:3],extra,seq[3]],max_actions=5,retrieval=MathRetrievalPolicy(mode="lexical",enabled=True))
     assert result.status=="failed" and "result" not in result.data
 
 
@@ -114,7 +114,7 @@ def test_native_retrieval_adds_unattached_exact_passages(store):
     from nima_semantica.math_retrieval import MathRetrievalPolicy
     seed(store);r=region(store,"Integer identities require assumptions.")
     seq=[{"name":"retrieve_context","arguments":{"query":"integer identities","purpose":"Compare evidence"}},*actions(r)[1:]]
-    result=run(store,seq=seq,retrieval=MathRetrievalPolicy(enabled=True));assert result.status=="partial",result
+    result=run(store,seq=seq,retrieval=MathRetrievalPolicy(mode="lexical",enabled=True));assert result.status=="partial",result
     assert result.data["result"]["coverage"]["read_region_ids"]==[r.id]
 
 

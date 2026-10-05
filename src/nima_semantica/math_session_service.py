@@ -187,10 +187,10 @@ class MathSessionService(PrivateGraphSessionStore):
         if not binding.allow_retrieval or research_store is None:
             raise ValueError("retrieval is not authorized or configured")
         from types import SimpleNamespace
-        from .math_retrieval import RetrieveMathContext, MathRetrievalPolicy, retrieve_math_context
+        from .math_retrieval import RetrieveMathContext, MathRetrievalPolicy, installation_retrieval_policy, retrieve_math_context
         found = retrieve_math_context(research_store, SimpleNamespace(
             project_id=binding.project_id, corpus_id=binding.corpus_id,
-            retrieval=MathRetrievalPolicy(enabled=True, projection_id=binding.retrieval_projection_id)),
+            retrieval=installation_retrieval_policy(projection_id=binding.retrieval_projection_id)),
             RetrieveMathContext.model_validate(args))
         nodes = []
         for passage in found["passages"]:
@@ -204,7 +204,7 @@ class MathSessionService(PrivateGraphSessionStore):
             node["retrieval_provenance"] = provenance
             nodes.append({"id": node["id"], "region_id": passage["region_id"], "text": passage["text"]})
         return {"source_nodes": nodes, "retrieval_receipt": found, "projection_revision": found["projection_revision"],
-            "truncated": found["truncated"]}, True
+            "retrieval_context": found, "truncated": found["truncated"]}, True
 
     def _load(self, db, session_id):
         life = db.execute("SELECT * FROM math_lifecycle WHERE session_id=?", (session_id,)).fetchone()

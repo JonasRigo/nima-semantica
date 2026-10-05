@@ -183,6 +183,47 @@ class GraphStore(GraphPersistence):
             where = " WHERE " + " AND ".join(clauses) if clauses else ""
             return [(i,self._decode(i,p)) for i,p in self._db.execute("SELECT id,payload FROM records" + where + " ORDER BY rowid",args)]
 
+    def iter_records(self, kind=None, project_id=None, corpus_id=None):
+        """Snapshot scoped IDs, then verify and decode one record at a time."""
+        with self._mutex:
+            clauses, args = [], []
+            for key, value in (("kind", kind), ("corpus_id", corpus_id)):
+                if value is not None:
+                    clauses.append(key + "=?")
+                    args.append(value)
+            if project_id is not None:
+                clauses.append("(project_id IS NULL OR project_id=?)")
+                args.append(project_id)
+            where = " WHERE " + " AND ".join(clauses) if clauses else ""
+            ids = [row[0] for row in self._db.execute(
+                "SELECT id FROM records" + where + " ORDER BY rowid", args)]
+        for record_id in ids:
+            record = self.get(record_id, corpus_id=corpus_id, project_id=project_id)
+            if record is None or (kind is not None and record.kind != kind):
+                raise NimaError("scoped record iterator integrity failure")
+            yield record_id, record
+
+    def iter_source_regions(self, source_id, *, corpus_id, project_id=None, source_revision=None):
+        """Decode one selected-source region at a time, preserving integrity checks.
+
+        Snapshot only indexed IDs under the mutex. Never materialize a corpus-wide
+        list of region payloads: book regions can repeat megabytes of diagnostics.
+        """
+        with self._mutex:
+            clauses = ["kind='SourceRegion'", "corpus_id=?", "document_id=?"]
+            args = [corpus_id, source_id]
+            if project_id is not None:
+                clauses.append("(project_id IS NULL OR project_id=?)")
+                args.append(project_id)
+            ids = [row[0] for row in self._db.execute(
+                "SELECT id FROM records WHERE " + " AND ".join(clauses) + " ORDER BY rowid", args)]
+        for record_id in ids:
+            record = self.get(record_id, corpus_id=corpus_id, project_id=project_id)
+            if record is None or record.kind != "SourceRegion" or record.content.get("source_id") != source_id:
+                raise NimaError("selected source region integrity failure")
+            if source_revision is None or record.content["source_revision"] == source_revision:
+                yield record_id, record
+
     @staticmethod
     def _decode(record_id, payload):
         record = Record.model_validate_json(payload)

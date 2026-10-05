@@ -16,7 +16,7 @@ class DeepExtractionRequest(StrictModel):
     operation_id: GraphIdentifier | None = None
     run_id: GraphIdentifier | None = None
     question: str = Field(default="Extract source-attributed claims, definitions, obligations and their relations.",min_length=1,max_length=12000)
-    source_region_ids: tuple[GraphIdentifier,...] = Field(default=(),max_length=32)
+    source_region_ids: tuple[GraphIdentifier,...] = Field(default=(),max_length=32,description="Regional execution scope, or an optional exact subset for plan mode to retry failed/deferred regions of source_id.")
     source_id: GraphIdentifier | None = None
     plan_attempt_id: GraphIdentifier | None = Field(default=None, description="Plan only: change for a deliberate new extraction attempt; omit for replay-stable batch IDs.")
     consolidation: ConsolidationSelection | None = None
@@ -29,7 +29,7 @@ class DeepExtractionRequest(StrictModel):
     def selected_scope(self):
         if len(canonical(self)) > 1_000_000:raise ValueError("extraction request exceeds 1 MB complete-read transport bound")
         if len(set(self.source_region_ids))!=len(self.source_region_ids):raise ValueError("duplicate region")
-        if self.source_id and self.source_region_ids and self.mode != "regional":raise ValueError("Use regional mode for explicit regions with an optional source consistency check; document and plan modes select source_id only")
+        if self.source_id and self.source_region_ids and self.mode not in ("regional","plan"):raise ValueError("Use regional or plan mode for explicit regions with a source consistency check; document modes select source_id only")
         if self.plan_attempt_id and self.mode != "plan":raise ValueError("plan_attempt_id is only accepted in plan mode")
         if self.mode not in ("preview", "plan", "consolidation_plan") and not self.operation_id:raise ValueError("execution requires operation_id")
         if self.mode in ("consolidation_plan", "consolidate"):
@@ -61,12 +61,16 @@ class ReadRegions(StrictModel):
     region_ids: tuple[GraphIdentifier,...] = Field(min_length=1,max_length=4)
 
 
+class CitationAnchor(StrictModel):
+    citation_id: GraphIdentifier = Field(description="Exact citation handle returned by read_regions; the controller supplies the unchanged quotation and offsets.")
+
+
 class ExtractionNode(StrictModel):
     node_id: GraphIdentifier
     node_type: GraphName
     text: str = Field(min_length=1,max_length=4000)
     properties: dict[str,Any] = Field(default_factory=dict,max_length=32)
-    anchors: tuple[Anchor,...] = Field(min_length=1,max_length=8,description="Exact quotations in selected, previously read source regions; source_id is the region ID.")
+    anchors: tuple[CitationAnchor | Anchor,...] = Field(min_length=1,max_length=8,description="Prefer citation_id handles from read_regions. Alternatively supply an exact quotation with a selected region ID or short region_ref as source_id; omit offsets for a unique quotation.")
 
 
 class ExtractionEdge(StrictModel):
@@ -75,7 +79,7 @@ class ExtractionEdge(StrictModel):
     source_id: GraphIdentifier
     target_id: GraphIdentifier
     properties: dict[str,Any] = Field(default_factory=dict,max_length=32)
-    anchors: tuple[Anchor,...] = Field(min_length=1,max_length=8)
+    anchors: tuple[CitationAnchor | Anchor,...] = Field(min_length=1,max_length=8)
 
 
 class RegionCoverage(StrictModel):
@@ -94,7 +98,7 @@ class ExtractionIssue(StrictModel):
 class ProposeGraph(StrictModel):
     nodes: tuple[ExtractionNode,...] = Field(default=(),max_length=128)
     edges: tuple[ExtractionEdge,...] = Field(default=(),max_length=256)
-    coverage: tuple[RegionCoverage,...] = Field(min_length=1,max_length=32)
+    coverage: tuple[RegionCoverage,...] = Field(default=(),max_length=32,description="Optional explicit coverage using selected region IDs or region_ref aliases. Omitted cited regions become extracted; other omitted regions remain deferred. Explicit declarations are validated, never silently corrected.")
     issues: tuple[ExtractionIssue,...] = Field(default=(),max_length=16)
     correction_reason: str = Field(default="",max_length=4000)
 

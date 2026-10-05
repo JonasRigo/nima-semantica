@@ -7078,6 +7078,7 @@
           },
           "source_region_ids": {
             "default": [],
+            "description": "Regional execution scope, or an optional exact subset for plan mode to retry failed/deferred regions of source_id.",
             "items": {
               "description": "Stable logical identifier without whitespace.",
               "maxLength": 256,

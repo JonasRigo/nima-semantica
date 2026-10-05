@@ -158,6 +158,39 @@ def test_agent_can_repair_rejection_with_actionable_diagnostics(store):
     result=deep_extraction(store,request(r),context(),model=model)
     assert result.status=="partial",result
     assert "Quotation" in json.dumps(model.calls[2]["messages"])
+
+
+@pytest.mark.parametrize("kind", ["nodes", "edges"])
+def test_missing_anchors_feedback_repairs_all_objects_without_inventing_evidence(store, kind):
+    r = region(store)
+    seq = actions(r)
+    bad = copy.deepcopy(seq[1])
+    for item in bad["arguments"][kind]:
+        item.pop("anchors")
+    model = Model([seq[0], bad, *seq[1:]])
+    result = deep_extraction(store, request(r), context(), model=model)
+    assert result.artifacts.get("graph_proposal"), result
+    rejection = result.data["last_rejection"]
+    assert result.data["rejection_count"] == 1
+    assert rejection["code"] == "required_grounding_invalid"
+    assert len(rejection["repair"]["paths"]) == len(bad["arguments"][kind])
+    assert rejection["repair"]["candidate_accepted"] is False
+    assert "not propagate" in rejection["repair"]["instruction"]
+    assert "required_grounding_invalid" in json.dumps(model.calls[2]["messages"])
+    delta = result.data["result"]["graph_proposal"]["artifact"]["delta"]
+    for item in [*delta["upsert_nodes"], *delta["add_edges"]]:
+        assert item["properties"]["extraction_grounding"][0]["quotation"] == r.content["text"]
+
+
+def test_terminal_grounding_rejection_retains_repair_diagnostics(store):
+    r = region(store)
+    seq = actions(r)[:2]
+    seq[1]["arguments"]["nodes"][0]["anchors"] = []
+    result = deep_extraction(store, request(r), context(max_actions=2), model=Model(seq))
+    assert result.status == "failed" and not result.artifacts.get("graph_proposal")
+    assert result.data["rejection_count"] == 1
+    assert result.data["last_rejection"]["code"] == "required_grounding_invalid"
+    assert result.data["candidate_history"] == []
     assert any(a["status"]=="failed" for a in result.data["attempts"])
 
 
@@ -194,7 +227,7 @@ def test_real_ingestion_retrieval_read_extraction_ensemble(store):
     from nima_semantica.math_retrieval import MathRetrievalPolicy
     r=region(store);seq=actions(r)
     model=Model([seq[0],{"name":"retrieve_context","arguments":{"query":"claim obligation","purpose":"Clarify the dependency vocabulary"}},*seq[1:]])
-    result=deep_extraction(store,request(r),context(retrieval=MathRetrievalPolicy(enabled=True)),model=model)
+    result=deep_extraction(store,request(r),context(retrieval=MathRetrievalPolicy(mode="lexical",enabled=True)),model=model)
     assert result.status=="partial",result
     packet=result.data["context_packets"][0]
     assert packet["passages"] and packet["projection_revision"]
@@ -316,3 +349,83 @@ def test_document_reconciliation_preserves_all_region_coverage(store):
     assert result.status=="partial",result
     assert {c["region_id"] for c in result.data["result"]["coverage"]}==set(ids)
     assert len([v for v in result.data["reasoning_state"]["items"].values() if v["kind"]=="region"])==len(ids)
+
+
+def test_short_region_refs_and_citation_handles_publish_canonical_grounding(store):
+    r=region(store,"Repeated exact line.\nRepeated exact line.\n")
+    p=proposal(r)
+    for item in p["arguments"]["nodes"]+p["arguments"]["edges"]:
+        item["anchors"]=[{"citation_id":"r1:s2"}]
+    p["arguments"].pop("coverage")
+    model=Model([{"name":"read_regions","arguments":{"region_ids":["r1"]}},p,*actions(r)[2:]])
+    result=deep_extraction(store,request(r),context(),model=model)
+    assert result.artifacts.get("graph_proposal"),result
+    graph=result.data["result"]["graph_proposal"]["artifact"]["delta"]
+    span=graph["upsert_nodes"][0]["properties"]["extraction_grounding"][0]
+    assert span["start"]==len("Repeated exact line.\n")
+    assert span["region_id"]==r.id and r.content["text"][span["start"]:span["end"]]==span["quotation"]
+    assert result.data["result"]["coverage"][0]["region_id"]==r.id
+    assert result.data["result"]["coverage"][0]["status"]=="extracted"
+    assert model.calls[0]["messages"][-1]["content"].find('"region_ref":"r1"')>=0
+
+
+def test_omitted_uncited_regions_remain_deferred(store):
+    r=region(store);other=region(store,"Other evidence, not read.")
+    p=proposal(r);p["arguments"].pop("coverage")
+    result=deep_extraction(store,request(r,source_region_ids=(r.id,other.id)),context(),
+        model=Model([actions(r)[0],p,*actions(r)[2:]]))
+    assert result.artifacts.get("graph_proposal"),result
+    coverage={c["region_id"]:c for c in result.data["result"]["coverage"]}
+    assert coverage[r.id]["status"]=="extracted"
+    assert coverage[other.id]["status"]=="deferred" and coverage[other.id]["reason"]
+    assert "coverage" in result.data["reasoning_state"]["consequences"]["Open"]
+
+
+@pytest.mark.parametrize("damage",["unknown_handle","unread_handle","unknown_alias","duplicate_coverage","explicit_deferred","wrong_offsets","changed_unicode","ambiguous_quote"])
+def test_short_references_preserve_exact_source_guards(store,damage):
+    r=region(store,"Exact coeﬃcient.\nExact coeﬃcient.\n")
+    seq=actions(r);p=seq[1]["arguments"]
+    for item in p["nodes"]+p["edges"]:item["anchors"]=[{"citation_id":"r1:s1"}]
+    p["coverage"][0]["region_id"]="r1"
+    if damage=="unknown_handle":p["nodes"][0]["anchors"]=[{"citation_id":"r1:s999"}]
+    if damage=="unread_handle":seq=seq[1:]
+    if damage=="unknown_alias":p["coverage"][0]["region_id"]="r99"
+    if damage=="duplicate_coverage":p["coverage"].append({"region_id":r.id,"status":"extracted","reason":"duplicate"})
+    if damage=="explicit_deferred":p["coverage"][0]["status"]="deferred"
+    if damage=="wrong_offsets":p["nodes"][0]["anchors"]=[{"source_id":"r1","quotation":"Exact coeﬃcient.","start":1,"end":16}]
+    if damage=="changed_unicode":p["nodes"][0]["anchors"]=[{"source_id":"r1","quotation":"Exact coefficient."}]
+    if damage=="ambiguous_quote":p["nodes"][0]["anchors"]=[{"source_id":"r1","quotation":"Exact coeﬃcient."}]
+    result=deep_extraction(store,request(r),context(max_actions=len(seq)),model=Model(seq))
+    assert result.status=="failed" and "graph_proposal" not in result.artifacts,result
+    assert not store.records("GraphArtifactProposal")
+
+
+def test_unique_quotation_with_alias_resolves_offsets(store):
+    r=region(store,"Unique exact coeﬃcient.\n")
+    p=proposal(r);p["arguments"].pop("coverage")
+    for item in p["arguments"]["nodes"]+p["arguments"]["edges"]:
+        item["anchors"]=[{"source_id":"r1","quotation":"exact coeﬃcient"}]
+    result=deep_extraction(store,request(r),context(),model=Model([actions(r)[0],p,*actions(r)[2:]]))
+    assert result.artifacts.get("graph_proposal"),result
+    span=result.data["result"]["graph_proposal"]["artifact"]["delta"]["upsert_nodes"][0]["properties"]["extraction_grounding"][0]
+    assert span=={"region_id":r.id,"quotation":"exact coeﬃcient","start":7,"end":22}
+
+
+def test_retry_plan_selects_only_deferred_regions_without_widening_scope(store):
+    prepared,_,_=pipeline(store,source_request(sources=[{"name":"retry.txt","text":"Evidence. "*7000}]))
+    source_id=prepared.data["sources"][0]["source_id"]
+    full=deep_extraction(store,DeepExtractionRequest(mode="plan",source_id=source_id),context())
+    selected=full.data["batches"][0]["source_region_ids"][1:4]
+    before=store.revision
+    retry=deep_extraction(store,DeepExtractionRequest(mode="plan",source_id=source_id,
+        source_region_ids=tuple(reversed(selected)),plan_attempt_id="deferred-only"),context())
+    assert retry.status=="complete",retry
+    assert retry.data["coverage"]=="selected_source_regions"
+    assert retry.data["region_count"]==len(selected)
+    assert retry.data["full_source_region_count"]==full.data["region_count"]
+    assert retry.data["batches"][0]["source_region_ids"]==selected
+    assert retry.data["batches"][0]["operation_id"]!=full.data["batches"][0]["operation_id"]
+    assert store.revision==before
+    bad=deep_extraction(store,DeepExtractionRequest(mode="plan",source_id=source_id,
+        source_region_ids=("foreign",),plan_attempt_id="invalid"),context())
+    assert bad.status=="failed" and store.revision==before

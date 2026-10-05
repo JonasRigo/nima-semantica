@@ -5,6 +5,19 @@ import subprocess
 from nima_semantica.storage import GraphStore
 
 
+@pytest.fixture
+def lexical_installation(tmp_path, monkeypatch):
+    """Explicit operator configuration independent of the host installation."""
+    from nima_semantica.installation import Installation, ModelProfile
+    config = Installation(data_root=str(tmp_path / "operator-data"),
+        llm=ModelProfile(provider="compatible", model="offline-fixture",
+            base_url="http://127.0.0.1:1/v1"))
+    path = tmp_path / "installation.json"
+    path.write_text(config.model_dump_json())
+    monkeypatch.setenv("NIMA_CONFIG", str(path))
+    return config
+
+
 @pytest.fixture(scope="session")
 def symbolic_runtime():
     if os.environ.get("NIMA_SYMBOLIC_WORKER_URL"):

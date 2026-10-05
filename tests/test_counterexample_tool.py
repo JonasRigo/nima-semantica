@@ -175,7 +175,7 @@ def test_optional_retrieval_is_exact_scoped_and_receipted(store):
     _,_,prepared=pipeline(store)
     from nima_semantica.math_retrieval import MathRetrievalPolicy
     seq=actions(); seq[0]["arguments"]["context_needs"]=[{"query":"Claim evidence","purpose":"Locate method context"}]
-    result=agent(store,seq,retrieval=MathRetrievalPolicy(enabled=True,projection_id=prepared.data["projection"]["projection_id"]))
+    result=agent(store,seq,retrieval=MathRetrievalPolicy(mode="lexical",enabled=True,projection_id=prepared.data["projection"]["projection_id"]))
     assert result.status=="partial",result
     assert result.data["context_packets"][0]["passages"]
     assert any(a["kind"]=="retrieval" for a in result.data["attempts"])

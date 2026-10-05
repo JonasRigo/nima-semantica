@@ -176,7 +176,7 @@ def test_capabilities_and_forged_handles(service):
             disabled.read(sid, "inspect_" + kind, {key: "forged"})
 
 
-def test_retrieval_exact_provenance_preview(service, monkeypatch):
+def test_retrieval_exact_provenance_preview(service, monkeypatch, lexical_installation):
     from nima_semantica import math_retrieval
     text = "Exact method. " * 100
     passage = {"region_id": "region", "text": text, "evidence": {"source_revision": "v1", "artifact_sha256": "a" * 64}, "locator": {"page": 1}}
@@ -193,7 +193,7 @@ def test_retrieval_exact_provenance_preview(service, monkeypatch):
     assert exact["status"] == "observed_text"
 
 
-def test_real_retrieval_no_research_writes(service, store):
+def test_real_retrieval_no_research_writes(service, store, lexical_installation):
     pytest.importorskip("semantica", reason="real ingestion requires the installed Semantica environment")
     from test_source_pipeline import pipeline, context
     from nima_semantica.corpus_registry import CorpusRegistry
@@ -204,7 +204,7 @@ def test_real_retrieval_no_research_writes(service, store):
         "retrieval_projection_id": prepared.data["projection"]["projection_id"]}), research_store=store)
     before = store.revision
     sid = opened(service)
-    result = invoke(service, "retrieve_context", dict(session_id=sid, request_id="source", expected_revision=0, query="Claim evidence", purpose="Exact method"))
+    result = invoke(service, "retrieve_context", dict(session_id=sid, request_id="source", expected_revision=0, query="Claim evidence", purpose="Exact method", mode="lexical"))
     assert result["status"] == "completed", result
     assert result["result"]["source_nodes"]
     assert store.revision == before
@@ -318,7 +318,7 @@ async def _stdio_calculate(tmp_path, root, projection):
                 return json.loads(result.content[0].text)
             session = await call("open", dict(request_id="create", task="Calculate one plus one", required_paths=["answer"]))
             sid = session["session_id"]
-            retrieved = await call("retrieve_context", dict(session_id=sid, request_id="retrieve", expected_revision=0, query="Claim evidence", purpose="Inspect exact source context"))
+            retrieved = await call("retrieve_context", dict(session_id=sid, request_id="retrieve", expected_revision=0, query="Claim evidence", purpose="Inspect exact source context", mode="lexical"))
             assert retrieved["status"] == "completed", retrieved
             source = retrieved["result"]["source_nodes"][0]["id"]
             exact = await call("inspect", dict(session_id=sid, kind="node", identifier=source))

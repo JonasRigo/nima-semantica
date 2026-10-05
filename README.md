@@ -65,6 +65,7 @@ Project initialization installs all ten for your selected harnesses.
 | --- | --- |
 | [Chat with the knowledge base](docs/skills/nima-corpus-chat.md) | Answers from corpus literature and private project notes, with exact citations. |
 | [Ingest papers](docs/skills/nima-ingest.md) | Full or provisional fast ingestion, ontology-guided extraction, and approved graph updates. |
+| [Normalize vocabulary](docs/skills/normalize-vocabulary.md) | Evidence-backed terms, aliases and usage distinctions from the linked project graph. |
 | [Research](docs/skills/nima-research.md) | An investigation combining evidence and specialist checks. |
 | [Literature review](docs/skills/nima-literature-review.md) | Literature discovery, synthesis and comparison. |
 | [Review](docs/skills/nima-review.md) | A focused assessment of a claim, proof or artifact. |

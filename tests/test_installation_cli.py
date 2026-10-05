@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from nima_semantica.cli import main, install_harness
-from nima_semantica.installation import Installation, ModelProfile, EmbeddingProfile, write_json
+from nima_semantica.installation import Installation, ModelProfile, EmbeddingProfile, write_json, assets
 from nima_semantica.workflow_installation import configure_flow, maintained_flows, model_inventory, validate_flow
 
 
@@ -132,6 +132,9 @@ def test_setup_project_harness_merge_replay_and_ingestion(tmp_path, capsys):
     assert json.loads((project / ".nima/project.json").read_text())["cli_command"][-2:] == ["-m", "nima_semantica.cli"]
     assert json.loads((project / "opencode.json").read_text())["theme"] == "dark"
     assert (project / ".claude/skills/nima-conduct-proof/assets/scipost-report.tex").is_file()
+    for harness in (".agents", ".claude"):
+        skill = project / harness / "skills/normalize-vocabulary/SKILL.md"
+        assert skill.read_bytes() == (assets() / "skills/normalize-vocabulary/SKILL.md").read_bytes()
     notes = tmp_path / "notes.md"; notes.write_text("# Notes\n\nThe sum of two even integers is even.")
     assert main(prefix + ["ingest", "papers", str(notes), "--project", "test"]) == 0
     assert main(prefix + ["project", "status", "test", "--corpus", "papers"]) == 0

@@ -245,7 +245,7 @@ async def _stdio_lifecycle(tmp_path):
     from mcp.client.stdio import stdio_client
     config = tmp_path / "config.json"
     config.write_text(json.dumps(dict(database_path=str(tmp_path / "stdio.sqlite"), project_id="p", run_id="r")))
-    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
+    env = dict(os.environ)
     params = StdioServerParameters(command=sys.executable, args=["-m", "nima_semantica.math_mcp", "--config", str(config)], env=env)
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as client:
@@ -278,7 +278,7 @@ async def _stdio_lifecycle(tmp_path):
 
 @pytest.mark.integration
 @pytest.mark.symbolic
-def test_real_stdio_retrieval_calculation_and_submit(tmp_path):
+def test_real_stdio_retrieval_calculation_and_submit(tmp_path, lexical_installation):
     pytest.importorskip("semantica")
     from nima_semantica.storage import GraphStore
     from nima_semantica.corpus_registry import CorpusRegistry
@@ -308,7 +308,7 @@ async def _stdio_calculate(tmp_path, root, projection):
     config.write_text(json.dumps(dict(database_path=str(tmp_path / "full.sqlite"), project_id="p", run_id="r",
         allow_retrieval=True, allow_execution=True, retrieval_projection_id=projection)))
     params = StdioServerParameters(command=sys.executable, args=["-m", "nima_semantica.math_mcp", "--config", str(config)],
-        env={**os.environ, "NIMA_STORE_ROOT": str(root), "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")})
+        env={**os.environ, "NIMA_STORE_ROOT": str(root)})
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as client:
             await client.initialize()

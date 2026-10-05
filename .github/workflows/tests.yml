@@ -20,6 +20,7 @@ jobs:
     needs: package
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: ['ubuntu-24.04', 'macos-15', 'macos-26']
         python: ['3.11', '3.12', '3.13']
@@ -52,6 +53,7 @@ jobs:
     needs: package
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: ['ubuntu-24.04', 'macos-15', 'macos-26']
     steps:

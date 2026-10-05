@@ -103,7 +103,7 @@ def test_real_stdio_proof_lifecycle_and_resume(tmp_path):
     config = tmp_path / "proof.json"
     config.write_text(json.dumps({"database_path": str(tmp_path / "proof.sqlite"), "project_id": "p"}))
     params = StdioServerParameters(command=sys.executable, args=["-m", "nima_semantica.proof_mcp", "--config", str(config)],
-        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")})
+        env=dict(os.environ))
 
     async def exercise():
         async with stdio_client(params) as (read, write):

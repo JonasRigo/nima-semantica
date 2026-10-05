@@ -15,7 +15,17 @@ The complete source suite passed 1,447 tests with 85 optional skips on Linux/Pyt
 The pinned Langflow stack passed 1,652 tests with 76 optional skips and one retained adapter scheduling expected failure on Linux/Python 3.13.
 Retrieval fixtures use an explicit temporary operator configuration; offline preview checks fail if they attempt provider generation.
 Both full suites passed after refreshing the generated contract catalog and saved canvases.
-Installed-distribution and upgrade checks are pending.
+The installed wheel passed the same complete core suite: 1,447 tests with 85 optional skips.
+An isolated container installed the wheel and passed the pinned Langflow suite: 1,652 tests with 76 optional skips and one retained expected failure.
+Both installed checks verified that runtime imports came from site-packages.
+The local Python 3.12 wheel and upgrade environments reuse the development installation's dependency packages; they do not qualify fresh dependency resolution.
+Hosted jobs install the built wheel and resolve dependencies independently under the tested constraints.
+
+The published v0.1.2 wheel created an isolated fixture with 16 records, one exact Unicode source region and a scoped dependency graph.
+Upgrading that environment to v0.1.3 preserved every stored record, store and graph revisions, exact source readback and provenance, lexical retrieval results and operator configuration bytes.
+The check made no provider calls and did not open the live corpus.
+An additional 22 installed-wheel checks passed for real MCP transport, retrieval, calculation, submission and Docker symbolic isolation.
+The MCP subprocesses inherit the selected runtime import environment and an explicit temporary operator configuration.
 The exact commit, distribution hashes and qualification report will be supplied with the candidate artifacts.
 
 ## Live evidence and limitations

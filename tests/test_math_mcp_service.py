@@ -251,7 +251,8 @@ async def _stdio_lifecycle(tmp_path):
         async with ClientSession(read, write) as client:
             await client.initialize()
             listed = await client.list_tools()
-            assert len(listed.tools) == 16
+            from nima_semantica.math_mcp_contracts import TOOLS
+            assert {tool.name for tool in listed.tools} == {"nima_math_" + name for name in TOOLS} | {"nima_math_tools", "nima_math_operations"}
             discovery = await client.call_tool("nima_math_tools", {})
             assert "run_calculation_graph" in json.loads(discovery.content[0].text)["operations"]
             invalid = await client.call_tool("nima_math_open", {"request": {"unexpected": "SECRET"}})

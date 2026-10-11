@@ -14,7 +14,7 @@ from nima_semantica.providers import strict_json_object
 class MathMCPExport(Component):
     nima_manifest = manifest_for_component('MathMCPExport')
     display_name = 'Math · Export'
-    description = 'Export the private graph; does not publish to research graphs. Read-only; may run concurrently.'
+    description = 'Page the private graph; request exact full payloads explicitly. No project publication. Read-only; may run concurrently.'
     name = 'MathMCPExport'
     icon = "calculator"
     inputs = [

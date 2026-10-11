@@ -84,7 +84,7 @@ class CorpusRegistry:
             ))
 
     def resolve(self, resource_id: str, *, corpus_id: str, project_id: str | None = None, exact_scope: bool = False) -> RegistryEntry | None:
-        records = self.store.records(self.RECORD_KIND, corpus_id=corpus_id, project_id=project_id)
+        records = self.store.records_matching(self.RECORD_KIND, "resource_id", resource_id, corpus_id=corpus_id, project_id=project_id)
         for _, record in sorted(records, key=lambda item: item[1].project_id != project_id):
             if record.project_id not in (None, project_id):
                 continue
@@ -121,7 +121,7 @@ class CorpusRegistry:
         return descriptor
 
     def _revision(self, revision_id: str, corpus_id: str) -> RegistryRevision | None:
-        for _, record in self.store.records(self.REVISION_KIND, corpus_id=corpus_id):
+        for _, record in self.store.records_matching(self.REVISION_KIND, "revision_id", revision_id, corpus_id=corpus_id):
             revision = RegistryRevision.model_validate(record.content)
             if revision.revision_id == revision_id:
                 return revision

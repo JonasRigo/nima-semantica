@@ -260,7 +260,7 @@ def manifest_for_component(name: str) -> ComponentManifest:
         if name not in operations:
             raise ValueError(f"Unknown maintained component: {name}")
         operation = operations[name]
-        read_only = operation in {"operations", "status", "frontier", "inspect", "export"}
+        read_only = operation in {"operations", "status", "frontier", "inspect", "export", "enumerate_records", "read_record"}
         return ComponentManifest(
             component_id="math_mcp_" + operation, version="1",
             input_contract="math_mcp_" + operation + "_request", output_contract="math_mcp_result",

@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .math_task_contract import MathTaskFact
 from .math_indexed_count import IndexedSet
 from .math_graph_program import _ARITY
+from .private_record_reads import EnumerateRecords, ReadRecord
 
 
 class Arguments(BaseModel):
@@ -23,7 +24,11 @@ class Session(Arguments):
     session_id: str
 
 
-class Frontier(Session):
+class Status(Session):
+    full_payload: bool = False
+
+
+class Frontier(Status):
     support_nodes: dict[str, str] | None = Field(default=None, description="Optional current candidate: required output path to exact node ID. Inspection only; does not alter or qualify nodes. Otherwise view the latest candidate batch.")
 
 
@@ -36,6 +41,13 @@ class Inspect(Session):
     kind: Literal["node", "receipt", "action"]
     identifier: str
     source_span: SourceSpan | None = None
+    full_payload: bool = False
+
+
+class Export(Session):
+    cursor: str | None = Field(default=None, max_length=2048)
+    limit: int = Field(default=25, ge=1, le=100)
+    full_payload: bool = False
 
 
 class Mutation(Session):
@@ -132,11 +144,13 @@ class Close(Mutation):
 
 
 TOOLS = {
+    "enumerate_records": (EnumerateRecords, "Enumerate all scoped records of a kind with deterministic pagination and revision checks."),
+    "read_record": (ReadRecord, "Read an exact canonical scoped record and its hash."),
     "open": (OpenSession, "Create or resume an immutable task-bound private calculation session."),
-    "status": (Session, "Inspect lifecycle, task binding and current revision."),
+    "status": (Status, "Inspect lifecycle, task binding and current revision."),
     "frontier": (Frontier, "Request qualification of the selected candidate: inspect its unresolved obligations; full historical audit remains available through export/inspection."),
     "inspect": (Inspect, "Read an exact node, source passage, execution receipt or action attempt."),
-    "export": (Session, "Export the private graph; does not publish to research graphs."),
+    "export": (Export, "Page the private graph; request exact full payloads explicitly. No project publication."),
     "record_step": (RecordStep, "Record one provisional mathematical step with exact dependencies."),
     "retrieve_context": (Retrieve, "Retrieve exact scoped literature, returning previews and inspectable provenance."),
     "run_experiment": (Experiment, "Run exploratory Python in the isolated symbolic worker; observations are not proofs."),
@@ -149,7 +163,7 @@ TOOLS = {
 }
 
 for _operation, (_schema, _description) in list(TOOLS.items()):
-    _sequencing = (" Read-only; may run concurrently." if _operation in {"status", "frontier", "inspect", "export"}
+    _sequencing = (" Read-only; may run concurrently." if _operation in {"status", "frontier", "inspect", "export", "enumerate_records", "read_record"}
         else " Session mutation: run sequentially, await its returned revision before the next mutation (including retrieval).")
     TOOLS[_operation] = (_schema, _description + _sequencing)
 
@@ -195,9 +209,19 @@ def invoke(service, operation: str, arguments: dict):
     if operation == "inspect":
         kind = data["kind"]
         key = "request_id" if kind == "action" else kind + "_id"
-        return service.read(sid, "inspect_" + kind, {key: data["identifier"], **({"source_span": data["source_span"]} if "source_span" in data else {})})
-    if operation in {"status", "frontier", "export"}:
-        return response_view(service.read(sid, operation, data), operation)
+        return service.read(sid, "inspect_" + kind, {key: data["identifier"], "full_payload": request.full_payload,
+            **({"source_span": data["source_span"]} if "source_span" in data else {})})
+    if operation in {"status", "frontier", "export", "enumerate_records", "read_record"}:
+        response = service.read(sid, operation, data)
+        if operation in {"status", "frontier"} and data.get("full_payload"):
+            return response
+        response = response_view(response, operation)
+        if operation in {"status", "frontier"}:
+            from .inspection_pages import bounded_value
+            result = response["result"]
+            response["result"] = {key: bounded_value(value, {"operation": "export", "session_id": sid,
+                "full_payload": True, "section": key}, max_bytes=32768 // max(1, len(result))) for key, value in result.items()}
+        return response
     rid, revision = data.pop("request_id"), data.pop("expected_revision")
     # Preserve explicit JSON null values in user claims and answers.
     if isinstance(request, RecordStep):

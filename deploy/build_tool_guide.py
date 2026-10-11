@@ -47,6 +47,9 @@ def build():
             if name in ("ChatInput", "ChatOutput"):
                 template["should_store_message"]["value"] = False
                 template["session_id"]["value"] = ""
+            if name == "ChatOutput":
+                # Preserve the selected catalogue JSON at the terminal formatter.
+                template["clean_data"]["value"] = False
             if name == "ChatInput":
                 template["input_value"]["value"] = "{}"
                 template["files"]["value"] = []
@@ -58,6 +61,7 @@ def build():
         source, target = nodes[edge["source"]], nodes[edge["target"]]
         sh, th = edge["data"]["sourceHandle"], edge["data"]["targetHandle"]
         port = next(p for p in source["data"]["node"]["outputs"] if p["name"] == sh["name"])
+        source["data"]["selected_output"] = sh["name"]
         field = target["data"]["node"]["template"][th["fieldName"]]
         sh["output_types"] = port["types"]
         th.update(inputTypes=field.get("input_types", []), type=field["type"])

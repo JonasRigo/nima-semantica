@@ -44,6 +44,8 @@ class MathSessionService(PrivateGraphSessionStore):
         super().__init__(config.database_path)
         self.config, self.research_store, self.worker = config, research_store, worker
         with self._connect() as db:
+            from .private_payloads import schema
+            schema(db)
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS math_lifecycle (
                     session_id TEXT PRIMARY KEY, binding_json TEXT NOT NULL,
@@ -74,6 +76,22 @@ class MathSessionService(PrivateGraphSessionStore):
 
     def _scope(self):
         return _json(self.config.model_dump(exclude={"database_path"}))
+
+    def _state(self, graph, *, db=None):
+        from .private_payloads import compact
+        raw = super()._state(graph)
+        if db is not None:
+            return compact(db, self._scope(), raw)
+        with self._connect() as connection:
+            return compact(connection, self._scope(), raw)
+
+    def _restore(self, binding, payload):
+        return super()._restore(binding, self._expand(payload))
+
+    def _expand(self, payload):
+        from .private_payloads import expand
+        with self._connect() as db:
+            return expand(db, self._scope(), payload)
 
     @staticmethod
     def _dispatch(graph, binding, name, args, *, research_store=None, worker=None):
@@ -208,7 +226,13 @@ class MathSessionService(PrivateGraphSessionStore):
 
     def _load(self, db, session_id):
         life = db.execute("SELECT * FROM math_lifecycle WHERE session_id=?", (session_id,)).fetchone()
-        if life is None or life["scope_json"] != self._scope():
+        configured = json.loads(self._scope())
+        recorded = json.loads(life["scope_json"]) if life is not None else {}
+        # An operator projection rebind applies to new sessions. Existing sessions
+        # keep their immutable source pin and remain inspectable/replayable.
+        configured.pop("retrieval_projection_id", None)
+        recorded.pop("retrieval_projection_id", None)
+        if life is None or recorded != configured:
             raise ValueError("unknown session or scope/capability mismatch")
         data = json.loads(life["binding_json"])
         data["task_facts"] = tuple(MathTaskFact.model_validate(x) for x in data["task_facts"])
@@ -244,7 +268,7 @@ class MathSessionService(PrivateGraphSessionStore):
             else:
                 graph = SingleCalculationGraph(task, binding.task_facts, binding.required_paths, binding.indexed_sets)
                 db.execute("INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?)",
-                    (identifier, binding.project_id, binding.run_id, binding.digest(), 0, _json(self._state(graph))))
+                    (identifier, binding.project_id, binding.run_id, binding.digest(), 0, _json(self._state(graph, db=db))))
                 payload = asdict(binding)
                 payload["task_facts"] = [x.model_dump(mode="json") for x in binding.task_facts]
                 payload["indexed_sets"] = [x.model_dump(mode="json") for x in binding.indexed_sets]
@@ -278,29 +302,48 @@ class MathSessionService(PrivateGraphSessionStore):
                     raise ValueError("unknown or cross-session action")
                 outcome = db.execute("SELECT response_json FROM math_outcomes WHERE session_id=? AND request_id=?",
                     (session_id, args["request_id"])).fetchone()
-                result = {"attempt": dict(attempt), "outcome": json.loads(outcome[0]) if outcome else None}
+                result = {"attempt": dict(attempt), "outcome": self._expand(json.loads(outcome[0])) if outcome else None}
                 late = db.execute("SELECT result_json, detached_state_json FROM math_late_results WHERE session_id=? AND request_id=?", (session_id, args["request_id"])).fetchone()
                 if late:
-                    result["unadmitted_late_result"] = {"result": json.loads(late[0]), "detached_state": json.loads(late[1])}
+                    result["unadmitted_late_result"] = {"result": self._expand(json.loads(late[0])), "detached_state": self._expand(json.loads(late[1]))}
+            elif name in {"enumerate_records", "read_record"}:
+                from .corpus_snapshot import CorpusSnapshot
+                from .private_record_reads import read_records
+                import os
+                root = os.environ.get("NIMA_STORE_ROOT")
+                if not root:
+                    raise ValueError("operator corpus store is unconfigured")
+                with CorpusSnapshot(root, corpus_id=binding.corpus_id, project_id=binding.project_id) as store:
+                    result = read_records(store, name, {**args, "session_id": session_id})
             elif name in {"frontier", "export", "inspect_node", "inspect_receipt"}:
                 result, _ = self._dispatch(graph, binding, name, args)
             else:
                 raise ValueError("unknown inspection")
             if name in {"status", "frontier"}:
                 result.update(self._repair_view(db, session_id, graph, support_nodes=args.get("support_nodes")))
+            if name == "export" and not args.get("full_payload"):
+                from .inspection_pages import graph_page
+                result, pagination = graph_page(result, session_id=session_id, revision=row["revision"],
+                    cursor=args.get("cursor"), limit=args.get("limit", 25))
+                result.update(pagination)
+            elif name.startswith("inspect_") and not args.get("full_payload"):
+                from .inspection_pages import bounded_value
+                result = bounded_value(result, {"session_id": session_id, "kind": name.removeprefix("inspect_"),
+                    "identifier": next((args[k] for k in ("node_id", "receipt_id", "request_id") if k in args), None),
+                    "full_payload": True})
             return self._response(session_id, row["revision"], "completed", result)
 
-    @staticmethod
-    def _repair_view(db, session_id, graph, pending=None, support_nodes=None):
+    def _repair_view(self, db, session_id, graph, pending=None, support_nodes=None):
         from .math_repair_feedback import repair_feedback
-        attempts = [(row[0], json.loads(row[1])) for row in db.execute(
+        attempts = [(row[0], self._expand(json.loads(row[1]))) for row in db.execute(
             "SELECT request_id, response_json FROM math_outcomes WHERE session_id=? ORDER BY rowid", (session_id,))]
         if pending:
             attempts.append(pending)
         return repair_feedback(graph, attempts, support_nodes=support_nodes)
 
     def _save_outcome(self, db, sid, rid, response):
-        db.execute("INSERT INTO math_outcomes VALUES (?, ?, ?)", (sid, rid, _json(response)))
+        from .private_payloads import compact
+        db.execute("INSERT INTO math_outcomes VALUES (?, ?, ?)", (sid, rid, _json(compact(db, self._scope(), response))))
 
     def mutate(self, session_id: str, request_id: str, expected_revision: int,
                name: str, arguments: dict[str, Any]):
@@ -319,7 +362,7 @@ class MathSessionService(PrivateGraphSessionStore):
                     raise ValueError("divergent request replay")
                 done = db.execute("SELECT response_json FROM math_outcomes WHERE session_id=? AND request_id=?",
                     (session_id, request_id)).fetchone()
-                return json.loads(done[0]) if done else self._response(session_id, row["revision"], "running", {}, request_id)
+                return self._expand(json.loads(done[0])) if done else self._response(session_id, row["revision"], "running", {}, request_id)
             db.execute("INSERT INTO math_attempts VALUES (?, ?, ?, ?, ?)",
                 (session_id, request_id, name, encoded, expected_revision))
             reason = ("stale session revision" if expected_revision != row["revision"] else
@@ -351,7 +394,7 @@ class MathSessionService(PrivateGraphSessionStore):
                         (session_id, producing_request)).fetchone()
                 if saved is None:
                     raise ValueError("unknown or unfinished producing request in this session")
-                outcome = json.loads(saved[0])
+                outcome = self._expand(json.loads(saved[0]))
                 if outcome["status"] != "completed" or outcome["revision"] > expected_revision:
                     raise ValueError("named reference requires a completed prior result")
                 payload = outcome["result"]
@@ -379,7 +422,7 @@ class MathSessionService(PrivateGraphSessionStore):
                 if terminal == "completed":
                     with self._connect() as db:
                         submissions = db.execute("SELECT o.response_json FROM math_outcomes o JOIN math_attempts a USING(session_id, request_id) WHERE a.session_id=? AND a.name='submit' ORDER BY a.rowid DESC", (session_id,)).fetchall()
-                    latest = json.loads(submissions[0][0]) if submissions else {}
+                    latest = self._expand(json.loads(submissions[0][0])) if submissions else {}
                     if latest.get("revision") != row["revision"] or not latest.get("result", {}).get("admitted"):
                         raise ValueError("completed closure requires a current admitted submission")
                 result, changed = {"outcome": terminal, "frontier": graph.frontier(), "candidate": arguments.get("candidate")}, True
@@ -430,13 +473,13 @@ class MathSessionService(PrivateGraphSessionStore):
             existing = db.execute("SELECT response_json FROM math_outcomes WHERE session_id=? AND request_id=?", (session_id, request_id)).fetchone()
             if existing:
                 db.execute("INSERT INTO math_late_results VALUES (?, ?, ?, ?)",
-                    (session_id, request_id, _json(result), _json(self._state(graph))))
-                return json.loads(existing[0])
+                    (session_id, request_id, _json(result), _json(self._state(graph, db=db))))
+                return self._expand(json.loads(existing[0]))
             if life["active"] != request_id or current["revision"] != row["revision"]:
                 raise RuntimeError("session changed during reserved attempt")
             revision = row["revision"] + int(changed)
             if changed:
-                db.execute("UPDATE sessions SET revision=?, state_json=? WHERE session_id=?", (revision, _json(self._state(graph)), session_id))
+                db.execute("UPDATE sessions SET revision=?, state_json=? WHERE session_id=?", (revision, _json(self._state(graph, db=db)), session_id))
             db.execute("UPDATE math_lifecycle SET active=NULL, state=? WHERE session_id=?", (terminal or "open", session_id))
             response = self._response(session_id, revision, status, result, request_id)
             feedback_graph = graph if changed else self._restore(binding, json.loads(row["state_json"]))

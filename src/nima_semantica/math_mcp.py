@@ -23,12 +23,12 @@ class ConfiguredMathService(MathSessionService):
         if name != "retrieve_context" or not binding.allow_retrieval or research_store is not None:
             return super()._dispatch(graph, binding, name, arguments, research_store=research_store, worker=worker)
         # Store lease is short-lived and operator selected, independent of Langflow.
-        from .storage import GraphStore
+        from .corpus_snapshot import CorpusSnapshot
         with _retrieval_lock:
             root = os.environ.get("NIMA_STORE_ROOT")
             if not root or not (Path(root) / "graph.sqlite3").is_file():
                 raise ValueError("NIMA_STORE_ROOT must identify an existing corpus store")
-            store = GraphStore(Path(root))
+            store = CorpusSnapshot(Path(root), corpus_id=binding.corpus_id, project_id=binding.project_id)
             try:
                 return super()._dispatch(graph, binding, name, arguments, research_store=store, worker=worker)
             finally:
@@ -53,9 +53,16 @@ def canvas_service():
             if old != fingerprint:
                 raise ValueError("Math configuration changed; restart the canvas process")
             return service
-        service = load_service(path)
-        owner = exclusive_owner(service)
+        from .private_service import database_owner
+        config = MathServiceConfig.model_validate_json(fingerprint)
+        owner = database_owner(config.database_path)
         owner.__enter__()
+        try:
+            service = load_service(path)
+            service.recover_interrupted()
+        except BaseException:
+            owner.__exit__(None, None, None)
+            raise
         atexit.register(owner.__exit__, None, None, None)
         _canvas_services[path] = (fingerprint, service, owner)
         return service
@@ -64,8 +71,8 @@ def canvas_service():
 @contextmanager
 def exclusive_owner(service):
     """Separate from short SQLite transactions; never recover another live owner."""
-    with open(str(service.path) + ".owner.lock", "a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    from .private_service import database_owner
+    with database_owner(service.path):
         service.recover_interrupted()
         yield
 
@@ -74,6 +81,8 @@ def create_server(service):
     from .request_diagnostics import request_server
     import anyio
     server = request_server("NIMA Calculate Mathematics · Candidate", "nima_math_", TOOLS)
+    from .private_readiness import private_readiness
+    readiness = private_readiness(service.config)
 
     def register(operation, schema, description):
         async def call(request):
@@ -88,10 +97,10 @@ def create_server(service):
         register(operation, schema, description)
 
     @server.tool()
-    def nima_math_tools() -> dict:
+    def nima_math_tools(operation: str = "") -> dict:
         """Discover every session operation, typed input contract, limits and continuation."""
         from .tool_usage import private_catalog
-        return private_catalog(TOOLS)
+        return {**private_catalog(TOOLS, operation), "operator": readiness}
 
     @server.tool()
     def nima_math_operations() -> dict:
@@ -105,8 +114,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, help="Trusted local JSON configuration; never a tool argument")
     args = parser.parse_args()
-    service = load_service(args.config)
-    with exclusive_owner(service):
+    from .private_service import database_owner
+    config = MathServiceConfig.model_validate_json(Path(args.config).read_text())
+    with database_owner(config.database_path):
+        service = ConfiguredMathService(config)
+        service.recover_interrupted()
         create_server(service).run(transport="stdio")
 
 

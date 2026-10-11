@@ -60,10 +60,14 @@ def usage(tool_id, schema):
         "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage."}
 
 
-def private_catalog(tools):
+def private_catalog(tools, operation=""):
+    if operation and operation not in tools:
+        raise ValueError("unknown operation; request the compact inventory first")
     return {"transport": "typed request object", "operations": {
-        name: {"description": description, "input_schema": schema.model_json_schema(),
-               "request_limits": schema_limits(schema.model_json_schema())}
-        for name, (schema, description) in tools.items()},
+        name: ({"description": description, "input_schema": schema.model_json_schema(),
+               "request_limits": schema_limits(schema.model_json_schema())} if operation else {"description": description})
+        for name, (schema, description) in tools.items() if not operation or name == operation},
+        "view": "full_contract" if operation else "compact_inventory", "default_response_limit_bytes": 16384,
+        "contract_lookup": "Call this catalogue with operation set to the exact operation name for its complete contract.",
         "continuation": "Use status/frontier/inspect to recover session state. Mutations use the current revision and a unique request_id. Replay identical deliveries; do not automatically rerun interrupted execution.",
         "limits": "Per-call limits are not a fixed total step or batch count. Keep dependent work in the same session; do not split atomic or jointly validated operations blindly."}

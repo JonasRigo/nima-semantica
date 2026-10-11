@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nima-semantica"
-version = "0.1.3"
+version = "0.2.0"
 authors = [{name = "Jonas Rigo"}]
 description = "Local, auditable mathematical research on Semantica"
 requires-python = ">=3.11,<3.14"
@@ -29,6 +29,7 @@ all = ["nima-semantica[langflow,pdf,mcp]"]
 nima = "nima_semantica.cli:main"
 nima-math-mcp = "nima_semantica.math_mcp:main"
 nima-proof-mcp = "nima_semantica.proof_mcp:main"
+nima-private-service = "nima_semantica.private_service:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

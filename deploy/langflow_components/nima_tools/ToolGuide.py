@@ -14,9 +14,9 @@ class ToolGuide(BaseComponent):
     description = "Inspect exact contracts and delivery status. No model, storage, tool dispatch, or automatic selection."
     nima_manifest = manifest_for_component("ToolGuide")
     outputs = [
-        Output(name="result", display_name="Typed catalog result", method="result_data", group_outputs=True),
-        Output(name="preview", display_name="Readable guide", method="preview_message", group_outputs=True),
-        Output(name="table", display_name="Tool inventory", method="table_data", group_outputs=True),
+        Output(name="result", display_name="Typed catalog result", method="result_data", group_outputs=False),
+        Output(name="preview", display_name="Catalog JSON", method="preview_message", group_outputs=False),
+        Output(name="table", display_name="Tool inventory", method="table_data", group_outputs=False),
     ]
 
     async def run(self):
@@ -30,18 +30,6 @@ class ToolGuide(BaseComponent):
     async def preview_message(self) -> Message:
         import json
         result = (await self.result_data()).data
-        if result["status"] == "failed" and result["data"].get("executed") is False:
-            return Message(text=json.dumps(result, ensure_ascii=False))
-        lines = ["# NIMA Tool Guide", result["note"], "", result["data"]["contract_note"]]
-        for item in result["data"]["tools"]:
-            lines.extend(["", "## " + item["name"],
-                f"ID: {item['tool_id']} | Implementation: {item['implementation']} | Visual approval: {item['visual_approval']}",
-                item["description"], "Boundary: " + item["boundary"]])
-            lines.extend(["Usage and recovery:", "```json", json.dumps(item["usage"], indent=2), "```"])
-            if item["input_schema"] is not None:
-                lines.extend(["Input schema:", "```json", json.dumps(item["input_schema"], indent=2), "```",
-                    "Examples:", "```json", json.dumps(item["examples"], indent=2), "```"])
-        lines.extend(["", result["data"]["deployment_status"]])
-        for diagnostic in result["diagnostics"]:
-            lines.append(diagnostic["code"] + ": " + diagnostic["message"])
-        return Message(text="\n".join(lines))
+        # Langflow collects both display messages and returned Message values.
+        # Plain compact JSON survives both paths byte-for-byte and deduplicates.
+        return Message(text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))

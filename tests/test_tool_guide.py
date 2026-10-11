@@ -67,9 +67,9 @@ def test_lookup_does_not_open_store_or_network(monkeypatch):
         pytest.fail("catalog lookup must not execute external operations")
     monkeypatch.setattr(GraphStore, "__init__", forbidden)
     monkeypatch.setattr(socket, "create_connection", forbidden)
-    first = tool_guide(ToolGuideRequest())
+    first = tool_guide(ToolGuideRequest(tool="tool_guide"))
     first.data["tools"][0]["input_schema"].clear()
-    second = tool_guide(ToolGuideRequest())
+    second = tool_guide(ToolGuideRequest(tool="tool_guide"))
     assert second.data["tools"][0]["input_schema"]
     assert second.data["catalog_hash"] == first.data["catalog_hash"]
     json.dumps(second.model_dump(mode="json"), allow_nan=False)

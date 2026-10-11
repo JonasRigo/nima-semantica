@@ -105,12 +105,19 @@ def _scope(context):
     return {"corpus_id": context.corpus_id, "project_id": context.project_id}
 
 
+class RetrievalReadinessError(NimaError):
+    def __init__(self, code):
+        self.code = code
+        super().__init__(code)
+
+
 def _projection(store, request, context):
     if request.expected_store_revision is not None and store.revision != request.expected_store_revision:
         raise ConflictError("stale requested store revision")
     if CorpusRegistry(store).corpus(context.corpus_id) is None:
         raise NimaError("corpus unavailable")
     candidates = []
+    pinned_exists = False
     for _, record in store.records("GraphProjection", **_scope(context)):
         if record.project_id != context.project_id:
             continue
@@ -119,15 +126,16 @@ def _projection(store, request, context):
             raise ConflictError("projection scope differs")
         if request.projection_id is not None and manifest.projection_id != request.projection_id:
             continue
+        pinned_exists = True
         if (manifest.graph_revision == store.graph_revision(**_scope(context))
             and manifest.source_revision == str(store.embedding_revision(context.corpus_id))):
             candidates.append(manifest)
     if not candidates:
-        raise NimaError("no current projection; prepare/index sources explicitly")
+        raise RetrievalReadinessError("retrieval.projection_stale" if pinned_exists else "retrieval.projection_unavailable")
     # Deterministic exact identity, not row-order/latest fallback.
     manifest = min(candidates, key=lambda m: m.projection_id)
     if request.mode != "lexical" and manifest.vector_manifest is None:
-        raise NimaError("projection has no vectors")
+        raise RetrievalReadinessError("retrieval.projection_vectors_unavailable")
     return manifest
 
 
@@ -357,10 +365,14 @@ def retrieve_research_context(store, request, context, *, provider=None, manifes
     if request.mode == "lexical":
         try:
             return work()
+        except RetrievalReadinessError as exc:
+            return failure(exc.code)
         except (ValueError, KeyError, TypeError, NimaError, OSError):
             return failure("retrieval.unavailable_or_invalid_evidence")
     if not context.allow_embeddings or not context.allow_attempt_writes:
         return failure("retrieval.model_attempt_not_authorized")
+    if getattr(store, "read_only", False):
+        return failure("retrieval.embedding_requires_corpus_owner")
     receipts = ExecutionReceiptService(store)
     identifier = identity({"stage": "research_retrieval", "operation_id": request.operation_id, **_scope(context)})
     fingerprint = identity({"request": request, "context": context, "model": manifest})
@@ -390,7 +402,7 @@ def retrieve_research_context(store, request, context, *, provider=None, manifes
             return record(result, "partial" if result.status == "partial" else "completed")
     except (Exception, CancelledError, KeyboardInterrupt) as exc:
         interrupted = isinstance(exc, (CancelledError, KeyboardInterrupt))
-        result = record(failure("retrieval.interrupted" if interrupted else "retrieval.attempt_failed"),
+        result = record(failure("retrieval.interrupted" if interrupted else getattr(exc, "code", "retrieval.attempt_failed")),
             "interrupted" if interrupted else "failed")
         if interrupted:
             raise

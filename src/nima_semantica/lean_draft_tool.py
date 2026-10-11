@@ -289,7 +289,8 @@ def draft_lean(store, request, context, *, model=None, verifier=None, discovery=
             attempts.append({"kind":kind,"status":status,"receipt_id":child})
             receipts.record(ExecutionReceipt(receipt_id=child,operation_id=request.operation_id,stage="draft_lean_"+kind,**scope,
                 run_id=request.run_id,graph_revision=request.graph_revision,status=status,error=error,tool_version=VERSION,
-                metadata={"request_hash":identity(payload),"input":payload,"output":output,"parent_receipt_id":rid}))
+                metadata={"request_hash":identity(payload),"input_artifact":store.artifact(canonical(payload)),
+                    "output_artifact":store.artifact(canonical(output)),"parent_receipt_id":rid}))
     try:
         if not CorpusRegistry(store).corpus(context.corpus_id):raise RejectedAction("Registered corpus required")
         if request.run_id and ResearchRunService(store).get_run(request.run_id,**scope) is None:raise ConflictError("run outside scope")

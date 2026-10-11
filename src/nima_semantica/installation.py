@@ -11,6 +11,8 @@ import tempfile
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .models import AcquisitionPolicy
 from .paper_discovery import PaperDiscoveryPolicy
+from .execution_policy import LeanExecutionPolicy
+from .retrieval_policy import RetrievalLimits
 
 
 class Config(BaseModel):
@@ -89,6 +91,8 @@ class Installation(Config):
     lean_url: str = ""
     lean_container_url: str = ""
     lean_token_file: str = ""
+    lean_policy: LeanExecutionPolicy = Field(default_factory=LeanExecutionPolicy)
+    retrieval_limits: RetrievalLimits = Field(default_factory=RetrievalLimits)
 
 
 def configuration_path():

@@ -77,4 +77,7 @@ def request_server(title, prefix, contracts):
                 except (ValidationError, TypeError) as exc:
                     raise ToolError(json.dumps(invalid_request(name, exc))) from None
             return await super().call_tool(name, arguments)
-    return RequestServer(title)
+    from . import __version__
+    server = RequestServer(title)
+    server._mcp_server.version = __version__
+    return server

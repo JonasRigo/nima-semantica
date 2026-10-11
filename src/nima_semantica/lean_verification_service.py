@@ -42,8 +42,8 @@ class LeanVerificationResult(StrictModel):
     operation_id: str
     corpus_id: str
     project_id: str | None = None
-    status: Literal["verified", "inconclusive", "failed"]
-    outcome: Literal["verified", "inconclusive", "failed"]
+    status: Literal["verified", "inconclusive", "failed", "uncertain_delivery"]
+    outcome: Literal["verified", "inconclusive", "failed", "uncertain_delivery"]
     evidence_artifact: str | None = None
     environment_manifest: dict[str, Any] = Field(default_factory=dict)
     project_result: dict[str, Any] = Field(default_factory=dict)
@@ -68,7 +68,7 @@ class LeanVerificationService:
             return {"configured": False}
         toolchain = getattr(self.verifier, "toolchain", None)
         libraries = getattr(self.verifier, "libraries", ())
-        return {
+        manifest = {
             "configured": True,
             "protocol": "lean-project-kernel-replay-v3",
             "toolchain_sha256": getattr(toolchain, "sha256", None),
@@ -80,6 +80,12 @@ class LeanVerificationService:
             "artifact_bytes": getattr(self.verifier, "artifact_bytes", None),
             "allowed_axioms": ["propext", "Classical.choice", "Quot.sound"],
         }
+        policy = getattr(self.verifier, "policy", None)
+        if policy is not None:
+            manifest["execution_policy"] = policy.model_dump(mode="json")
+        if getattr(self.verifier, "durable_operations", False):
+            manifest["durable_operations"] = True
+        return manifest
 
     def request_hash(self, request: LeanVerificationRequest) -> str:
         """Exact binding for native reasoning checks, including compilation order."""
@@ -117,18 +123,37 @@ class LeanVerificationService:
                 require_source_region(self.store, region_id, corpus_id=request.corpus_id, project_id=request.project_id)
             pinned_environment = self.environment_manifest()
             native = LeanProjectRequest(dict(request.sources), tuple(request.targets), tuple(request.imports))
-            result = self.verifier.verify(self.store, native)
+            if hasattr(self.verifier, "verify_operation"):
+                result = self.verifier.verify_operation(self.store, native, operation_id)
+            else:
+                result = self.verifier.verify(self.store, native)
             if self.environment_manifest() != pinned_environment:
                 raise ConflictError("Lean verifier environment changed during verification")
-            project_result = asdict(result)
+            import json
+            project_result = json.loads(canonical(asdict(result)))
             evidence_artifact = result.evidence_artifact
             diagnostics = tuple(result.diagnostics)
             status = "verified" if result.compilation_succeeded and result.inspection_succeeded and result.certification_verified and result.axioms_accepted and result.kernel_replay_succeeded else (
                 "inconclusive" if result.compilation_succeeded else "failed"
             )
         except (Exception, CancelledError, KeyboardInterrupt) as exc:
+            from .lean_transport import UncertainLeanDelivery
+            if isinstance(exc, UncertainLeanDelivery):
+                from uuid import uuid4
+                delivery_id = identity({"operation_id": operation_id, "delivery": uuid4().hex})
+                uncertain = LeanVerificationResult(operation_id=operation_id, corpus_id=request.corpus_id,
+                    project_id=request.project_id, status="uncertain_delivery", outcome="uncertain_delivery",
+                    environment_manifest=environment, receipt_id=delivery_id,
+                    project_result={"durable_operation_id": exc.operation_id, "failure_layer": exc.layer},
+                    diagnostics=("Delivery is uncertain; repeat this exact request identity to reconcile the worker result.",))
+                self.receipts.record(ExecutionReceipt(receipt_id=delivery_id, operation_id=operation_id,
+                    stage="lean_delivery", corpus_id=request.corpus_id, project_id=request.project_id,
+                    status="partial", metadata={"request_hash": request_hash, "result": uncertain.model_dump(mode="json")}))
+                return uncertain
             interruption = exc if isinstance(exc, (CancelledError, KeyboardInterrupt)) else None
             diagnostics = (type(exc).__name__,)
+            if hasattr(exc, "layer"):
+                project_result["failure_layer"] = exc.layer
             error = "Lean verification failed"
 
         result = LeanVerificationResult(
@@ -173,8 +198,8 @@ class LeanVerificationService:
     def _persist_attempt(self, request: LeanVerificationRequest, result: LeanVerificationResult) -> str:
         payload = {
             "operation_id": result.operation_id,
-            "request": request.model_dump(mode="json"),
-            "result": result.model_dump(mode="json"),
+            "request_artifact": self.store.artifact(canonical(request.model_dump(mode="json"))),
+            "result_artifact": self.store.artifact(canonical(result.model_dump(mode="json"))),
             "status": result.status,
             "authority": "verification_result",
         }

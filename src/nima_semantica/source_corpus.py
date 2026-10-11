@@ -88,7 +88,7 @@ class SourceCorpusService:
             ))
 
     def get_source(self, source_id: str, *, corpus_id: str, project_id: str | None = None) -> SourceDescriptor | None:
-        for _, record in self.store.records(self.SOURCE_KIND, corpus_id=corpus_id):
+        for _, record in self.store.records_matching(self.SOURCE_KIND, "source_id", source_id, corpus_id=corpus_id, project_id=project_id):
             if record.content.get("source_id") == source_id and record.project_id in (None, project_id):
                 return SourceDescriptor.model_validate(record.content)
         return None

@@ -67,10 +67,11 @@ def test_preview_table_and_json_share_one_execution(monkeypatch):
     assert len(calls) == 1
     assert result.data["status"] == "complete"
     assert len(table) == 24
-    assert "Visual approval: approved" in preview.text
+    assert json.loads(preview.text) == result.data
+    assert len(preview.text.encode()) <= 32768
 
 
-@pytest.mark.parametrize("payload,expected", [({}, "Calculate Mathematics"), ({"tool": "Read Evidence"}, "## Read Evidence"), ({"tool": "Tool Guide"}, "Input schema:"), ({"tool": "unknown"}, "tool_guide.unknown_tool")])
+@pytest.mark.parametrize("payload,expected", [({}, "Calculate Mathematics"), ({"tool": "Read Evidence"}, "Read Evidence"), ({"tool": "Tool Guide"}, "Tool Guide"), ({"tool": "unknown"}, "tool_guide.unknown_tool")])
 def test_full_canvas_executes_through_real_langflow(payload, expected):
     from lfx.graph import Graph
     graph = Graph.from_payload(json.loads(builder.CANVAS.read_text())["data"])
@@ -80,6 +81,20 @@ def test_full_canvas_executes_through_real_langflow(payload, expected):
     result = asyncio.run(run())
     assert result and result[0].outputs
     assert expected in str(result)
+    # Reproduce the pinned MCP collector over actual Langflow outputs: display
+    # messages and return values must yield one identical exact JSON text.
+    texts = set()
+    for output in result:
+        for component in output.outputs:
+            texts.update(message.message for message in component.messages or [])
+            texts.update(value.get_text() if hasattr(value, "get_text") else str(value)
+                for value in (component.results or {}).values())
+    assert len(texts) == 1
+    native = json.loads(next(iter(texts)))
+    if payload.get("tool") in {"Read Evidence", "Tool Guide"}:
+        assert native["data"]["tools"][0]["input_schema"]
+    if not payload:
+        assert native["data"]["view"] == "compact_inventory" and len(next(iter(texts)).encode()) <= 32768
     assert graph.get_vertex("ToolGuide-EBGd-").built
 
 

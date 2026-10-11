@@ -324,7 +324,7 @@
                 "placeholder": "",
                 "show": true,
                 "name": "clean_data",
-                "value": true,
+                "value": false,
                 "display_name": "Basic Clean Data",
                 "advanced": true,
                 "api_editable": false,

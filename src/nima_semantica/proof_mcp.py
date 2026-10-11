@@ -13,6 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from .math_graph_session import PrivateGraphSessionStore, _json
+from .private_record_reads import EnumerateRecords, ReadRecord, read_records
 
 
 class Contract(BaseModel):
@@ -88,14 +89,25 @@ class Close(Mutation):
 
 class Inspect(Session):
     identifier: str
+    full_payload: bool = False
+    resolve_receipt: bool = False
+    state_section: Literal["binding", "resolutions", "submission", "closure", "superseded"] | None = None
+
+
+class Export(Session):
+    cursor: str | None = Field(default=None, max_length=2048)
+    limit: int = Field(default=25, ge=1, le=100)
+    full_payload: bool = False
 
 
 TOOLS = {
+    "enumerate_records": (EnumerateRecords, "Enumerate every scoped corpus/project record of a kind with deterministic pagination and revision checks."),
+    "read_record": (ReadRecord, "Read an exact scope-checked canonical corpus/project record with its hash."),
     "open": (Open, "Create or replay a target-bound private proof session."),
     "status": (Session, "Read the current revision and session binding."),
     "frontier": (Session, "Inspect open obligations and superseded dependencies."),
     "inspect": (Inspect, "Inspect an exact private node or action receipt."),
-    "export": (Session, "Export private proof state and receipts; does not publish to the project graph."),
+    "export": (Export, "Page private proof state and action receipts; inspect referenced exact payloads explicitly. No project publication."),
     "record_node": (RecordNode, "Record a provisional definition, assumption, strategy, lemma, step, obligation or counterexample."),
     "resolve_obligation": (Resolve, "Record a harness assessment with exact support dependencies; this is uncertified."),
     "attach_receipt": (Attach, "Import an authentic same-scope specialist-tool receipt, retaining its actual status."),
@@ -145,7 +157,7 @@ class ProofService(PrivateGraphSessionStore):
         args = TOOLS[operation][0].model_validate(arguments).model_dump(mode="json")
         if operation == "open":
             return self.open(args)
-        if operation in {"status", "frontier", "inspect", "export"}:
+        if operation in {"status", "frontier", "inspect", "export", "enumerate_records", "read_record"}:
             return self.read(operation, args)
         return self.mutate(operation, args)
 
@@ -189,20 +201,61 @@ class ProofService(PrivateGraphSessionStore):
             row, state = self._load(db, args["session_id"])
             result = {"session_id": row["id"], "revision": row["revision"], "lifecycle": row["lifecycle"],
                       "scientific_status": "uncertified", "binding": state["binding"], "scope": json.loads(self.scope)}
+            if operation in {"enumerate_records", "read_record"}:
+                with self._research_store() as store:
+                    result.update(read_records(store, operation, args))
             if operation == "frontier":
                 result.update(self.frontier(state))
             elif operation == "inspect":
                 identifier = args["identifier"]
-                if identifier in state["nodes"]:
+                if args.get("state_section"):
+                    section = state[args["state_section"]]
+                    result["state_section"] = section.get(identifier) if isinstance(section, dict) and identifier in section else section
+                elif identifier in state["nodes"]:
                     result["node"] = state["nodes"][identifier]
+                    if args.get("resolve_receipt"):
+                        from .execution_receipts import ExecutionReceiptService
+                        with self._research_store() as store:
+                            ref = result["node"].get("receipt_reference")
+                            if ref is None:
+                                raise ValueError("selected node has no receipt reference")
+                            result["receipt_payload"] = ExecutionReceiptService(store).resolve(ref,
+                                corpus_id=self.config.corpus_id, project_id=self.config.project_id).model_dump(mode="json")
                 else:
                     found = db.execute("SELECT payload FROM proof_receipts WHERE session=? AND id=?", (row["id"], identifier)).fetchone()
                     if not found:
                         raise ValueError("unknown or foreign node/receipt")
                     result["receipt"] = json.loads(found[0])
+                if not args.get("full_payload"):
+                    from .inspection_pages import bounded_value
+                    for key in ("node", "receipt", "receipt_payload", "state_section"):
+                        if key in result:
+                            result[key] = bounded_value(result[key], {"session_id": row["id"],
+                                "identifier": identifier, "resolve_receipt": args.get("resolve_receipt", False), "full_payload": True})
             elif operation == "export":
-                result["graph"] = state
-                result["receipts"] = [json.loads(r[0]) for r in db.execute("SELECT payload FROM proof_receipts WHERE session=? ORDER BY rowid", (row["id"],))]
+                from .inspection_pages import graph_page, page_offset, bounded_value
+                if args.get("full_payload"):
+                    result["graph"] = state
+                    result["receipts"] = [json.loads(r[0]) for r in db.execute("SELECT payload FROM proof_receipts WHERE session=? ORDER BY rowid", (row["id"],))]
+                    result["partial_export"] = False
+                else:
+                    limit = min(args.get("limit", 25), 25)
+                    result["graph"], pagination = graph_page(state, session_id=row["id"], revision=row["revision"],
+                        cursor=args.get("cursor"), limit=limit)
+                    offset = page_offset(args.get("cursor"), session_id=row["id"], revision=row["revision"])
+                    receipts = db.execute("SELECT id,payload FROM proof_receipts WHERE session=? ORDER BY rowid LIMIT ? OFFSET ?",
+                        (row["id"], limit, offset)).fetchall()
+                    result["receipts"] = [bounded_value(json.loads(r[1]), {"session_id": row["id"], "identifier": r[0],
+                        "full_payload": True}, max_bytes=max(512, 16384 // limit)) for r in receipts]
+                    count = db.execute("SELECT count(*) FROM proof_receipts WHERE session=?", (row["id"],)).fetchone()[0]
+                    if offset + limit < count:
+                        from .inspection_pages import next_cursor
+                        pagination.update(has_more=True, next_cursor=next_cursor(offset + limit, session_id=row["id"], revision=row["revision"]), partial_export=True)
+                    result.update(pagination, total_receipts=count)
+            if not args.get("full_payload"):
+                from .inspection_pages import bounded_value
+                result["binding"] = bounded_value(result["binding"], {"session_id": row["id"],
+                    "identifier": "binding", "state_section": "binding", "full_payload": True}, max_bytes=8192)
             return result
 
     def mutate(self, operation, args):
@@ -285,10 +338,10 @@ class ProofService(PrivateGraphSessionStore):
         elif operation == "attach_receipt":
             from .execution_receipts import ExecutionReceiptService
             with self._research_store() as store:
-                receipt = ExecutionReceiptService(store).get(args["receipt_id"], corpus_id=self.config.corpus_id, project_id=self.config.project_id)
-                if receipt is None or receipt.project_id not in (None, self.config.project_id):
-                    raise ValueError("unknown or foreign specialist receipt")
-                result["node_id"] = add({"kind": "check", "statement": args["purpose"], "depends_on": [], "receipt": receipt.model_dump(mode="json")})
+                reference = ExecutionReceiptService(store).reference(args["receipt_id"],
+                    corpus_id=self.config.corpus_id, project_id=self.config.project_id)
+                result["node_id"] = add({"kind": "check", "statement": args["purpose"], "depends_on": [],
+                                        "receipt_reference": reference.model_dump(mode="json")})
         elif operation == "retrieve_context":
             if not self.config.allow_retrieval or not self.config.projection_id:
                 raise ValueError("retrieval not configured and authorized")
@@ -329,12 +382,13 @@ class ProofService(PrivateGraphSessionStore):
 
     def _research_store(self):
         from contextlib import contextmanager
-        from .storage import GraphStore
+        from .corpus_snapshot import CorpusSnapshot
         @contextmanager
         def opened():
             if not self.config.store_root or not (Path(self.config.store_root) / "graph.sqlite3").is_file():
                 raise ValueError("configured research store is unavailable")
-            store = GraphStore(Path(self.config.store_root))
+            store = CorpusSnapshot(Path(self.config.store_root), corpus_id=self.config.corpus_id,
+                                   project_id=self.config.project_id)
             try:
                 yield store
             finally:
@@ -356,6 +410,8 @@ def create_server(service):
     from .request_diagnostics import request_server
     import anyio
     server = request_server("NIMA private proof graph", "nima_proof_", TOOLS)
+    from .private_readiness import private_readiness
+    readiness = private_readiness(service.config)
     def register(operation, schema, description):
         async def call(request):
             return await anyio.to_thread.run_sync(lambda: service.invoke(operation, request.model_dump(mode="json")))
@@ -366,10 +422,10 @@ def create_server(service):
     for operation, (schema, description) in TOOLS.items():
         register(operation, schema, description)
     @server.tool()
-    def nima_proof_tools() -> dict:
+    def nima_proof_tools(operation: str = "") -> dict:
         """Discover every private proof operation, typed contract, limits and continuation."""
         from .tool_usage import private_catalog
-        return private_catalog(TOOLS)
+        return {**private_catalog(TOOLS, operation), "operator": readiness}
     return server
 
 
@@ -377,9 +433,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True)
     args = parser.parse_args()
-    service = ProofService(ProofConfig.model_validate_json(Path(args.config).read_text()))
-    from .math_mcp import exclusive_owner
-    with exclusive_owner(service):
+    config = ProofConfig.model_validate_json(Path(args.config).read_text())
+    from .private_service import database_owner
+    with database_owner(config.database_path):
+        service = ProofService(config)
+        service.recover_interrupted()
         create_server(service).run(transport="stdio")
 
 

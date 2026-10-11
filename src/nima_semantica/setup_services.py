@@ -145,7 +145,9 @@ def provision(config, config_path, *, pdf=False, lean=False):
             env={**os.environ, "ELAN_TOOLCHAIN": version}, text=True).strip())
         pin = root / "lean-project.json"
         if not pin.exists():
-            run("lean-pin", [sys.executable, str(assets() / "deploy/configure_lean.py"), "--toolchain", str(binary.parent.parent), "--output", str(pin)])
+            policy_file = root / "lean-policy.json"
+            write_json(policy_file, config.lean_policy.model_dump(mode="json"))
+            run("lean-pin", [sys.executable, str(assets() / "deploy/configure_lean.py"), "--toolchain", str(binary.parent.parent), "--output", str(pin), "--policy", str(policy_file)])
         config.lean_url = "http://127.0.0.1:7873"; config.lean_token_file = str(root / "lean/token")
         service("lean", [sys.executable, assets() / "deploy/serve_lean_worker.py", "--config", pin, "--token-file", config.lean_token_file])
     import yaml

@@ -213,7 +213,11 @@ def tool_guide(request: ToolGuideRequest) -> ToolResult:
     return ToolResult(
         operation="Tool Guide", status="complete" if selected else "failed",
         data={"catalog_version": "1", "catalog_hash": identity([item.model_dump(mode="json") for item in catalog]),
-              "tools": [item.model_dump(mode="json") for item in selected],
+              "tools": [item.model_dump(mode="json") if key else item.model_dump(mode="json",
+                  include={"tool_id", "name", "description", "implementation", "visual_approval", "boundary", "contract_version"}) for item in selected],
+              "view": "full_contract" if key else "compact_inventory",
+              "default_response_limit_bytes": 32768,
+              "contract_lookup": "Pass tool with an exact name or tool ID for its complete schema, examples and guidance.",
               "execution_supported": False,
               "deployment_status": "Not inspected; catalog availability does not imply live publication.",
               "contract_note": "Planned tools have no public invocation schema yet. Only the harness selects actions."},

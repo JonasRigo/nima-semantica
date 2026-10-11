@@ -1,0 +1,30 @@
+# One authenticated loopback owner per database. Clients use the stdio proxy.
+# Prepare private proof.json, math.json, installation.json and token files in
+# NIMA_PRIVATE_DIRECTORY before starting; database paths stay operator-owned.
+services:
+  proof:
+    image: ${NIMA_PRIVATE_IMAGE:?Select the installed NIMA image}
+    network_mode: host
+    restart: unless-stopped
+    command: ["python", "-m", "nima_semantica.private_service", "--kind", "proof", "--config", "/operator/proof.json", "--token-file", "/operator/proof.token", "--port", "7881"]
+    environment: &operator_environment
+      NIMA_CONFIG: /operator/installation.json
+      NIMA_STORE_ROOT: ${NIMA_DATA_ROOT:?Select the persistent data directory}/corpus
+      NIMA_RESEARCH_MCP_URL: ${NIMA_RESEARCH_MCP_URL:?Select the project MCP endpoint}
+      NIMA_SYMBOLIC_WORKER_URL: ${NIMA_SYMBOLIC_WORKER_URL:-}
+      NIMA_SYMBOLIC_WORKER_TOKEN_FILE: ${NIMA_SYMBOLIC_WORKER_TOKEN_FILE:-}
+      NIMA_LEAN_WORKER_URL: ${NIMA_LEAN_WORKER_URL:-}
+      NIMA_LEAN_WORKER_TOKEN_FILE: ${NIMA_LEAN_WORKER_TOKEN_FILE:-}
+    volumes: &operator_volumes
+      - ${NIMA_PRIVATE_DIRECTORY:?Select private service configuration}:/operator:ro
+      - ${NIMA_DATA_ROOT}:${NIMA_DATA_ROOT}:rw
+      - ${NIMA_LEAN_TOKEN_DIRECTORY:-/tmp/nima-empty-lean-tokens}:/lean-tokens:ro
+    stop_grace_period: 45s
+  math:
+    image: ${NIMA_PRIVATE_IMAGE}
+    network_mode: host
+    restart: unless-stopped
+    command: ["python", "-m", "nima_semantica.private_service", "--kind", "math", "--config", "/operator/math.json", "--token-file", "/operator/math.token", "--port", "7882"]
+    environment: *operator_environment
+    volumes: *operator_volumes
+    stop_grace_period: 45s

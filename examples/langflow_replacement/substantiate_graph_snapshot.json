@@ -324,7 +324,7 @@
                 "placeholder": "",
                 "show": true,
                 "name": "clean_data",
-                "value": true,
+                "value": false,
                 "display_name": "Basic Clean Data",
                 "advanced": true,
                 "api_editable": false,
@@ -1874,7 +1874,7 @@
       "substantiation_tool": "7423257e24e2f665e52165f785f30901fdadc7d9732308710a2ccc732164c3c9",
       "graph_analysis": "03cbc456e4fc0402bb20615dabe0f8d29bc2a884879b2f4366eeeb42c0a9c012",
       "claim_dependencies": "1890934999be033208cfd42ba5c68c4699662b0eeb4650f896725e039f8b7827",
-      "math_retrieval": "e14d1c2b66860f5d34d988738ec7156752b615367790bf8ed7ecf4b6885135ff",
+      "math_retrieval": "b02c7f56eca6fbe900cc37b9237128729305394440be387fa3042d388de1f18c",
       "math_reasoning": "c7eca62e04e55ffb8256b160c755831687ca0348c9ad435ea50337bb356a4728",
       "reasoning_state": "cf22253686c357a8954fd7ed54cae77d5dfaa2da249af60707586e89bf2eaf20",
       "reasoning_kernel": "71a592fe5f12b662bd5731c4d3917fb40f9e12475316f5e7df781a899821bd34"

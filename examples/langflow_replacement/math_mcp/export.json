@@ -290,7 +290,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Inspectable export boundary for the private calculation graph.\"\"\"\nimport json\nfrom lfx.custom.custom_component.component import Component\nfrom pydantic import ValidationError\nfrom lfx.io import BoolInput, MessageTextInput, Output\nfrom lfx.schema import Message\nfrom nima_semantica.math_mcp_contracts import TOOLS, invoke, operation_catalogue\nfrom nima_semantica.math_mcp import canvas_service\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.request_diagnostics import invalid_request\nfrom nima_semantica.providers import strict_json_object\n\n\nclass MathMCPExport(Component):\n    nima_manifest = manifest_for_component('MathMCPExport')\n    display_name = 'Math · Export'\n    description = 'Export the private graph; does not publish to research graphs. Read-only; may run concurrently.'\n    name = 'MathMCPExport'\n    icon = \"calculator\"\n    inputs = [\n        MessageTextInput(name=\"request_json\", display_name=\"Typed request JSON\", value=\"{}\", tool_mode=True),\n        BoolInput(name=\"execute\", display_name=\"Execute authorized request (operator)\", value=False),\n    ]\n    outputs = [Output(name=\"response\", display_name=\"Result and receipt\", method=\"run_request\")]\n\n    def run_request(self) -> Message:\n        operation = 'export'\n        if operation == \"operations\":\n            result = operation_catalogue()\n        elif not self.execute:\n            result = {\"executed\": False, \"operation\": operation,\n                \"request_schema\": TOOLS[operation][0].model_json_schema(),\n                \"authority\": \"Private graph only; no mathematical truth certificate.\"}\n        else:\n            try:\n                request = strict_json_object(self.request_json or \"{}\")\n                TOOLS[operation][0].model_validate(request)\n            except (ValidationError, ValueError) as exc:\n                return Message(text=json.dumps(invalid_request(operation, exc)))\n            # Same typed arguments, service and admission rules as stdio MCP.\n            # NIMA_MATH_CONFIG binds scope and capabilities outside model inputs.\n            result = invoke(canvas_service(), operation, request)\n        return Message(text=json.dumps(result, ensure_ascii=False))\n",
+                "value": "\"\"\"Inspectable export boundary for the private calculation graph.\"\"\"\nimport json\nfrom lfx.custom.custom_component.component import Component\nfrom pydantic import ValidationError\nfrom lfx.io import BoolInput, MessageTextInput, Output\nfrom lfx.schema import Message\nfrom nima_semantica.math_mcp_contracts import TOOLS, invoke, operation_catalogue\nfrom nima_semantica.math_mcp import canvas_service\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.request_diagnostics import invalid_request\nfrom nima_semantica.providers import strict_json_object\n\n\nclass MathMCPExport(Component):\n    nima_manifest = manifest_for_component('MathMCPExport')\n    display_name = 'Math · Export'\n    description = 'Page the private graph; request exact full payloads explicitly. No project publication. Read-only; may run concurrently.'\n    name = 'MathMCPExport'\n    icon = \"calculator\"\n    inputs = [\n        MessageTextInput(name=\"request_json\", display_name=\"Typed request JSON\", value=\"{}\", tool_mode=True),\n        BoolInput(name=\"execute\", display_name=\"Execute authorized request (operator)\", value=False),\n    ]\n    outputs = [Output(name=\"response\", display_name=\"Result and receipt\", method=\"run_request\")]\n\n    def run_request(self) -> Message:\n        operation = 'export'\n        if operation == \"operations\":\n            result = operation_catalogue()\n        elif not self.execute:\n            result = {\"executed\": False, \"operation\": operation,\n                \"request_schema\": TOOLS[operation][0].model_json_schema(),\n                \"authority\": \"Private graph only; no mathematical truth certificate.\"}\n        else:\n            try:\n                request = strict_json_object(self.request_json or \"{}\")\n                TOOLS[operation][0].model_validate(request)\n            except (ValidationError, ValueError) as exc:\n                return Message(text=json.dumps(invalid_request(operation, exc)))\n            # Same typed arguments, service and admission rules as stdio MCP.\n            # NIMA_MATH_CONFIG binds scope and capabilities outside model inputs.\n            result = invoke(canvas_service(), operation, request)\n        return Message(text=json.dumps(result, ensure_ascii=False))\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -350,7 +350,7 @@
                 "_input_type": "MessageTextInput"
               }
             },
-            "description": "Export the private graph; does not publish to research graphs. Read-only; may run concurrently.",
+            "description": "Page the private graph; request exact full payloads explicitly. No project publication. Read-only; may run concurrently.",
             "icon": "calculator",
             "base_classes": [
               "Message"
@@ -439,7 +439,7 @@
                 "placeholder": "",
                 "show": true,
                 "name": "clean_data",
-                "value": true,
+                "value": false,
                 "display_name": "Basic Clean Data",
                 "advanced": true,
                 "api_editable": false,
@@ -736,19 +736,19 @@
   },
   "is_component": false,
   "name": "Calculate Mathematics · Export",
-  "description": "Export the private graph; does not publish to research graphs. Read-only; may run concurrently.",
+  "description": "Page the private graph; request exact full payloads explicitly. No project publication. Read-only; may run concurrently.",
   "endpoint_name": "nima-math-export",
   "nima_tool_manifest": {
     "tool_id": "nima_math_export",
     "contract_version": "math-session-v1",
     "visual_approval": "pending",
     "publication": "candidate",
-    "source_sha256": "b3ae403ad2fa6e3f65e3b8be1358e92d27d58fd56d3410912b0ab8593d75867e",
+    "source_sha256": "2dc0fd003998ffb966bfbfce04601a67bbf3718d3025303a5a22d265477d9c2c",
     "native_sources_sha256": {
       "calculation_values.py": "2227718cd02c2e0826b15c16be6023b1ba07dd8af4ce89efaab5ed4e25fceb05",
-      "math_mcp_contracts.py": "49c549ec87c6dbd190e8dd8d2b43567fd7bf86a6806828ee66724e07fece9cd1",
-      "math_mcp.py": "3f5e5874f690c57fcbfabe4384d3746fc51cb2145f74b612eee136b441e666f9",
-      "math_session_service.py": "d66053642faf0d8443e3788801f1d343ae991af686e70f2adb70d48d289ff945",
+      "math_mcp_contracts.py": "04f301fc29a690b60ede3810f26951b0096376b45202f987c747ec33574e9d8b",
+      "math_mcp.py": "a37a2033bc157fda191c95090f38de5d3993c5501e7cbb99dd7f9ca06da34a91",
+      "math_session_service.py": "eac9aaee6e14511c60ee53b4774977236d8a20e566507a819111f4b9e77f61d3",
       "math_interface_helpers.py": "fc73d964acde88bff7083af9ee05493b68948d624354b5e5fb071e99e5ba5436",
       "math_repair_feedback.py": "8dfdc65e31b5a6a7c2b1ddd7a9e78cd81319fcbb4fd1c133e52f510731e1b6dc",
       "math_evidence_handoff.py": "fe5150d043efcbd17e5eab76fadf9f730724f1d1eb83fa23091e2fdf44119cc3",

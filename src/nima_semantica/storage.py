@@ -271,6 +271,25 @@ class GraphStore(GraphPersistence):
                 return None
             return self._decode(record_id,row[0])
 
+    def records_matching(self, kind, field, value, *, corpus_id, project_id=None):
+        """Decode exact content matches in scope, rather than every registry row."""
+        with self._mutex:
+            rows = self._db.execute("SELECT id,payload FROM records WHERE kind=? AND corpus_id=? "
+                "AND (project_id IS NULL OR project_id=?) AND json_extract(payload,?)=? ORDER BY rowid",
+                (kind, corpus_id, project_id, "$.content." + field, value))
+            return [(key, self._decode(key, payload)) for key, payload in rows]
+
+    def receipt_record(self, receipt_id, *, corpus_id, project_id=None):
+        """Resolve one logical receipt in an exact scope without decoding neighbors."""
+        with self._mutex:
+            row = self._db.execute(
+                "SELECT id,payload FROM records WHERE corpus_id=? "
+                "AND kind='ExecutionReceipt' AND project_id IS ? "
+                "AND json_extract(payload,'$.content.receipt_id')=? "
+                "ORDER BY rowid LIMIT 1", (corpus_id, project_id, receipt_id)
+            ).fetchone()
+            return (row[0], self._decode(row[0], row[1])) if row else None
+
     def embedding_revision(self, corpus_id):
         with self._mutex:
             row = self._db.execute("SELECT value FROM generations WHERE corpus_id=?",(corpus_id,)).fetchone()

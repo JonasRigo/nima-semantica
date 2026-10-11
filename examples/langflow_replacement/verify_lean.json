@@ -324,7 +324,7 @@
                 "placeholder": "",
                 "show": true,
                 "name": "clean_data",
-                "value": true,
+                "value": false,
                 "display_name": "Basic Clean Data",
                 "advanced": true,
                 "api_editable": false,
@@ -1326,10 +1326,10 @@
     "visual_approval": "pending",
     "controller_version": "verify-lean-v2",
     "native_sources_sha256": {
-      "verify_lean_tool": "a696bfb3cee9851e72bf5a7251bd0eb6ba96938f7420cfe2eefe2d19b3a25f91",
-      "lean_transport": "5b7c48857d3643c56915b308040d8edd76730a742dc84579c89e351c5aa4ec8d",
-      "lean_project": "4f2a530d167e9938b5a4cce1ffa01ef699f3aa0a9346fb2160103c0d39d35927",
-      "lean_verification_service": "c24bdcb0fa6e87c4a03464da3cd4d0909db5e3e02586e200af1725b377612b08"
+      "verify_lean_tool": "aa7b00255096152801ce4ef0146c0c48ba4052c700a3f5654a9c485617b0eec9",
+      "lean_transport": "3387c86423c7d178a221c4fb08ca1580739d5b44c2947e0ea95d31bc6b3f4ac8",
+      "lean_project": "d7dff67ef2d86ee6c88f2af4edb35cb7c68a527fea244aef5d0b07b6854e6bf0",
+      "lean_verification_service": "5ff402bce648d09932bf4007c7f518acdd0d08c162eaba22432c5abb5898afa9"
     },
     "publication": "not_published_by_builder",
     "components": {

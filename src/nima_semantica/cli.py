@@ -72,7 +72,7 @@ def install_harness(root, config_path, binding, harnesses):
     root = Path(root).resolve()
     if set(harnesses) - {"codex", "claude", "opencode"}:
         raise ValueError("harness must be codex, claude or opencode")
-    common = {"NIMA_STORE_ROOT": binding["store_root"]}
+    common = {"NIMA_STORE_ROOT": binding["store_root"], "NIMA_CONFIG": str(Path(config_path).resolve())}
     config = load_installation(config_path)
     if config.symbolic_url:
         common.update(NIMA_SYMBOLIC_WORKER_URL=config.symbolic_url, NIMA_SYMBOLIC_WORKER_TOKEN_FILE=config.symbolic_token_file)
@@ -80,6 +80,9 @@ def install_harness(root, config_path, binding, harnesses):
         "nima-math": {"command": str(Path(sys.executable)), "args": ["-m", "nima_semantica.math_mcp", "--config", binding["math_config"]], "env": common},
         "nima-proof": {"command": str(Path(sys.executable)), "args": ["-m", "nima_semantica.proof_mcp", "--config", binding["proof_config"]], "env": common},
     }
+    from .config_reconciliation import harness_servers
+    for name, server in harness_servers(binding, config_path).items():
+        servers[name] = {**server, **({"env": {**common, **server.get("env", {})}} if "command" in server else {})}
     if binding.get("mcp_url"):
         servers["nima"] = {"url": binding["mcp_url"]}
     planned = {}
@@ -108,7 +111,7 @@ def install_harness(root, config_path, binding, harnesses):
         value = json.loads(path.read_text()) if path.exists() else {}
         settings = value.setdefault(table, {})
         for key, server in servers.items():
-            server = dict(server)
+            server = {k: v for k, v in server.items() if k not in {"startup_timeout_sec", "tool_timeout_sec"}}
             if harness == "claude" and "url" in server:
                 server["type"] = "http"
             if harness == "opencode":
@@ -222,7 +225,8 @@ def project_init(args, config):
         binding["mcp_url"] = published["mcp_url"]
     write_json(manifest, binding)
     changed = install_harness(args.path, args.config or configuration_path(), binding, args.harness.split(","))
-    emit({"project": binding, "installed_files": changed, "toolbox_connected": bool(binding.get("mcp_url"))})
+    emit({"project": binding, "installed_files": changed, "toolbox_configured": bool(binding.get("mcp_url")),
+          "toolbox_verified": False, "verification_command": "nima doctor --project " + binding["project_id"] + " --corpus " + binding["corpus_id"] + " --mcp"})
 
 
 def ingest(args, config):
@@ -386,7 +390,7 @@ def _ingest_one(args, config):
     return result
 
 
-def doctor(config):
+def doctor(config, args=None):
     import importlib.util
     import subprocess
     from urllib.parse import urlsplit
@@ -429,8 +433,16 @@ def doctor(config):
         except Exception:
             checks[worker] = False
     from .workflow_installation import model_inventory
-    emit({"checks": checks, "model_inputs": model_inventory(), "data_root": config.data_root,
-          "workers": {"pdf": bool(config.pdf_url), "symbolic": bool(config.symbolic_url), "lean": bool(config.lean_url)}})
+    from . import __version__
+    output = {"nima_version": __version__, "checks": checks, "model_inputs": model_inventory(), "data_root": config.data_root,
+          "workers": {"pdf": bool(config.pdf_url), "symbolic": bool(config.symbolic_url), "lean": bool(config.lean_url)}}
+    if args is not None and args.mcp:
+        from .mcp_diagnostics import scoped_mcp_diagnostics
+        binding = project_binding(config, args.corpus, args.project)
+        output["mcp_diagnostics"] = scoped_mcp_diagnostics(binding, root=args.path,
+            installation_path=args.config or configuration_path())
+        checks["project_mcp"] = output["mcp_diagnostics"]["ready"]
+    emit(output)
     return 0 if all(checks.values()) else 1
 
 
@@ -454,7 +466,43 @@ def main(argv=None):
     install.add_argument("--embedding-revision"); install.add_argument("--embedding-dimension", type=int)
     install.add_argument("--provision", action="store_true", help="Install/start the local stack, including dependency and model downloads")
     install.add_argument("--pdf", action="store_true"); install.add_argument("--lean", action="store_true")
-    commands.add_parser("doctor")
+    diagnostic = commands.add_parser("doctor")
+    diagnostic.add_argument("--mcp", action="store_true")
+    diagnostic.add_argument("--project")
+    diagnostic.add_argument("--corpus", default="papers")
+    diagnostic.add_argument("--path", default=".")
+    harness = commands.add_parser("harness").add_subparsers(dest="action", required=True)
+    reconcile = harness.add_parser("reconcile", help="Preview or apply a hashed, recoverable harness transition")
+    reconcile.add_argument("--binding", required=True)
+    reconcile.add_argument("--path", default=".")
+    reconcile.add_argument("--harness", default="codex,claude,opencode")
+    reconcile.add_argument("--preview-file", required=True)
+    reconcile.add_argument("--apply", help="Exact preview hash; omission writes a preview only")
+    reconcile.add_argument("--recovery-directory")
+    reconcile.add_argument("--project-manifest", help="Also reconcile the installation's registered project manifest")
+    reconcile.add_argument("--owner-uid", type=int, help="Explicit owner of all destination configurations")
+    reconcile.add_argument("--owner-gid", type=int, help="Explicit group of all destination configurations")
+    recovery = harness.add_parser("recover")
+    recovery.add_argument("manifest")
+    recovery.add_argument("--mode", choices=["restore", "complete"], required=True)
+    maintenance = commands.add_parser("maintenance").add_subparsers(dest="action", required=True)
+    migration = maintenance.add_parser("receipt-migration")
+    migration_config = migration.add_mutually_exclusive_group(required=True)
+    migration_config.add_argument("--proof-config")
+    migration_config.add_argument("--math-config")
+    migration.add_argument("--session", required=True)
+    migration.add_argument("--expected-revision", required=True, type=int)
+    migration.add_argument("--directory", required=True)
+    reclaim = maintenance.add_parser("reclaim-sqlite")
+    reclaim.add_argument("--database", required=True)
+    reclaim.add_argument("--backup", required=True)
+    private = commands.add_parser("private").add_subparsers(dest="action", required=True)
+    service_setup = private.add_parser("configure", help="Prepare managed single-owner private MCP services")
+    service_setup.add_argument("--binding", required=True)
+    service_setup.add_argument("--directory", required=True)
+    service_setup.add_argument("--proof-port", type=int, default=7881)
+    service_setup.add_argument("--math-port", type=int, default=7882)
+    service_setup.add_argument("--start", action="store_true")
     commands.add_parser("list", help="List registered corpora (local, no service calls)")
     project = commands.add_parser("project").add_subparsers(dest="action", required=True)
     listing = project.add_parser("list", help="List locally registered projects")
@@ -483,6 +531,8 @@ def main(argv=None):
         if action == "install":
             sub.add_argument("--corpus", required=True); sub.add_argument("--project", required=True)
     args = parser.parse_args(argv)
+    if args.command == "doctor" and args.mcp and not args.project:
+        parser.error("doctor --mcp requires --project and its corpus scope")
     try:
         if args.command == "setup":
             setup(args); return 0
@@ -492,7 +542,50 @@ def main(argv=None):
             emit({"corpora": list_corpora(config)})
             return 0
         if args.command == "doctor":
-            return doctor(config)
+            return doctor(config, args)
+        if args.command == "harness":
+            from .config_reconciliation import reconciliation_preview, apply_reconciliation, recover_reconciliation
+            if args.action == "recover":
+                emit(recover_reconciliation(args.manifest, args.mode))
+            elif args.apply:
+                preview = json.loads(Path(args.preview_file).read_text())
+                if preview["preview_hash"] != args.apply or not args.recovery_directory:
+                    raise ValueError("apply requires the exact saved preview hash and a new recovery directory")
+                emit(apply_reconciliation(preview, args.recovery_directory))
+            else:
+                binding = json.loads(Path(args.binding).read_text())
+                preview = reconciliation_preview(args.path, args.config or configuration_path(), binding, args.harness.split(","), project_manifest=args.project_manifest,
+                    owner_uid=args.owner_uid, owner_gid=args.owner_gid)
+                write_json(args.preview_file, preview)
+                emit({"preview_hash": preview["preview_hash"], "scope": preview["scope"],
+                      "files": [{k: v for k, v in item.items() if k != "payload_base64"} for item in preview["changes"]],
+                      "preview_file": args.preview_file})
+            return 0
+        if args.command == "maintenance":
+            from .private_service import database_owner
+            from .receipt_migration import migrate_proof_receipts, migrate_math_payloads, reclaim_sqlite
+            if args.action == "receipt-migration":
+                if args.proof_config:
+                    from .proof_mcp import ProofConfig as Contract, ProofService as Service
+                    function, path = migrate_proof_receipts, args.proof_config
+                else:
+                    from .math_session_service import MathServiceConfig as Contract, MathSessionService as Service
+                    function, path = migrate_math_payloads, args.math_config
+                selected = Contract.model_validate_json(Path(path).read_text())
+                with database_owner(selected.database_path):
+                    emit(function(Service(selected), args.session, args.expected_revision, args.directory))
+            else:
+                with database_owner(args.database):
+                    emit(reclaim_sqlite(args.database, args.backup))
+            return 0
+        if args.command == "private":
+            from .managed_private import configure_private_services, start_private_services
+            result = configure_private_services(json.loads(Path(args.binding).read_text()), args.config or configuration_path(),
+                args.directory, proof_port=args.proof_port, math_port=args.math_port)
+            if args.start:
+                start_private_services(result)
+            emit(result)
+            return 0
         if args.command == "project":
             if args.action == "list":
                 from .installation import list_projects

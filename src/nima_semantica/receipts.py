@@ -35,6 +35,18 @@ class ExecutionReceipt(StrictModel):
     metadata: dict[str, Any] = Field(default_factory=dict, max_length=128)
 
 
+class ReceiptReference(StrictModel):
+    """Authenticated identity in an operator-selected authoritative store."""
+    schema_version: Literal[1] = 1
+    receipt_id: GraphIdentifier
+    corpus_id: GraphIdentifier
+    project_id: GraphIdentifier | None = None
+    payload_record_id: GraphIdentifier
+    canonical_payload_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    canonical_payload_bytes: int = Field(ge=0)
+    summary: dict[str, str | None] = Field(max_length=8)
+
+
 def receipt(stage, run_id, project_id, corpus_id, inputs, outputs=(), status="completed", error=None, metadata=None):
     return Record(kind="Receipt", project_id=project_id, corpus_id=corpus_id, parents=tuple(inputs), content={
         "schema_version": 1, "invocation_id": uuid4().hex, "stage": stage,

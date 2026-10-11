@@ -138,6 +138,12 @@ def verify_lean(store, request, context, *, verifier=None):
             parent_node_ids=request.parent_node_ids,definition_node_ids=request.definition_node_ids,source_region_ids=request.source_region_ids)
         children.append(identity({"stage":"lean_verification","operation_id":native.operation_id}))
         checked = LeanVerificationService(store,verifier).execute(native)
+        if checked.status == "uncertain_delivery":
+            return ToolResult(operation="Verify Lean", status="partial",
+                data={**data, "delivery_state": "uncertain_delivery", "durable_operation_id": checked.project_result["durable_operation_id"],
+                      "failure_layer": checked.project_result["failure_layer"], "formal_verification_accepted": False},
+                receipt_ids=(checked.receipt_id,), diagnostics=({"code": "lean.delivery_uncertain",
+                    "message": "Replay the identical request and operation_id to reconcile; a fresh ID deliberately starts another attempt."},))
         data.update(executed=True,verification=checked.model_dump(mode="json"))
         result = checked.project_result
         if result:

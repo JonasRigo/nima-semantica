@@ -139,8 +139,10 @@ def test_nested_failures_and_cancellation_preserve_both_attempts(store,error):
         with pytest.raises(CancelledError):run(store,**kw)
     else:assert run(store,**kw).status=="failed"
     assert store.records("ReviewProgressProposal") and store.records("CounterexampleProgressProposal")
-    receipt=next(r.content for _,r in store.records("ExecutionReceipt") if r.content["stage"]=="review_research")
-    assert receipt["metadata"]["result"]["data"]["tests"][0]["receipt_id"]
+    from nima_semantica.execution_receipts import ExecutionReceiptService
+    reference=next(r.content for _,r in store.records("ExecutionReceipt") if r.content["stage"]=="review_research")
+    receipt=ExecutionReceiptService(store).get(reference["receipt_id"], corpus_id=reference["corpus_id"], project_id=reference["project_id"])
+    assert receipt.metadata["result"]["data"]["tests"][0]["receipt_id"]
 
 
 def test_new_read_requires_reassessment_and_retains_obligations(store):

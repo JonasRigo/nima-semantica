@@ -13,6 +13,7 @@ from .installation import EmbeddingProfile
 from .okf_contracts import GraphIdentifier
 from .research_retrieval import ResearchRetrievalRequest, ResearchRetrievalContext, retrieve_research_context
 from .evidence_reader import ReadEvidenceRequest, ReadEvidenceContext, read_evidence
+from .retrieval_policy import RetrievalLimits
 
 
 class MathRetrievalPolicy(StrictModel):
@@ -22,6 +23,7 @@ class MathRetrievalPolicy(StrictModel):
     allow_embeddings: StrictBool = False
     allow_attempt_writes: StrictBool = False
     embedding_profile: EmbeddingProfile | None = None
+    limits: RetrievalLimits = Field(default_factory=RetrievalLimits)
 
 
 def installation_retrieval_policy(*, projection_id=None):
@@ -30,7 +32,7 @@ def installation_retrieval_policy(*, projection_id=None):
     config = load_installation()
     return MathRetrievalPolicy(enabled=True, projection_id=projection_id,
         allow_embeddings=config.embedding is not None, allow_attempt_writes=True,
-        embedding_profile=config.embedding)
+        embedding_profile=config.embedding, limits=config.retrieval_limits)
 
 
 class RetrieveMathContext(StrictModel):
@@ -57,22 +59,33 @@ def retrieve_math_context(store, context, action, *, provider=None, manifest=Non
     mode = action.mode or policy.mode
     if mode != "lexical" and (not policy.allow_embeddings or not policy.allow_attempt_writes):
         raise ValueError("Hybrid/vector retrieval requires an operator embedding connection and attempt-receipt permission. Request lexical explicitly if appropriate.")
-    if mode != "lexical" and provider is None and policy.embedding_profile is not None:
+    if mode != "lexical" and provider is None and policy.embedding_profile is not None and not getattr(store, "read_only", False):
         from .setup_services import embedding_provider
         profile = policy.embedding_profile
         if profile.container_url:
             profile = profile.model_copy(update={"base_url": profile.container_url})
         provider, manifest = embedding_provider(SimpleNamespace(embedding=profile))
-    result = retrieve_research_context(store, ResearchRetrievalRequest(query=action.query,
-        mode=mode, projection_id=policy.projection_id, limit=4, max_results=8,
-        max_hops=2, max_nodes=64, max_edges=128, max_chars=12000,
-        operation_id="math-retrieval-" + uuid4().hex if mode != "lexical" else None),
-        ResearchRetrievalContext(**scope, allow_embeddings=policy.allow_embeddings,
-            allow_attempt_writes=policy.allow_attempt_writes), provider=provider, manifest=manifest)
+    request = ResearchRetrievalRequest(query=action.query,
+        mode=mode, projection_id=policy.projection_id, **policy.limits.model_dump(exclude={"owner_timeout_seconds"}),
+        operation_id="math-retrieval-" + uuid4().hex if mode != "lexical" else None)
+    retrieval_context = ResearchRetrievalContext(**scope, allow_embeddings=policy.allow_embeddings,
+        allow_attempt_writes=policy.allow_attempt_writes)
+    if mode != "lexical" and getattr(store, "read_only", False):
+        from .retrieval_owner import retrieve_through_owner
+        result = retrieve_through_owner(store, request, retrieval_context, timeout=policy.limits.owner_timeout_seconds)
+        # Owner attempts may advance the corpus; exact reads use a fresh consistent snapshot.
+        store.refresh()
+    else:
+        result = retrieve_research_context(store, request, retrieval_context, provider=provider, manifest=manifest)
     if result.status not in ("complete", "partial"):
         codes = [v.get("code", "retrieval.failed") for v in result.diagnostics]
         raise ValueError("Requested retrieval failed: " + ", ".join(codes) + ". No lexical fallback was performed.")
     packet = result.data
+    if mode != "lexical" and policy.embedding_profile:
+        profile = policy.embedding_profile
+        expected = {"provider": profile.provider, "model": profile.model, "revision": profile.revision, "dimension": profile.dimension}
+        if any(packet.get("embedding_identity", {}).get(k) != v for k, v in expected.items()):
+            raise ValueError("retrieval owner embedding configuration differs from the operator installation")
     passages = []
     for region in packet["regions"]:
         read = read_evidence(store, ReadEvidenceRequest(reference=region["evidence"], max_bytes=100000),
@@ -84,7 +97,7 @@ def retrieve_math_context(store, context, action, *, provider=None, manifest=Non
     budget_truncated = False
     # Whole exact passages and graph objects are retained or omitted, never shortened.
     # Keep the canonical observation bounded across both graph and text content.
-    while len(canonical(content).decode()) > 12000:
+    while len(canonical(content).decode()) > policy.limits.max_chars:
         budget_truncated = True
         if len(content["passages"]) > 1:
             content["passages"].pop()
@@ -103,4 +116,5 @@ def retrieve_math_context(store, context, action, *, provider=None, manifest=Non
         **content, traversal=packet["traversal"],
         truncated=packet["truncated"] or budget_truncated, budget_truncated=budget_truncated,
         receipt_ids=list(result.receipt_ids), source_text=canonical(content).decode(),
+        context_limits=policy.limits.model_dump(),
         authority="Untrusted exact literature and typed graph context; source claims, prerequisites and conditional consequences are not independently verified proofs.")

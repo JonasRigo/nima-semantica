@@ -19,4 +19,7 @@ class LeanDraftState(ProofState):
         if (receipt is None or receipt.operation_id != self.attempt_id or receipt.status != "completed"
                 or receipt.stage not in ("draft_lean_read_regions", "draft_lean_retrieve_context")):
             raise ValueError("evidence is not a successful same-attempt exact read")
+        if "output_artifact" in receipt.metadata:
+            import json
+            return json.loads(self.store.read_artifact(receipt.metadata["output_artifact"]))["source_text"]
         return receipt.metadata["output"]["source_text"]

@@ -31,7 +31,7 @@ class ArtifactStore(Protocol):
     def artifact(self, data: bytes) -> str: ...
 
 
-def tree_digest(root: Path) -> str:
+def tree_digest(root: Path, *, progress=None) -> str:
     """Hash an installation, allowing only internal regular-file symlinks."""
     root = Path(root)
     if root.is_symlink() or not root.is_dir():
@@ -52,6 +52,8 @@ def tree_digest(root: Path) -> str:
         with path.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                 digest.update(chunk)
+                if progress:
+                    progress()
     return digest.hexdigest()
 
 
@@ -60,10 +62,10 @@ class PinnedDirectory:
     path: Path
     sha256: str
 
-    def validate(self) -> None:
+    def validate(self, *, progress=None) -> None:
         if not re.fullmatch(r"[0-9a-f]{64}", self.sha256):
             raise ValueError("explicit SHA256 pin required")
-        if tree_digest(self.path) != self.sha256:
+        if tree_digest(self.path, progress=progress) != self.sha256:
             raise ValueError("installation pin mismatch")
 
 
@@ -107,6 +109,10 @@ class LeanProjectResult:
     kernel_replay_succeeded: bool = False
     declaration_types: dict[str, str] = field(default_factory=dict)
     declaration_type_fingerprints: dict[str, str] = field(default_factory=dict)
+    failure_layer: str | None = None
+    phase: str = "complete"
+    elapsed_seconds: float = 0
+    execution_policy: dict = field(default_factory=dict)
 
 
 def _checker(request: LeanProjectRequest, trusted_imports: tuple[str, ...] = ("Init",),
@@ -299,7 +305,7 @@ with open('/tmp/compile.log', 'w+b') as log:
 '''
 
 
-def _run(command: list[str], timeout: float, limit: int, fd: int) -> dict:
+def _run(command: list[str], timeout: float, limit: int, fd: int, *, cancel_event=None, heartbeat=None) -> dict:
     start = time.monotonic()
     data = bytearray()
     reason = None
@@ -308,6 +314,11 @@ def _run(command: list[str], timeout: float, limit: int, fd: int) -> dict:
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ)
             while selector.get_map():
+                if heartbeat:
+                    heartbeat()
+                if cancel_event is not None and cancel_event.is_set():
+                    reason = "cancelled"
+                    break
                 if time.monotonic() - start >= timeout:
                     reason = "timeout"
                     break
@@ -344,12 +355,17 @@ class LeanProjectVerifier:
     def __init__(self, toolchain: PinnedDirectory, *, libraries: tuple[PinnedDirectory, ...] = (),
                  trusted_imports: tuple[str, ...] = ("Init",),
                  timeout: float = 30, output_bytes: int = 1024 * 1024,
-                 memory_mb: int = 4096, artifact_bytes: int = 16 * 1024 * 1024):
-        if not math.isfinite(timeout) or not 0 < timeout <= 300:
+                 memory_mb: int = 4096, artifact_bytes: int = 16 * 1024 * 1024, policy=None):
+        from .execution_policy import LeanExecutionPolicy
+        if policy is not None:
+            policy = LeanExecutionPolicy.model_validate(policy)
+            timeout, memory_mb = policy.compilation_seconds, policy.memory_mb
+            output_bytes, artifact_bytes = policy.output_bytes, policy.artifact_bytes
+        if not math.isfinite(timeout) or not 0 < timeout <= (7200 if policy else 300):
             raise ValueError("timeout must be in (0, 300]")
-        if not 1024 <= output_bytes <= 16 * 1024 * 1024 or not 512 <= memory_mb <= 8192:
+        if not 1024 <= output_bytes <= (268435456 if policy else 16 * 1024 * 1024) or not 512 <= memory_mb <= (65536 if policy else 8192):
             raise ValueError("invalid resource bounds")
-        if not 1024 <= artifact_bytes <= 64 * 1024 * 1024:
+        if not 1024 <= artifact_bytes <= (536870912 if policy else 64 * 1024 * 1024):
             raise ValueError("invalid artifact bound")
         self.toolchain, self.libraries = toolchain, tuple(libraries)
         self.trusted_imports = tuple(trusted_imports)
@@ -359,6 +375,7 @@ class LeanProjectVerifier:
             raise ValueError("invalid trusted import configuration")
         self.timeout, self.output_bytes = timeout, output_bytes
         self.memory_mb, self.artifact_bytes = memory_mb, artifact_bytes
+        self.policy = policy or LeanExecutionPolicy.legacy(timeout, memory_mb, output_bytes, artifact_bytes)
         self._pins()
         if not (toolchain.path / "bin/lean").is_file():
             raise ValueError("Lean binary unavailable")
@@ -367,13 +384,13 @@ class LeanProjectVerifier:
             if not any((root / (name.replace('.', '/') + '.olean')).is_file() for root in roots):
                 raise ValueError("trusted import is not in a pinned installation")
 
-    def _pins(self):
+    def _pins(self, *, progress=None):
         for pin in (self.toolchain, *self.libraries):
-            pin.validate()
+            pin.validate(progress=progress)
 
     def _command(self, root: Path, output: Path, fd: int, args: list[str], *, compile: bool) -> list[str]:
         command = ["prlimit", f"--as={self.memory_mb * 1024 * 1024}",
-                   f"--cpu={math.ceil(self.timeout)}", f"--fsize={self.artifact_bytes}",
+                   f"--cpu={math.ceil(self.policy.compilation_seconds if compile else self.policy.replay_seconds)}", f"--fsize={self.artifact_bytes}",
                    "--nofile=128", "--core=0", "bwrap", "--unshare-all", "--die-with-parent",
                    "--new-session", "--cap-drop", "ALL", "--clearenv"]
         for system in ("/usr", "/lib", "/lib64"):
@@ -396,7 +413,15 @@ class LeanProjectVerifier:
                 "timeout": self.timeout, "output_limit": self.output_bytes, "artifact_limit": self.artifact_bytes})]
         return command + ["--seccomp", str(fd), *lean]
 
-    def verify(self, store: ArtifactStore, request: LeanProjectRequest) -> LeanProjectResult:
+    def verify(self, store: ArtifactStore, request: LeanProjectRequest, *, progress=None, cancel_event=None) -> LeanProjectResult:
+        started = time.monotonic()
+        whole_deadline = started + self.policy.job_seconds
+        phase, failure_layer = "preparation", None
+        if progress:
+            progress(phase)
+        def run(command, timeout, limit, fd):
+            options = {"cancel_event": cancel_event, "heartbeat": (lambda: progress(phase)) if progress else None}
+            return _run(command, timeout, limit, fd, **{k: v for k, v in options.items() if v is not None})
         # Snapshot mutable caller data before validation or execution.
         request = LeanProjectRequest(dict(request.sources), tuple(request.targets), tuple(request.imports))
         request.validate()
@@ -412,7 +437,7 @@ class LeanProjectVerifier:
         checker_id = store.artifact(checker.encode())
         compiler_id = store.artifact(_COMPILER.encode())
         try:
-            self._pins()
+            self._pins(**({"progress": lambda: progress(phase)} if progress else {}))
             with tempfile.TemporaryDirectory(prefix="nima-project-") as scratch:
                 base = Path(scratch)
                 src, out, trusted = (base / n for n in ("source", "artifacts", "trusted"))
@@ -429,13 +454,16 @@ class LeanProjectVerifier:
                 with tempfile.TemporaryFile() as policy:
                     policy.write(_seccomp())
                     policy.flush()
-                    deadline = time.monotonic() + self.timeout
+                    phase = "compilation"
+                    if progress:
+                        progress(phase)
+                    deadline = min(whole_deadline, time.monotonic() + self.policy.compilation_seconds)
                     for name in request.sources:
                         policy.seek(0)
                         relative = name.replace(".", "/")
                         command = self._command(src, out, policy.fileno(),
                             ["-o", "/build/Result.olean", f"/src/{relative}.lean"], compile=True)
-                        log = _run(command, max(.01, deadline - time.monotonic()),
+                        log = run(command, max(.01, deadline - time.monotonic()),
                                    self.artifact_bytes * 4 + self.output_bytes * 6 + 4096, policy.fileno())
                         if log["exit_code"] != 0 or log["failure"]:
                             logs.append({**log, "output": log["output"][:self.output_bytes]})
@@ -465,7 +493,11 @@ class LeanProjectVerifier:
                         if path.is_file() and path.stat().st_size:
                             artifacts[path.relative_to(out).as_posix()] = store.artifact(path.read_bytes())
                     policy.seek(0)
-                    log = _run(self._command(trusted, out, policy.fileno(), ["--run", "/src/Checker.lean"], compile=False),
+                    phase = "replay"
+                    if progress:
+                        progress(phase)
+                    deadline = min(whole_deadline, time.monotonic() + self.policy.replay_seconds)
+                    log = run(self._command(trusted, out, policy.fileno(), ["--run", "/src/Checker.lean"], compile=False),
                                max(.01, deadline - time.monotonic()), self.output_bytes, policy.fileno())
                     logs.append(log)
                     if log["exit_code"] != 0 or log["failure"]:
@@ -499,11 +531,32 @@ class LeanProjectVerifier:
                     accepted = all(set(ax) <= {"propext", "Classical.choice", "Quot.sound"} for ax in axioms.values())
                     if not accepted:
                         diagnostics.append("unaccepted axioms")
-            self._pins()
+            self._pins(**({"progress": lambda: progress(phase)} if progress else {}))
+            if cancel_event is not None and cancel_event.is_set():
+                raise ValueError("cancelled")
+            if time.monotonic() >= whole_deadline:
+                raise ValueError("whole job timeout")
             certified = compiled and inspected and accepted and replayed
         except (OSError, ValueError, RuntimeError, KeyError, TypeError, AttributeError) as exc:
             accepted = False
             diagnostics.append(str(exc))
+            message = str(exc).lower()
+            if "cancelled" in message:
+                failure_layer = "cancelled"
+            elif time.monotonic() >= whole_deadline:
+                failure_layer = "job_timeout"
+            elif "timeout" in message:
+                failure_layer = "compilation_timeout" if phase == "compilation" else "replay_timeout"
+            elif "output limit" in message:
+                failure_layer = "output_overflow"
+            elif "artifact size" in message:
+                failure_layer = "artifact_overflow"
+            elif any(term in " ".join(str(log.get("output", "")) for log in logs).lower()
+                     for term in ("out of memory", "maximum memory", "memory allocation failed")):
+                failure_layer = "memory_exhaustion"
+            else:
+                failure_layer = phase + "_failure"
+        elapsed = time.monotonic() - started
         evidence = store.artifact(json.dumps({"protocol": "lean-project-kernel-replay-v3", "runtime": "bwrap", "sources": sources,
             "artifacts": artifacts, "checker": checker_id, "toolchain": self.toolchain.sha256,
             "compiler_transport": compiler_id, "allowed_axioms": ["propext", "Classical.choice", "Quot.sound"],
@@ -513,6 +566,8 @@ class LeanProjectVerifier:
             "declaration_type_fingerprints": declaration_type_fingerprints,
             "declaration_type_fingerprint_format": "lean-expr-alpha-sha256-v2",
             "targets": request.targets, "imports": request.imports, "diagnostics": diagnostics,
+            "failure_layer": failure_layer, "phase": "complete" if certified else phase,
+            "elapsed_seconds": elapsed, "execution_policy": self.policy.model_dump(mode="json"),
             "compilation_succeeded": compiled, "inspection_succeeded": inspected, "axioms_accepted": accepted,
             "correspondence_verified": False, "certification_verified": certified,
             "limits": {"seconds": self.timeout, "output_bytes_per_process": self.output_bytes,
@@ -521,4 +576,6 @@ class LeanProjectVerifier:
         return LeanProjectResult(compiled, inspected, accepted, evidence, sources, artifacts, axioms,
                                  tuple(diagnostics), compiler_logs=tuple(logs), certification_verified=certified,
                                  kernel_replay_succeeded=replayed, declaration_types=declaration_types,
-                                 declaration_type_fingerprints=declaration_type_fingerprints)
+                                 declaration_type_fingerprints=declaration_type_fingerprints,
+                                 failure_layer=failure_layer, phase="complete" if certified else phase,
+                                 elapsed_seconds=elapsed, execution_policy=self.policy.model_dump(mode="json"))

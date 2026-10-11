@@ -4,6 +4,8 @@ Use NIMA to carry an investigation across papers, calculations and coding-agent 
 You choose the questions and decide what belongs in the research record.
 We provide persistent knowledge, inspectable tools and adaptable skills to support that work.
 
+See the [v0.2.0 release notes](RELEASE_NOTES_v0.2.0.md) and [qualification scope](PLATFORM_SUPPORT_v0.2.0.md) for this release.
+
 ## Get started
 
 1. [Install NIMA and configure models](SETUP.md) with the setup wizard.
@@ -18,6 +20,7 @@ We provide persistent knowledge, inspectable tools and adaptable skills to suppo
 | Investigate, calculate, review or develop a proof | [Research workflows](RESEARCH_WORKFLOWS.md) |
 | Understand a tool and its effects | [Tool catalogue](TOOLS.md) |
 | Continue private calculations and proofs | [Private graph sessions](PRIVATE_GRAPHS.md) |
+| Diagnose MCP connections and configure reliable private services | [Reliability and recovery](RELIABILITY.md) |
 | Inspect Markdown exports and write reports | [Inspection and reports](INSPECTION_REPORTS.md) |
 | Understand graph interchange | [NIMA’s OKF profile](OKF_PROFILE.md) |
 | Add your own tool | [Contribute a Langflow workflow](CONTRIBUTING_WORKFLOWS.md) |

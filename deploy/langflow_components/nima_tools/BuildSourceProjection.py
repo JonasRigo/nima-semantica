@@ -18,12 +18,14 @@ class BuildSourceProjection(BaseComponent):
         StrInput(name="project_id", display_name="Authorized index project (operator)", value="research"),
         StrInput(name="actor", display_name="Actor (operator)", value="harness"),
         BoolInput(name="allow_corpus_writes", display_name="Allow projection writes (operator)", value=False),
+        StrInput(name="projection_limits_json", display_name="Projection limits (operator)", value='{}'),
     ]
 
     def run_sync(self):
         incoming = ToolResult.model_validate(_value(self.payload))
         context = SourceToolContext(corpus_id=self.corpus_id, project_id=self.project_id or None,
-            actor=self.actor, allow_corpus_writes=self.allow_corpus_writes)
+            actor=self.actor, allow_corpus_writes=self.allow_corpus_writes,
+            projection_limits=__import__('json').loads(self.projection_limits_json))
         if incoming.data.get("mode") == "preview" or incoming.status != "complete":
             return incoming.model_dump(mode="json")
         with configured_store(required=False) as store:

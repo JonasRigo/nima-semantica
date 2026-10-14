@@ -153,24 +153,75 @@ def install_harness(root, config_path, binding, harnesses):
     return [str(path) for path in planned]
 
 
-def refresh_project_projection(config, corpus, project):
+def projection_limits(config, override=None):
+    from .projection_limits import ProjectionLimits
+    return ProjectionLimits.model_validate({**config.projection_limits.model_dump(),
+        **({"max_tokens": override} if override is not None else {})})
+
+
+def bind_project_projection(config, corpus, project, result):
+    directory = project_path(config, corpus, project)
+    for name, pin in (("math", "retrieval_projection_id"), ("proof", "projection_id")):
+        path = directory / f"{name}.json"
+        value = json.loads(path.read_text())
+        value[pin] = result.projection_id
+        value["allow_retrieval"] = True
+        write_json(path, value)
+
+
+def refresh_project_projection(config, corpus, project, max_tokens=None):
     """Refresh future session bindings; existing private sessions keep their pins."""
     from .storage import GraphStore
     from .graph_projection import GraphProjectionRequest, GraphProjectionService
-    store = GraphStore(store_path(config))
+    from .models import ConflictError
     try:
-        result = GraphProjectionService(store).rebuild(GraphProjectionRequest(corpus_id=corpus, project_id=project))
-        if result.status != "completed":
-            raise ValueError("Project retrieval projection failed: " + str(result.diagnostics))
-    finally:
-        store.close()
-    directory = project_path(config, corpus, project)
-    for name, key in (("math", "retrieval_projection_id"), ("proof", "projection_id")):
-        path = directory / f"{name}.json"
-        value = json.loads(path.read_text())
-        value[key] = result.projection_id
-        value["allow_retrieval"] = True
-        write_json(path, value)
+        store = GraphStore(store_path(config))
+    except ConflictError as exc:
+        if str(exc) != "another service owns this corpus": raise
+        from .graph_projection import GraphProjectionResult
+        data = index_through_owner(config, corpus, project, projection_limits(config, max_tokens))
+        if not data.get("index_ready"):
+            raise ValueError("Project retrieval projection failed: " + str(data.get("diagnostics")))
+        result = GraphProjectionResult.model_validate({k: data[k] for k in GraphProjectionResult.model_fields})
+    else:
+        try:
+            result = GraphProjectionService(store).rebuild(GraphProjectionRequest(corpus_id=corpus, project_id=project,
+                **projection_limits(config, max_tokens).model_dump()))
+            if result.status != "completed":
+                raise ValueError("Project retrieval projection failed: " + str(result.diagnostics))
+        finally:
+            store.close()
+    bind_project_projection(config, corpus, project, result)
+
+
+def index_through_owner(config, corpus, project, limits, attempt_id=None):
+    from .owner_operations import call_owner
+    from .corpus_snapshot import CorpusSnapshot
+    from .graph_projection import GraphProjectionService
+    from .models import identity, ConflictError
+    if project:
+        binding = project_binding(config, corpus, project)
+    else:
+        candidates = [json.loads(p.read_text()) for p in sorted(
+            (Path(config.data_root) / "projects" / corpus).glob("*/project.json"))]
+        binding = next((b for b in candidates if b.get("mcp_url")), {})
+    with CorpusSnapshot(store_path(config), corpus_id=corpus, project_id=project) as store:
+        revision = store.graph_revision(corpus, project)
+        operation = attempt_id or identity({"stage": "index_recovery", "corpus": corpus, "project": project,
+            "limits": limits, "graph_revision": revision, "source_revision": str(store.embedding_revision(corpus))})
+    response = call_owner(binding.get("mcp_url"), "Prepare and Index Sources",
+        {"mode": "index_rebuild", "operation_id": operation, "sources": [],
+         "index_scope": "project" if project else "corpus", "projection_max_tokens": limits.max_tokens,
+         "projection_max_regions": limits.max_regions})
+    data = response.data
+    if (data.get("corpus_id"), data.get("project_id")) != (corpus, project):
+        raise ConflictError("index owner response scope mismatch")
+    if data.get("index_ready"):
+        with CorpusSnapshot(store_path(config), corpus_id=corpus, project_id=project) as store:
+            manifest = GraphProjectionService(store).get_current(data["projection_id"], corpus_id=corpus, project_id=project)
+            if manifest.model_dump(mode="json") != data.get("manifest"):
+                raise ConflictError("index owner returned a different projection manifest")
+    return data
 
 
 def private_sessions(binding):
@@ -218,7 +269,7 @@ def project_init(args, config):
         path = directory / f"{name}.json"
         if not path.exists():
             write_json(path, value)
-    refresh_project_projection(config, corpus, project)
+    refresh_project_projection(config, corpus, project, getattr(args, "projection_max_tokens", None))
     if not args.offline:
         from .workflow_installation import publish_flows
         published = publish_flows(config, corpus, project, directory)
@@ -289,7 +340,8 @@ def project_promote(args, config):
         from .graph_projection import GraphProjectionRequest, GraphProjectionService
         store = GraphStore(store_path(config))
         try:
-            projection = GraphProjectionService(store).rebuild(GraphProjectionRequest(corpus_id=args.corpus))
+            projection = GraphProjectionService(store).rebuild(GraphProjectionRequest(corpus_id=args.corpus,
+                **projection_limits(config).model_dump()))
             if projection.status != "completed":
                 raise ValueError("Corpus retrieval projection failed: " + str(projection.diagnostics))
         finally:
@@ -324,7 +376,8 @@ def _ingest_one(args, config):
         raise ValueError("fast reading is disabled in the installation configuration")
     ctx = SourceToolContext(corpus_id=corpus, project_id=args.project,
         source_scope="project" if args.project else "corpus", allow_corpus_writes=not args.project,
-        allow_project_writes=bool(args.project), allow_pdf=bool(config.pdf_url) or preparation_mode == "fast", allow_embeddings=args.index_mode == "vector")
+        allow_project_writes=bool(args.project), allow_pdf=bool(config.pdf_url) or preparation_mode == "fast", allow_embeddings=args.index_mode == "vector",
+        projection_limits=projection_limits(config, getattr(args, "projection_max_tokens", None)).model_dump())
     def pdf_normalizer(content):
         from .orchestration.langflow.pdf_client import PdfNormalizerClient
         result = PdfNormalizerClient(config.pdf_url, config.pdf_token_file).normalize(content)
@@ -386,7 +439,7 @@ def _ingest_one(args, config):
     if result.data.get("index_ready"):
         projects = [args.project] if args.project else [p.name for p in (Path(config.data_root) / "projects" / corpus).glob("*") if (p / "project.json").is_file()]
         for project in projects:
-            refresh_project_projection(config, corpus, project)
+            refresh_project_projection(config, corpus, project, getattr(args, "projection_max_tokens", None))
     return result
 
 
@@ -517,11 +570,37 @@ def main(argv=None):
         if action == "init":
             sub.add_argument("--path", default="."); sub.add_argument("--harness", default="codex,claude,opencode")
             sub.add_argument("--offline", action="store_true", help="Initialize storage and graph MCPs without publishing the Langflow toolbox")
+        if action in {"init", "refresh"}:
+            sub.add_argument("--projection-max-tokens", type=int, help="Explicit projection token limit (1..10000000)")
+    configure = project.add_parser("configure", help="Configure optional vocabulary guidance for new investigations")
+    configure.add_argument("project"); configure.add_argument("--corpus", default="papers")
+    configure.add_argument("--normalized-reasoning", choices=["on", "off"], required=True)
+    configure.add_argument("--vocabulary", help="Bind a validated structured vocabulary JSON file")
+    configure.add_argument("--path", default=".", help="Update the matching workspace binding if present")
+    vocabulary = commands.add_parser("vocabulary").add_subparsers(dest="action", required=True)
+    for action in ("context", "read", "header"):
+        sub = vocabulary.add_parser(action)
+        sub.add_argument("project"); sub.add_argument("--corpus", default="papers")
+        if action == "context": sub.add_argument("--query", default="")
+        elif action == "read": sub.add_argument("--entry", required=True)
+    for action in ("validate", "seal"):
+        sub = vocabulary.add_parser(action)
+        sub.add_argument("file"); sub.add_argument("--corpus", required=True); sub.add_argument("--project", required=True)
+        if action == "seal":
+            sub.add_argument("--output", required=True); sub.add_argument("--markdown", required=True)
+    indexing = commands.add_parser("index").add_subparsers(dest="action", required=True)
+    for action in ("check", "rebuild"):
+        sub = indexing.add_parser(action)
+        sub.add_argument("corpus"); sub.add_argument("--project")
+        sub.add_argument("--projection-max-tokens", type=int)
+        if action == "rebuild":
+            sub.add_argument("--attempt-id", help="Explicit new indexing attempt; historical failed receipts are retained")
     source = commands.add_parser("ingest")
     source.add_argument("corpus"); source.add_argument("file", nargs="+"); source.add_argument("--project")
     source.add_argument("--mode", choices=["full", "fast"], default="full")
     source.add_argument("--format", choices=["auto", "pdf", "html"], default="auto")
     source.add_argument("--index-mode", choices=["lexical", "vector"], default="lexical")
+    source.add_argument("--projection-max-tokens", type=int, help="Explicit projection token limit (1..10000000)")
     source.add_argument("--retry", action="store_true", help="Start a new receipted attempt instead of replaying a saved result; preserves existing evidence")
     export = commands.add_parser("export").add_subparsers(dest="format", required=True).add_parser("okf")
     export.add_argument("--corpus", required=True); export.add_argument("--project"); export.add_argument("--output", required=True)
@@ -592,11 +671,15 @@ def main(argv=None):
                 emit({"projects": list_projects(config, args.corpus)})
             elif args.action == "promote":
                 return project_promote(args, config)
+            elif args.action == "configure":
+                from .vocabulary_installation import configure_project
+                emit(configure_project(config, identifier(args.corpus), identifier(args.project),
+                    enabled=args.normalized_reasoning == "on", vocabulary_file=args.vocabulary, workspace=args.path))
             elif args.action == "init":
                 project_init(args, config)
             elif args.action == "refresh":
                 project_binding(config, args.corpus, args.project)
-                refresh_project_projection(config, args.corpus, args.project)
+                refresh_project_projection(config, args.corpus, args.project, args.projection_max_tokens)
                 emit({"projection_ready": True, "corpus_id": args.corpus, "project_id": args.project})
             else:
                 binding = project_binding(config, args.corpus, args.project)
@@ -609,6 +692,77 @@ def main(argv=None):
                 finally:
                     store.close()
             return 0
+        if args.command == "vocabulary":
+            from .vocabulary_context import vocabulary_context, load_snapshot, seal_vocabulary, validate_snapshot, render_vocabulary
+            from .vocabulary_contracts import VocabularyPolicy, VocabularySnapshot
+            from .corpus_snapshot import CorpusSnapshot
+            scope = dict(corpus_id=identifier(args.corpus), project_id=identifier(args.project))
+            if args.action == "header":
+                from .vocabulary_context import vocabulary_header
+                with CorpusSnapshot(store_path(config), **scope) as store:
+                    emit(vocabulary_header(store, **scope))
+                return 0
+            if args.action in {"seal", "validate"}:
+                path = Path(args.file)
+                if path.is_symlink() or path.stat().st_size > 5_000_000:
+                    raise ValueError("Vocabulary must be a bounded regular JSON file")
+                snapshot = seal_vocabulary(json.loads(path.read_text())) if args.action == "seal" else VocabularySnapshot.model_validate_json(path.read_bytes())
+                with CorpusSnapshot(store_path(config), **scope) as store:
+                    validate_snapshot(store, snapshot, **scope)
+                if args.action == "seal":
+                    write_json(args.output, snapshot.model_dump(mode="json"))
+                    from .storage import atomic_bytes
+                    markdown = Path(args.markdown)
+                    if markdown.is_symlink(): raise ValueError("Refusing symlink vocabulary destination")
+                    atomic_bytes(markdown, render_vocabulary(snapshot).encode())
+                emit({"valid": True, "snapshot_hash": snapshot.content_hash, "entries": len(snapshot.entries)})
+            else:
+                binding = project_binding(config, args.corpus, args.project)
+                policy = VocabularyPolicy.model_validate(binding.get("normalized_reasoning", {}))
+                if args.action == "context" and not policy.enabled:
+                    emit({"status": "disabled", "enabled": False}); return 0
+                if args.action == "context" and not policy.snapshot_artifact_id:
+                    emit(vocabulary_context(None, **scope, query=args.query, configured=policy)); return 0
+                with CorpusSnapshot(store_path(config), **scope) as store:
+                    if args.action == "context":
+                        emit(vocabulary_context(store, **scope, query=args.query, configured=policy))
+                    else:
+                        if not policy.snapshot_artifact_id: raise ValueError("No vocabulary is bound")
+                        snapshot = load_snapshot(store, policy, **scope, current=False)
+                        entry = next((e for e in snapshot.entries if e.entry_id == args.entry), None)
+                        if entry is None: raise ValueError("Vocabulary entry is unavailable")
+                        emit(entry.model_dump(mode="json"))
+            return 0
+        if args.command == "index":
+            from contextlib import closing
+            from .index_recovery import check_index, rebuild_index
+            from .corpus_snapshot import CorpusSnapshot
+            from .storage import GraphStore
+            scope = dict(corpus_id=identifier(args.corpus), project_id=identifier(args.project) if args.project else None)
+            limits = projection_limits(config, args.projection_max_tokens)
+            if args.action == "check":
+                with CorpusSnapshot(store_path(config), **scope) as store:
+                    result = check_index(store, **scope, limits=limits)
+            else:
+                from .models import ConflictError
+                try:
+                    selected = GraphStore(store_path(config))
+                except ConflictError as exc:
+                    if str(exc) != "another service owns this corpus": raise
+                    result = index_through_owner(config, args.corpus, args.project, limits, args.attempt_id)
+                else:
+                    with closing(selected) as store:
+                        result = rebuild_index(store, **scope, limits=limits, attempt_id=args.attempt_id)
+                if result.get("index_ready"):
+                    from .graph_projection import GraphProjectionResult
+                    projected = GraphProjectionResult.model_validate({k: result[k] for k in GraphProjectionResult.model_fields})
+                    if args.project:
+                        bind_project_projection(config, args.corpus, args.project, projected)
+                    else:
+                        for path in sorted((Path(config.data_root) / "projects" / args.corpus).glob("*/project.json")):
+                            refresh_project_projection(config, args.corpus, path.parent.name, args.projection_max_tokens)
+            emit(result)
+            return 0 if result.get("ready") and (args.action == "check" or result.get("index_ready")) else 1
         if args.command == "ingest":
             return ingest(args, config)
         if args.command == "export":

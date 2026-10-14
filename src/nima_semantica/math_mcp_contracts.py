@@ -1,10 +1,11 @@
 """Shared typed arguments for native, MCP, and inspectable canvas entry points."""
 from typing import Annotated, Any, Literal
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .math_task_contract import MathTaskFact
 from .math_indexed_count import IndexedSet
 from .math_graph_program import _ARITY
 from .private_record_reads import EnumerateRecords, ReadRecord
+from .vocabulary_contracts import VocabularyObservation, VocabularyExtension
 
 
 class Arguments(BaseModel):
@@ -18,6 +19,7 @@ class OpenSession(Arguments):
     task_facts: list[MathTaskFact] = Field(default_factory=list)
     indexed_sets: list[IndexedSet] = Field(default_factory=list)
     session_id: str | None = Field(default=None, description="Existing session to resume with identical binding; omit to create.")
+    normalized_reasoning: bool | None = Field(default=None, description="Override vocabulary guidance for this session; omission inherits project settings.")
 
 
 class Session(Arguments):
@@ -38,10 +40,16 @@ class SourceSpan(Arguments):
 
 
 class Inspect(Session):
-    kind: Literal["node", "receipt", "action"]
-    identifier: str
+    kind: Literal["node", "receipt", "action", "vocabulary"]
+    identifier: str | None = None
     source_span: SourceSpan | None = None
     full_payload: bool = False
+
+    @model_validator(mode="after")
+    def selected_object(self):
+        if self.kind != "vocabulary" and not self.identifier:
+            raise ValueError("Object inspection requires an identifier")
+        return self
 
 
 class Export(Session):
@@ -135,6 +143,9 @@ class Application(Mutation):
 class Submit(Mutation):
     answer: Any = Field(default=None, description="Omit to let the controller assemble exact selected graph values. Explicitly supplied JSON, including null, is still checked unchanged.")
     support_nodes: dict[str, NodeReference | Annotated[list[NodeReference], Field(min_length=1, max_length=1)]] = Field(description="One exact node per required output path. Extra valid local references are retained as supplementary evidence, not answer fields or qualified claims. Missing required paths still fail. A singleton list is unwrapped; multiple candidates are never chosen automatically.")
+    vocabulary_assessment: str | None = Field(default=None, max_length=4000)
+    vocabulary_findings: tuple[VocabularyObservation, ...] = Field(default=(), max_length=16)
+    vocabulary_extensions: tuple[VocabularyExtension, ...] = Field(default=(), max_length=8)
 
 
 class Close(Mutation):
@@ -203,11 +214,16 @@ def invoke(service, operation: str, arguments: dict):
     from .math_response_views import response_view
     if operation == "open":
         return response_view(service.open(request.task, request.required_paths, request.task_facts,
-            request.indexed_sets, request.session_id, request.request_id), operation)
+            request.indexed_sets, request.session_id, request.request_id, request.normalized_reasoning), operation)
+    from .vocabulary_contracts import compatible_dump
     data = request.model_dump(mode="json", exclude_none=True)
+    for key in set(data) - set(compatible_dump(request)):
+        data.pop(key, None)
     sid = data.pop("session_id")
     if operation == "inspect":
         kind = data["kind"]
+        if kind == "vocabulary":
+            return service.read(sid, "inspect_vocabulary", {"full_payload": request.full_payload})
         key = "request_id" if kind == "action" else kind + "_id"
         return service.read(sid, "inspect_" + kind, {key: data["identifier"], "full_payload": request.full_payload,
             **({"source_span": data["source_span"]} if "source_span" in data else {})})

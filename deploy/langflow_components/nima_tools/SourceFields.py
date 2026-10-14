@@ -14,7 +14,7 @@ class SourceFields(BaseComponent):
     description = "Supply text or base64 bytes, never server paths or URLs. Preview is read-only; preparation requires an operation ID."
     nima_manifest = manifest_for_component("SourceFields")
     inputs = [
-        DropdownInput(name="mode", display_name="Mode", options=["preview", "prepare_index"], value="preview"),
+        DropdownInput(name="mode", display_name="Mode", options=["preview", "prepare_index", "index_check", "index_rebuild"], value="preview"),
         DropdownInput(name="index_mode", display_name="Index mode", options=["lexical", "vector"], value="lexical"),
         DropdownInput(name="preparation_mode", display_name="Preparation quality", options=["full", "fast"], value="full"),
         MultilineInput(name="sources_json", display_name="Sources JSON", value='{"sources":[{"name":"inspection.md","data_base64":"IyBJbnNwZWN0aW9uIGZpeHR1cmUKCkZvciB4ID0gMiwgJHheMiA9IDQkLgo="}]}',
@@ -39,11 +39,11 @@ class SourceFields(BaseComponent):
         mode = override.get("mode", self.mode)
         payload = {"mode": mode, "index_mode": self.index_mode,
                    "preparation_mode": self.preparation_mode, "run_id": self.run_id or None}
-        if "sources" not in override:
+        if "sources" not in override and mode in {"preview", "prepare_index"}:
             if len(self.sources_json) > 8_100_000:
                 raise ValueError("sources exceed input limit")
             payload.update(strict_json_object(self.sources_json))
-        if mode == "prepare_index":
+        if mode in {"prepare_index", "index_rebuild"}:
             payload["operation_id"] = self.operation_id or None
         payload.update(override)
         return PrepareSourcesRequest.model_validate(payload).model_dump(mode="json")

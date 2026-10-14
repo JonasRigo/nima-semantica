@@ -13,6 +13,7 @@ from .models import AcquisitionPolicy
 from .paper_discovery import PaperDiscoveryPolicy
 from .execution_policy import LeanExecutionPolicy
 from .retrieval_policy import RetrievalLimits
+from .projection_limits import ProjectionLimits
 
 
 class Config(BaseModel):
@@ -93,6 +94,7 @@ class Installation(Config):
     lean_token_file: str = ""
     lean_policy: LeanExecutionPolicy = Field(default_factory=LeanExecutionPolicy)
     retrieval_limits: RetrievalLimits = Field(default_factory=RetrievalLimits)
+    projection_limits: ProjectionLimits = Field(default_factory=ProjectionLimits)
 
 
 def configuration_path():

@@ -18,6 +18,9 @@ from .research_run_service import ResearchRunService
 from .execution_receipts import ExecutionReceiptService
 from .receipts import ExecutionReceipt
 from .providers import Invocation,validate_manifest
+from .vocabulary_contracts import compatible_dump, vocabulary_schema
+from .vocabulary_context import vocabulary_context, GUIDANCE
+from .vocabulary_review import assess_vocabulary
 from .tool_contracts import ToolResult
 
 INSTRUCTIONS="""You are the Review Research ontology-state agent. Review ONLY the harness-selected
@@ -43,13 +46,13 @@ complete a parent proof or hide unsuccessful/cancelled work.
 """
 
 
-def review_tools(context):
+def review_tools(context, vocabulary_enabled=False):
     descriptions={"read_regions":"Read exact selected/attached source regions.","retrieve_context":"Retrieve native corpus context and exact passages.",
         "assess_target":"Assess one exact claim or proof part, retaining open obligations and limitations.",
         "search_counterexamples":"Run an authorized bounded native integer search and independent witness check.",
         "substantiate_target":"Revisit an exact missing-support finding through Substantiate Graph Snapshot.",
         "analyze_review":"Trace represented dependencies and check current assessment coverage.","submit_result":"Persist an advisory review and pending project progress, never scientific admission."}
-    return [{"type":"function","function":{"name":n,"description":descriptions[n],"parameters":s.model_json_schema()}}
+    return [{"type":"function","function":{"name":n,"description":descriptions[n],"parameters":vocabulary_schema(s.model_json_schema(), enabled=vocabulary_enabled)}}
         for n,s in SCHEMAS.items() if (n!="retrieve_context" or context.retrieval.enabled) and
         (n!="search_counterexamples" or context.allow_counterexamples) and (n!="substantiate_target" or context.allow_substantiation)]
 
@@ -225,10 +228,15 @@ class ReviewController:
         obligations=list(dict.fromkeys([*target.unresolved_obligations,*(old or {}).get("unresolved_obligations",[]),*action.unresolved_obligations]))
         if len(obligations)>48:raise RejectedAction("Obligation limit reached; narrow scope, do not erase history.")
         binding=self.substantiation_binding(action)
-        value={**action.model_dump(mode="json"),"content_revision":target.content_revision,"unresolved_obligations":obligations,
+        value={**compatible_dump(action),"content_revision":target.content_revision,"unresolved_obligations":obligations,
             "exact_grounding":grounding,"evidence_epoch":self.evidence_epoch(),"substantiation":binding,
             "search_operation_ids":[x["operation_id"] for x in tests],"mathematical_validity":"not_verified","source_correspondence_verified":False,
             "authority":"model_proposal","unqualified_absence_supported":False}
+        if getattr(self, "vocabulary", {}).get("status") == "active":
+            value["vocabulary_review"] = assess_vocabulary(self.store, self.vocabulary, **self.scope,
+                target_id=target.target_id, argument=target.argument or target.statement,
+                observations=action.vocabulary_findings, extensions=action.vocabulary_extensions,
+                assessment=action.vocabulary_assessment)
         deps=["target_"+token(target.target_id),"coverage",*("evidence_"+token(g["region_id"]) for g in grounding),
             *("check_"+token(x["operation_id"]) for x in [*self.tests,*self.substantiations])]
         obligation_key="review_obligations_"+token(target.target_id)
@@ -264,7 +272,8 @@ class ReviewController:
             "mathematical_validity":"not_verified","scientific_admission":False,"private_state_published":False,"parent_proof_completed":False,"unqualified_absence_supported":False}
 
     def feedback(self):
-        return {"revision":self.revision,"targets":[t.model_dump(mode="json") for t in self.targets.values()],
+        return {**({"vocabulary": self.vocabulary} if getattr(self, "vocabulary", {}).get("status", "disabled") != "disabled" else {}),
+            "revision":self.revision,"targets":[t.model_dump(mode="json") for t in self.targets.values()],
             "graph_objects":[self.nodes[t.ref].model_dump(mode="json") for t in self.targets.values()],
             "region_inventory":[{"region_id":r,"read":r in self.read} for r in self.inventory],"assessments":list(self.assessments.values()),
             "tests":self.tests,"substantiations":self.substantiations,"analysis":self.analysis,"counterexample_target_ids":self.context.counterexample_target_ids,
@@ -279,11 +288,15 @@ def review_research(store,request,context,*,model=None,worker=None):
         return ToolResult(operation="Review Research",status="failed",diagnostics=({"code":"model_audit_or_store_unavailable"},))
     scope=dict(corpus_id=context.corpus_id,project_id=context.project_id);receipts=ExecutionReceiptService(store)
     rid=identity({"stage":"review_research","operation_id":request.operation_id,**scope})
-    fingerprint=identity({"version":VERSION,"policy":POLICY_DIGEST,"request":request,"context":context})
+    vocabulary = vocabulary_context(store, **scope, query=" ".join(t.statement for t in request.targets),
+        override=request.normalized_reasoning, configured=context.normalized_reasoning)
+    fingerprint=identity({"version":VERSION,"policy":POLICY_DIGEST,"request":compatible_dump(request),"context":compatible_dump(context),
+        **({"vocabulary": vocabulary} if vocabulary["status"] != "disabled" else {})})
     previous=receipts.replay(rid,request_hash=fingerprint,**scope)
     if previous:return ToolResult.model_validate(previous.metadata["result"])
     children=[];attempts=[];controller=None;interrupted=None
-    data={"version":VERSION,"policy_digest":POLICY_DIGEST,"attempts":attempts,"source_fidelity_verified":False}
+    data={"version":VERSION,"policy_digest":POLICY_DIGEST,"attempts":attempts,"source_fidelity_verified":False,
+        "normalized_reasoning": vocabulary}
     def attempt(kind,payload,callback):
         child=identity((rid,len(children),kind));children.append(child);output={};status="failed";error=None
         try:
@@ -309,11 +322,13 @@ def review_research(store,request,context,*,model=None,worker=None):
         validate_manifest(context.model_manifest)
         ontology=OntologyService.from_store(store,**scope);snapshot=load_snapshot(store,request,context,ontology)
         controller=ReviewController(store,request,context,snapshot,ontology)
+        controller.vocabulary = vocabulary
         controller.model=model;controller.worker=worker
         data.update(snapshot_id=snapshot.snapshot_id,snapshot_hash=identity(snapshot),graph_revision=request.graph_revision.model_dump(mode="json"),
             input_unresolved=snapshot.metadata.get("unresolved",[]),input_diagnostics=snapshot.metadata.get("diagnostics",[]))
-        messages=[{"role":"system","content":INSTRUCTIONS},{"role":"user","content":canonical(request).decode()}]
-        tools=review_tools(context)
+        messages=[{"role":"system","content":INSTRUCTIONS + ("\n" + GUIDANCE if vocabulary["status"] == "active" else "")},
+            {"role":"user","content":canonical(compatible_dump(request)).decode()}]
+        tools=review_tools(context, vocabulary_enabled=vocabulary["status"] == "active")
         for ordinal in range(context.max_actions):
             controller.current()
             prompt={"messages":[*messages,{"role":"user","content":canonical(controller.feedback()).decode()}],"tools":tools,"remaining_actions":context.max_actions-ordinal}

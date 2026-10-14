@@ -119,6 +119,11 @@ def wire_model(flow, target, field, profile, role):
 
 def configure_flow(flow, name, installation, corpus, project):
     flow = copy.deepcopy(flow)
+    from .installation import project_binding
+    try:
+        vocabulary_policy = project_binding(installation, corpus, project).get("normalized_reasoning")
+    except (OSError, ValueError):
+        vocabulary_policy = None
     # Remove previous model nodes after discarding their model-input edges below.
     old_models = {n["id"] for n in flow["data"]["nodes"] if n["data"]["type"] in {"OpenAIModel", "ConfiguredModel"}}
     flow["data"]["nodes"] = [n for n in flow["data"]["nodes"] if n["id"] not in old_models]
@@ -142,7 +147,9 @@ def configure_flow(flow, name, installation, corpus, project):
                   "discovery_providers_json": json.dumps(installation.discovery.discovery_providers),
                   "max_discoveries": installation.discovery.max_discoveries,
                   "acquisition_policy_json": installation.acquisition.model_dump_json(),
-                  "allow_fast_read": installation.allow_fast_read}
+                  "allow_fast_read": installation.allow_fast_read,
+                  "projection_limits_json": installation.projection_limits.model_dump_json(),
+                  "normalized_reasoning_json": json.dumps(vocabulary_policy)}
         for field, value in values.items():
             if field in template:
                 template[field]["value"] = value

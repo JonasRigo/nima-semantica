@@ -26,6 +26,16 @@ Private graph exports do not themselves update project knowledge.
 
 ## Flexible workflow
 
+Normalized reasoning is optional and off by default.
+Read the project's `normalized_reasoning` setting and, for an existing private session, its pinned metadata before applying vocabulary guidance.
+When disabled, continue without loading vocabulary or adding vocabulary review calls.
+When enabled, obtain bounded context with the configured CLI's `vocabulary context PROJECT --corpus CORPUS --query QUESTION` and read complete selected definitions with `vocabulary read` as needed.
+An unavailable reference leaves ordinary work possible; retain that diagnostic rather than claiming normalization succeeded.
+Use the pinned definitions and qualifiers when framing questions and recording arguments, and retain provisional new concepts, distinctions, borrowed terms and definition challenges with their motivations and unresolved assumptions.
+Before submission, assess material changes of meaning, unsupported equivalences, lost qualifiers and status inflation in the existing harness/model call.
+Hypothesis/review actions and private submissions accept optional `vocabulary_assessment`, `vocabulary_findings` and `vocabulary_extensions`; findings remain advisory and cannot certify science or admit a graph update.
+An unfamiliar word alone does not invalidate an argument, and unresolved disagreements need not converge to the existing vocabulary.
+
 Start from the user's question and current project state. Choose existing tools by need rather than following a mandatory pipeline.
 Hypothesis Generation proposes routes; Compare Research Objects compares selected alternatives; Review Research assesses claims and arguments; Search for Counterexamples checks an explicit scoped encoding.
 Deep Research discovers and reads literature, returning a source-attributed proposal and remaining questions.

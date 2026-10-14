@@ -398,8 +398,14 @@ class GraphStore(GraphPersistence):
             raise NimaError("artifact path rejected")
         try:
             data = path.read_bytes()
+        except PermissionError:
+            from .artifact_diagnostics import ArtifactReadError
+            raise ArtifactReadError("artifact.permission_denied", artifact_id,
+                "Artifact read access denied; check the configured reader account and scoped corpus access.") from None
         except FileNotFoundError:
-            raise NimaError("artifact not found") from None
+            from .artifact_diagnostics import ArtifactReadError
+            raise ArtifactReadError("artifact.missing", artifact_id, "artifact not found") from None
         if hashlib.sha256(data).hexdigest() != artifact_id:
-            raise NimaError("artifact integrity failure")
+            from .artifact_diagnostics import ArtifactReadError
+            raise ArtifactReadError("artifact.integrity_failure", artifact_id, "artifact integrity failure")
         return data

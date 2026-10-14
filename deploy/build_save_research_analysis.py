@@ -60,7 +60,7 @@ def build():
         "nima_tool_manifest": {"tool_id": tool, "contract_version": "1", "visual_approval": "pending",
             "controller_version":VERSION,
             "native_sources_sha256":{name:hashlib.sha256((ROOT/"src/nima_semantica"/(name+".py")).read_bytes()).hexdigest()
-                for name in ("research_analysis",)},
+                for name in ("research_analysis","vocabulary_contracts","vocabulary_context","vocabulary_review","proposal_service")},
             "publication": "not_published_by_builder", "components": snapshots}}
 
 

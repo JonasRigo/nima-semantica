@@ -37,6 +37,7 @@ class ReviewResearch(BaseComponent):
         IntInput(name="max_edges",display_name="Maximum snapshot edges (operator)",value=256),
         IntInput(name="max_read_regions",display_name="Maximum exact-read regions (operator)",value=32),
         StrInput(name="model_manifest_json",display_name="Model identity JSON (operator)",value="{}",advanced=True),
+        StrInput(name="normalized_reasoning_json",display_name="Optional vocabulary policy (operator)",value="null",advanced=True),
         HandleInput(name="model",display_name="Review language model (operator)",input_types=["LanguageModel"],required=False)]
 
     def run_sync(self):
@@ -51,7 +52,8 @@ class ReviewResearch(BaseComponent):
             max_counterexamples=self.max_counterexamples,max_evaluations=self.max_evaluations,
             allow_substantiation=self.allow_substantiation,max_substantiations=self.max_substantiations,
             max_actions=self.max_actions,max_nodes=self.max_nodes,max_edges=self.max_edges,max_read_regions=self.max_read_regions,
-            model_manifest=manifest, retrieval=MathRetrievalPolicy.model_validate(_value(self.retrieval_policy))
+            model_manifest=manifest, normalized_reasoning=json.loads(getattr(self, "normalized_reasoning_json", "null")),
+            retrieval=MathRetrievalPolicy.model_validate(_value(self.retrieval_policy))
                 if getattr(self,"retrieval_policy",None) else MathRetrievalPolicy())
         language_model = getattr(self,"model",None)
         if request.mode != "preview" and context.allow_counterexamples:

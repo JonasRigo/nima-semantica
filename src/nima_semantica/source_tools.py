@@ -105,18 +105,27 @@ def _source_bytes(source, store, context):
 
 
 class PrepareSourcesRequest(StrictModel):
-    mode: Literal["preview", "prepare_index"] = "preview"
-    sources: tuple[SourceInput | AcquiredSourceInput, ...] = Field(min_length=1, max_length=16)
+    mode: Literal["preview", "prepare_index", "index_check", "index_rebuild"] = "preview"
+    sources: tuple[SourceInput | AcquiredSourceInput, ...] = Field(default=(), max_length=16)
     index_mode: Literal["lexical", "vector"] = "lexical"
     preparation_mode: Literal["full", "fast"] = "full"
     operation_id: GraphIdentifier | None = None
     run_id: GraphIdentifier | None = None
     expected_store_revision: GraphIdentifier | None = None
+    index_scope: Literal["corpus", "project"] = "project"
+    projection_max_tokens: int | None = Field(default=None, ge=1, le=10_000_000)
+    projection_max_regions: int | None = Field(default=None, ge=1, le=1_000_000)
 
     @model_validator(mode="after")
     def controls(self):
         if self.mode == "prepare_index" and self.operation_id is None:
             raise ValueError("preparation requires an operation_id")
+        if self.mode in {"preview", "prepare_index"} and not self.sources:
+            raise ValueError("source preparation requires sources")
+        if self.mode in {"index_check", "index_rebuild"} and self.sources:
+            raise ValueError("index recovery uses existing sources only")
+        if self.mode == "index_rebuild" and not self.operation_id:
+            raise ValueError("index rebuild requires an explicit operation ID")
         if self.mode == "preview" and (self.operation_id is not None or self.expected_store_revision is not None):
             raise ValueError("preview does not accept write controls")
         if sum(len(item.text or item.data_base64 or "") for item in self.sources
@@ -134,6 +143,7 @@ class SourceToolContext(StrictModel):
     allow_project_writes: StrictBool = False
     allow_embeddings: StrictBool = False
     allow_pdf: StrictBool = False
+    projection_limits: dict | None = None
 
 
 def failure(code, *, status="failed", data=None, receipts=()):
@@ -155,7 +165,9 @@ def _attempt(store, context, stage, operation_id, payload, work, *, run_id=None,
         return failure("sources.store_not_configured", status="unavailable")
     receipts = ExecutionReceiptService(store)
     identifier = identity({"stage": stage, "operation_id": operation_id, **_scope(context)})
-    request_hash = identity({"payload": payload, "context": context})
+    # Projection policy changes must not invalidate historical preparation or
+    # embedding receipts; only the projection stage binds its effective limits.
+    request_hash = identity({"payload": payload, "context": context.model_dump(mode="json", exclude={"projection_limits"})})
     with store.joined_transaction():
         replay = receipts.replay(identifier, **_scope(context), request_hash=request_hash)
         if replay is not None:
@@ -182,9 +194,13 @@ def _attempt(store, context, stage, operation_id, payload, work, *, run_id=None,
             data={**(previous.data if previous else {}), "failed_stage": stage, "index_ready": False},
             receipts=(*(previous.receipt_ids if previous else ()), identifier))
         from .ingestion_diagnostics import EmbeddingStageError, preparation_diagnostic
-        if isinstance(exc, EmbeddingStageError):
+        from .projection_limits import ProjectionStageError
+        from .artifact_diagnostics import SourceValidationError, ArtifactReadError
+        if isinstance(exc, (EmbeddingStageError, ProjectionStageError, SourceValidationError)):
             result = result.model_copy(update={"diagnostics": tuple(exc.diagnostics),
                 "data": {**result.data, "retry_hint": "After correcting the cause, use CLI --retry for a new receipted attempt; existing provenance is retained."}})
+        elif isinstance(exc, ArtifactReadError):
+            result = result.model_copy(update={"diagnostics": (exc.diagnostic,)})
         elif stage == "source_preparation" and (detail := preparation_diagnostic(exc)):
             result = result.model_copy(update={"diagnostics": (detail,),
                 "data": {**result.data, "retry_hint": "After correcting the cause, use CLI --retry or a new operation_id; the failed attempt is retained."}})
@@ -231,6 +247,28 @@ def _normalize(source, pdf_normalizer, *, store=None, context=None, preparation_
 def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolContext, *, pdf_normalizer=None):
     request = PrepareSourcesRequest.model_validate(request.model_dump(mode="json"))
     context = SourceToolContext.model_validate(context.model_dump(mode="json"))
+    if request.mode in {"index_check", "index_rebuild"}:
+        from .index_recovery import check_index, rebuild_index
+        from .projection_limits import ProjectionLimits
+        if store is None:
+            return failure("sources.store_not_configured", status="unavailable")
+        if request.mode == "index_rebuild" and not context.allow_corpus_writes:
+            return failure("sources.write_not_authorized")
+        scope = dict(corpus_id=context.corpus_id, project_id=context.project_id if request.index_scope == "project" else None)
+        limits = ProjectionLimits.model_validate(context.projection_limits or {})
+        if request.projection_max_tokens is not None:
+            limits = ProjectionLimits.model_validate({**limits.model_dump(), "max_tokens": request.projection_max_tokens})
+        if request.projection_max_regions is not None:
+            limits = ProjectionLimits.model_validate({**limits.model_dump(), "max_regions": request.projection_max_regions})
+        if request.mode == "index_check":
+            checked = check_index(store, **scope, limits=limits)
+        else:
+            checked = rebuild_index(store, **scope, limits=limits, attempt_id=request.operation_id)
+        return ToolResult(operation="Prepare and Index Sources", status="complete" if checked.get("ready") and (
+            request.mode == "index_check" or checked.get("index_ready")) else "failed",
+            data={"mode": request.mode, **checked}, diagnostics=tuple(checked.get("diagnostics", ())),
+            receipt_ids=(checked["receipt_id"],) if checked.get("receipt_id") else (),
+            note="Existing sources and embeddings only; readiness does not certify science.")
     if request.mode == "preview":
         # No external PDF worker or embedding calls in a no-receipt preview.
         try:
@@ -350,13 +388,17 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
                 "normalization_complete": unresolved_region_count == 0,
                 "unresolved_region_count": unresolved_region_count},
             note="Immutable source preparation completed in the requested scope; indexing has not completed. PDF diagnostics remain attached to normalized documents/regions.")
-    return _attempt(store, context, "source_preparation", request.operation_id, request, work,
+    payload = request.model_dump(mode="json")
+    if request.index_scope == "project" and request.projection_max_tokens is None and request.projection_max_regions is None:
+        payload.pop("index_scope", None); payload.pop("projection_max_tokens", None)
+        payload.pop("projection_max_regions", None)
+    return _attempt(store, context, "source_preparation", request.operation_id, payload, work,
         run_id=request.run_id, expected=request.expected_store_revision)
 
 
 def _upstream(store, incoming, context, stage):
     incoming = ToolResult.model_validate(incoming.model_dump(mode="json"))
-    if incoming.status != "complete" or incoming.data.get("mode") == "preview":
+    if incoming.status != "complete" or incoming.data.get("mode") in {"preview", "index_check", "index_rebuild"}:
         return None
     if store is None or incoming.data.get("scope") != _scope(context) or incoming.data.get("stage") != stage:
         raise ConflictError("invalid upstream source scope or stage")
@@ -412,10 +454,12 @@ def project_sources(store, incoming: ToolResult, context: SourceToolContext):
         return failure("sources.invalid_upstream")
     if upstream is None:
         return incoming
+    from .projection_limits import ProjectionLimits, ProjectionStageError
+    limits = ProjectionLimits.model_validate(context.projection_limits or {})
     def work():
         service = GraphProjectionService(store)
         # Revalidate every visible source before including it in a derived index.
-        for identifier, record in store.records("SourceRegion", **_scope(context)):
+        for identifier, record in store.iter_records("SourceRegion", **_scope(context)):
             if record.project_id in (None, context.project_id):
                 require_source_region(store, identifier, **_scope(context))
         for _, batch in store.records("EmbeddingBatch", **_scope(context)):
@@ -426,9 +470,11 @@ def project_sources(store, incoming: ToolResult, context: SourceToolContext):
             for identifier in batch.content["region_ids"]:
                 require_source_region(store, identifier, **_scope(context))
         projected = service.rebuild(GraphProjectionRequest(**_scope(context), idempotency_key=identity({
-            "upstream": incoming.receipt_ids[-1], "stage": "source_projection"})))
+            "upstream": incoming.receipt_ids[-1], "stage": "source_projection", "limits": limits.model_dump(),
+            "graph_revision": store.graph_revision(**_scope(context)),
+            "source_revision": str(store.embedding_revision(context.corpus_id))}), **limits.model_dump()))
         if projected.status != "completed" or projected.manifest is None:
-            raise NimaError("projection publication failed")
+            raise ProjectionStageError(projected.diagnostics, projected.receipt_id)
         service.get_current(projected.projection_id, **_scope(context))
         if incoming.data["index_mode"] == "vector":
             vector = projected.manifest.vector_manifest
@@ -440,5 +486,8 @@ def project_sources(store, incoming: ToolResult, context: SourceToolContext):
                 "stage": "source_projection", "index_ready": True,
                 "projection": projected.manifest.model_dump(mode="json")},
             note="Requested index mode completed at the returned revisions. Lexical readiness is not vector readiness; readiness never certifies scientific correctness or PDF transcription fidelity.")
-    return _attempt(store, context, "source_projection", incoming.data["operation_id"], incoming, work,
+    operation_id = identity({"upstream": incoming.data["operation_id"], "limits": limits.model_dump(),
+        "graph_revision": store.graph_revision(**_scope(context)),
+        "source_revision": str(store.embedding_revision(context.corpus_id))})
+    return _attempt(store, context, "source_projection", operation_id, {"upstream": incoming, "limits": limits}, work,
         run_id=incoming.data.get("run_id"), previous=incoming)

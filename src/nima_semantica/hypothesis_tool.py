@@ -22,6 +22,9 @@ from .receipts import ExecutionReceipt
 from .source_quality import evidence_locator
 from .providers import Invocation,validate_manifest
 from .tool_contracts import ToolResult
+from .vocabulary_contracts import compatible_dump, vocabulary_schema
+from .vocabulary_context import vocabulary_context, GUIDANCE
+from .vocabulary_review import assess_vocabulary
 
 INSTRUCTIONS="""You are the Hypothesis Generation ontology-state agent.
 Generate or restate alternatives within the harness objective, immutable required assumptions,
@@ -48,8 +51,8 @@ never enters scientific graphs; proposals and progress recording require later h
 """
 
 
-def hypothesis_tools(context):
-    return [{"type":"function","function":{"name":name,"parameters":schema.model_json_schema(),
+def hypothesis_tools(context, vocabulary_enabled=False):
+    return [{"type":"function","function":{"name":name,"parameters":vocabulary_schema(schema.model_json_schema(), enabled=vocabulary_enabled),
         "description":{"read_regions":"Read exact selected or attached prepared evidence.","retrieve_context":"Search and read exact authorized corpus context.",
             "propose_hypothesis":"Propose, revise or withdraw a stable hypothesis alternative.","probe_hypothesis":"Authorized bounded counterexample search on the current candidate encoding.",
             "analyze_candidates":"Check scoped text duplicates, current probes and open obligations.","submit_result":"Persist current proposals without selecting a winner or changing research graphs."}[name]}}
@@ -60,9 +63,10 @@ def normalized(text):return " ".join(text.casefold().split())
 
 
 class HypothesisController:
-    def __init__(self,store,request,context,snapshot,ontology,worker,children):
+    def __init__(self,store,request,context,snapshot,ontology,worker,children,vocabulary=None):
         self.store,self.request,self.context,self.snapshot=store,request,context,snapshot
         self.worker,self.children=worker,children;self.scope=dict(corpus_id=context.corpus_id,project_id=context.project_id)
+        self.vocabulary = vocabulary or {"status": "disabled", "enabled": False}
         self.snapshot_hash=identity(snapshot);self.history=[];self.candidates={};self.analysis=None;self.probes=[];self.searches=[];self.read={}
         nodes,profiles,_,_,self.coverage=inspect_snapshot_ontology(snapshot,ontology)
         self.ontology_digests=sorted(profiles);self.objects={"node":nodes,"edge":{e.ref:e for e in snapshot.edges}}
@@ -160,8 +164,13 @@ class HypothesisController:
         inherited=[p["content"] for p in self.priors] if self.request.mode=="restate" else []
         obligations=list(dict.fromkeys([*(v for p in inherited for v in p["unresolved_obligations"]),*(old or {}).get("unresolved_obligations",[]),*action.unresolved_obligations]))
         if len(obligations)>32:raise RejectedAction("Open obligations exceed bound; narrow the task rather than deleting them.")
-        value={**action.model_dump(mode="json"),"assumptions":list(dict.fromkeys([*self.request.required_assumptions,*(v for p in inherited for v in p["assumptions"]),*action.assumptions])),
+        value={**compatible_dump(action),"assumptions":list(dict.fromkeys([*self.request.required_assumptions,*(v for p in inherited for v in p["assumptions"]),*action.assumptions])),
             "unresolved_obligations":obligations,"exact_grounding":grounding,"constraint_satisfaction_verified":False,"novelty_verified":False,"mathematically_verified":False}
+        if self.vocabulary["status"] == "active":
+            value["vocabulary_review"] = assess_vocabulary(self.store, self.vocabulary, **self.scope,
+                target_id=action.candidate_id, argument=action.statement,
+                observations=action.vocabulary_findings, extensions=action.vocabulary_extensions,
+                assessment=action.vocabulary_assessment)
         value["candidate_hash"]=identity(value)
         token=identity(key)[:16]
         deps=["request","coverage",*["prior_"+str(i) for i in range(len(self.priors))],*["evidence_"+identity(ref)[:16] for ref in sorted({g["region_id"] for g in grounding})]]
@@ -252,7 +261,8 @@ class HypothesisController:
             "private_state_published":False,"mathematically_verified":False,"novelty_verified":False}
 
     def feedback(self):
-        return {"revision":self.revision,"required_assumptions":self.request.required_assumptions,"constraints":[c.model_dump(mode="json") for c in self.request.constraints],
+        return {**({"vocabulary": self.vocabulary} if self.vocabulary["status"] != "disabled" else {}),
+            "revision":self.revision,"required_assumptions":self.request.required_assumptions,"constraints":[c.model_dump(mode="json") for c in self.request.constraints],
             "graph_targets":[{"kind":k[0],"object":v.model_dump(mode="json")} for k,v in self.selected.items()],"prior_hypotheses":self.priors,
             "region_inventory":[{"region_id":ref,"source_id":r.content["source_id"],"read":ref in self.read} for ref,r in self.inventory.items()],
             "candidates":list(self.candidates.values()),"analysis":self.analysis,"consequences":self.state.view()["consequences"]}
@@ -266,11 +276,15 @@ def generate_hypotheses(store,request,context,*,model=None,worker=None):
         return ToolResult(operation="Hypothesis Generation",status="failed",diagnostics=({"code":"model_audit_or_store_unavailable"},))
     scope=dict(corpus_id=context.corpus_id,project_id=context.project_id);receipts=ExecutionReceiptService(store)
     rid=identity({"stage":"generate_hypotheses","operation_id":request.operation_id,**scope})
-    fingerprint=identity({"version":VERSION,"policy":POLICY_DIGEST,"request":request,"context":context})
+    vocabulary = vocabulary_context(store, **scope, query=request.objective,
+        override=request.normalized_reasoning, configured=context.normalized_reasoning)
+    fingerprint=identity({"version":VERSION,"policy":POLICY_DIGEST,"request":compatible_dump(request),"context":compatible_dump(context),
+        **({"vocabulary": vocabulary} if vocabulary["status"] != "disabled" else {})})
     previous=receipts.replay(rid,request_hash=fingerprint,**scope)
     if previous:return ToolResult.model_validate(previous.metadata["result"])
     children=[];attempts=[];controller=None;interrupted=None
-    data={"version":VERSION,"policy_digest":POLICY_DIGEST,"attempts":attempts,"source_fidelity_verified":False}
+    data={"version":VERSION,"policy_digest":POLICY_DIGEST,"attempts":attempts,"source_fidelity_verified":False,
+        "normalized_reasoning": vocabulary}
     def attempt(kind,payload,callback):
         child=identity((rid,len(children),kind));children.append(child);output={};status="failed";error=None
         try:
@@ -294,11 +308,12 @@ def generate_hypotheses(store,request,context,*,model=None,worker=None):
         if model is None or context.model_manifest is None:raise RejectedAction("Operator-configured model and identity manifest required.")
         validate_manifest(context.model_manifest)
         ontology=OntologyService.from_store(store,**scope);snapshot=load_snapshot(store,request,context,ontology)
-        controller=HypothesisController(store,request,context,snapshot,ontology,worker,children)
+        controller=HypothesisController(store,request,context,snapshot,ontology,worker,children,vocabulary)
         data.update(snapshot_id=snapshot.snapshot_id,snapshot_hash=identity(snapshot),graph_revision=request.graph_revision.model_dump(mode="json"),
             input_unresolved=snapshot.metadata.get("unresolved",[]),input_diagnostics=snapshot.metadata.get("diagnostics",[]))
-        messages=[{"role":"system","content":INSTRUCTIONS},{"role":"user","content":canonical(request).decode()}]
-        tools=hypothesis_tools(context)
+        messages=[{"role":"system","content":INSTRUCTIONS + ("\n" + GUIDANCE if vocabulary["status"] == "active" else "")},
+            {"role":"user","content":canonical(compatible_dump(request)).decode()}]
+        tools=hypothesis_tools(context, vocabulary_enabled=vocabulary["status"] == "active")
         for ordinal in range(context.max_actions):
             controller.current()
             prompt={"messages":[*messages,{"role":"user","content":canonical(controller.feedback()).decode()}],"tools":tools,"remaining_actions":context.max_actions-ordinal}

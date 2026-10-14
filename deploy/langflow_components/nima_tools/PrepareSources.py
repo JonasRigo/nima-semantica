@@ -17,6 +17,7 @@ class PrepareSources(BaseComponent):
         StrInput(name="corpus_id", display_name="Authorized corpus (operator)", value="papers"),
         StrInput(name="project_id", display_name="Index/run project (operator)", value="research"),
         StrInput(name="actor", display_name="Actor (operator)", value="harness"),
+        StrInput(name="projection_limits_json", display_name="Projection limits (operator)", value='{}'),
         BoolInput(name="allow_corpus_writes", display_name="Allow CORPUS source writes (operator)", value=False,
             info="Sources are corpus-wide, not private to the index project. Requires an existing registered corpus."),
         BoolInput(name="allow_pdf", display_name="Allow configured PDF worker (operator)", value=False),
@@ -27,7 +28,8 @@ class PrepareSources(BaseComponent):
     def run_sync(self):
         request = PrepareSourcesRequest.model_validate(_value(self.payload))
         context = SourceToolContext(corpus_id=self.corpus_id, project_id=self.project_id or None,
-            actor=self.actor, allow_corpus_writes=self.allow_corpus_writes, allow_pdf=self.allow_pdf)
+            actor=self.actor, allow_corpus_writes=self.allow_corpus_writes, allow_pdf=self.allow_pdf,
+            projection_limits=__import__('json').loads(self.projection_limits_json))
         # Client construction/secret access happens inside the receipted attempt,
         # only if authorized PDF input actually requires the worker.
         def pdf_normalizer(data):

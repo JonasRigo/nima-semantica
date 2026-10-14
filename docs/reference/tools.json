@@ -1269,12 +1269,15 @@
           "default": "preview",
           "enum": [
             "preview",
-            "prepare_index"
+            "prepare_index",
+            "index_check",
+            "index_rebuild"
           ],
           "title": "Mode",
           "type": "string"
         },
         "sources": {
+          "default": [],
           "items": {
             "anyOf": [
               {
@@ -1286,7 +1289,6 @@
             ]
           },
           "maxItems": 16,
-          "minItems": 1,
           "title": "Sources",
           "type": "array"
         },
@@ -1355,11 +1357,45 @@
           ],
           "default": null,
           "title": "Expected Store Revision"
+        },
+        "index_scope": {
+          "default": "project",
+          "enum": [
+            "corpus",
+            "project"
+          ],
+          "title": "Index Scope",
+          "type": "string"
+        },
+        "projection_max_tokens": {
+          "anyOf": [
+            {
+              "maximum": 10000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projection Max Tokens"
+        },
+        "projection_max_regions": {
+          "anyOf": [
+            {
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projection Max Regions"
         }
       },
-      "required": [
-        "sources"
-      ],
       "title": "PrepareSourcesRequest",
       "type": "object"
     },
@@ -1524,7 +1560,6 @@
             "sources"
           ],
           "bounds": {
-            "minItems": 1,
             "maxItems": 16
           }
         },
@@ -1562,6 +1597,30 @@
           "bounds": {
             "minLength": 1,
             "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "properties",
+            "projection_max_tokens",
+            "anyOf",
+            0
+          ],
+          "bounds": {
+            "minimum": 1,
+            "maximum": 10000000
+          }
+        },
+        {
+          "schema_path": [
+            "properties",
+            "projection_max_regions",
+            "anyOf",
+            0
+          ],
+          "bounds": {
+            "minimum": 1,
+            "maximum": 1000000
           }
         }
       ],
@@ -2754,6 +2813,19 @@
           "default": null,
           "description": "Existing session to resume with identical binding; omit to create.",
           "title": "Session Id"
+        },
+        "normalized_reasoning": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override vocabulary guidance for this session; omission inherits project settings.",
+          "title": "Normalized Reasoning"
         }
       },
       "required": [
@@ -8427,6 +8499,18 @@
           ],
           "default": null,
           "title": "Parent Record Id"
+        },
+        "normalized_reasoning": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized Reasoning"
         }
       },
       "title": "GenerateHypothesesRequest",
@@ -11500,6 +11584,18 @@
           ],
           "default": null,
           "title": "Parent Record Id"
+        },
+        "normalized_reasoning": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized Reasoning"
         }
       },
       "title": "ReviewRequest",
@@ -12051,6 +12147,50 @@
           "title": "EvidenceReference",
           "type": "object"
         },
+        "GraphIdentity": {
+          "additionalProperties": false,
+          "description": "A logical identity; equal local names in distinct scopes remain distinct.",
+          "properties": {
+            "corpus_id": {
+              "description": "Stable logical identifier without whitespace.",
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "title": "Corpus Id",
+              "type": "string"
+            },
+            "project_id": {
+              "anyOf": [
+                {
+                  "description": "Stable logical identifier without whitespace.",
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "pattern": "^\\S+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Project Id"
+            },
+            "local_id": {
+              "description": "Stable logical identifier without whitespace.",
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "title": "Local Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "corpus_id",
+            "local_id"
+          ],
+          "title": "GraphIdentity",
+          "type": "object"
+        },
         "GraphRevision": {
           "additionalProperties": false,
           "description": "A view containing a corpus head and optional project head.",
@@ -12240,6 +12380,381 @@
           ],
           "title": "ResearchAnalysisBundle",
           "type": "object"
+        },
+        "VocabularyEntry": {
+          "additionalProperties": false,
+          "properties": {
+            "entry_id": {
+              "description": "Stable logical identifier without whitespace.",
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "title": "Entry Id",
+              "type": "string"
+            },
+            "term": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "Term",
+              "type": "string"
+            },
+            "definition": {
+              "maxLength": 24000,
+              "minLength": 1,
+              "title": "Definition",
+              "type": "string"
+            },
+            "aliases": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 32,
+              "title": "Aliases",
+              "type": "array"
+            },
+            "concept_ids": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/GraphIdentity"
+              },
+              "maxItems": 32,
+              "title": "Concept Ids",
+              "type": "array"
+            },
+            "notation": {
+              "default": "",
+              "maxLength": 4000,
+              "title": "Notation",
+              "type": "string"
+            },
+            "domain": {
+              "default": "",
+              "maxLength": 4000,
+              "title": "Domain",
+              "type": "string"
+            },
+            "assumptions": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 32,
+              "title": "Assumptions",
+              "type": "array"
+            },
+            "qualifiers": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 32,
+              "title": "Qualifiers",
+              "type": "array"
+            },
+            "distinctions": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 32,
+              "title": "Distinctions",
+              "type": "array"
+            },
+            "evidence": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/EvidenceReference"
+              },
+              "maxItems": 32,
+              "title": "Evidence",
+              "type": "array"
+            },
+            "status": {
+              "default": "unresolved",
+              "enum": [
+                "source_defined",
+                "project_convention",
+                "proposed",
+                "unresolved"
+              ],
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          "required": [
+            "entry_id",
+            "term",
+            "definition"
+          ],
+          "title": "VocabularyEntry",
+          "type": "object"
+        },
+        "VocabularyExtension": {
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": 1,
+              "default": 1,
+              "title": "Schema Version",
+              "type": "integer"
+            },
+            "proposal_id": {
+              "description": "Stable logical identifier without whitespace.",
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "title": "Proposal Id",
+              "type": "string"
+            },
+            "revision": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Revision",
+              "type": "integer"
+            },
+            "supersedes": {
+              "anyOf": [
+                {
+                  "description": "Stable logical identifier without whitespace.",
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "pattern": "^\\S+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Supersedes"
+            },
+            "corpus_id": {
+              "description": "Stable logical identifier without whitespace.",
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "title": "Corpus Id",
+              "type": "string"
+            },
+            "project_id": {
+              "description": "Stable logical identifier without whitespace.",
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "title": "Project Id",
+              "type": "string"
+            },
+            "base_snapshot_hash": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Base Snapshot Hash",
+              "type": "string"
+            },
+            "task_id": {
+              "description": "Stable logical identifier without whitespace.",
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "title": "Task Id",
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "new_term",
+                "new_concept",
+                "distinction",
+                "definition_challenge",
+                "borrowed_terminology"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "term": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "Term",
+              "type": "string"
+            },
+            "definition": {
+              "maxLength": 24000,
+              "minLength": 1,
+              "title": "Definition",
+              "type": "string"
+            },
+            "motivation": {
+              "maxLength": 8000,
+              "minLength": 1,
+              "title": "Motivation",
+              "type": "string"
+            },
+            "related_entry_ids": {
+              "default": [],
+              "items": {
+                "description": "Stable logical identifier without whitespace.",
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^\\S+$",
+                "type": "string"
+              },
+              "maxItems": 32,
+              "title": "Related Entry Ids",
+              "type": "array"
+            },
+            "changed_assumptions": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 32,
+              "title": "Changed Assumptions",
+              "type": "array"
+            },
+            "evidence": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/EvidenceReference"
+              },
+              "maxItems": 32,
+              "title": "Evidence",
+              "type": "array"
+            },
+            "speculative_basis": {
+              "default": "",
+              "maxLength": 8000,
+              "title": "Speculative Basis",
+              "type": "string"
+            },
+            "competing_interpretations": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 32,
+              "title": "Competing Interpretations",
+              "type": "array"
+            },
+            "open_questions": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 32,
+              "title": "Open Questions",
+              "type": "array"
+            },
+            "disposition": {
+              "default": "proposed",
+              "enum": [
+                "proposed",
+                "withdrawn"
+              ],
+              "title": "Disposition",
+              "type": "string"
+            },
+            "scientific_status": {
+              "const": "uncertified",
+              "default": "uncertified",
+              "title": "Scientific Status",
+              "type": "string"
+            }
+          },
+          "required": [
+            "proposal_id",
+            "corpus_id",
+            "project_id",
+            "base_snapshot_hash",
+            "task_id",
+            "kind",
+            "term",
+            "definition",
+            "motivation"
+          ],
+          "title": "VocabularyExtension",
+          "type": "object"
+        },
+        "VocabularySnapshot": {
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": 1,
+              "default": 1,
+              "title": "Schema Version",
+              "type": "integer"
+            },
+            "corpus_id": {
+              "description": "Stable logical identifier without whitespace.",
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "title": "Corpus Id",
+              "type": "string"
+            },
+            "project_id": {
+              "description": "Stable logical identifier without whitespace.",
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "title": "Project Id",
+              "type": "string"
+            },
+            "graph_revision": {
+              "$ref": "#/$defs/GraphRevision"
+            },
+            "graph_snapshot_hash": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Graph Snapshot Hash",
+              "type": "string"
+            },
+            "ontology_digests": {
+              "default": [],
+              "items": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "maxItems": 32,
+              "title": "Ontology Digests",
+              "type": "array"
+            },
+            "generated_at": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Generated At",
+              "type": "string"
+            },
+            "coverage_limitations": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 64,
+              "title": "Coverage Limitations",
+              "type": "array"
+            },
+            "entries": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/VocabularyEntry"
+              },
+              "maxItems": 10000,
+              "title": "Entries",
+              "type": "array"
+            },
+            "content_hash": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Content Hash",
+              "type": "string"
+            }
+          },
+          "required": [
+            "corpus_id",
+            "project_id",
+            "graph_revision",
+            "graph_snapshot_hash",
+            "generated_at",
+            "content_hash"
+          ],
+          "title": "VocabularySnapshot",
+          "type": "object"
         }
       },
       "additionalProperties": false,
@@ -12248,7 +12763,9 @@
           "default": "preview",
           "enum": [
             "preview",
-            "save"
+            "save",
+            "save_vocabulary",
+            "propose_vocabulary"
           ],
           "title": "Mode",
           "type": "string"
@@ -12338,6 +12855,28 @@
           ],
           "default": null,
           "title": "Parent Record Id"
+        },
+        "vocabulary_snapshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VocabularySnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "vocabulary_extension": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VocabularyExtension"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "title": "SaveAnalysisRequest",
@@ -12554,6 +13093,44 @@
         {
           "schema_path": [
             "$defs",
+            "GraphIdentity",
+            "properties",
+            "corpus_id"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "GraphIdentity",
+            "properties",
+            "project_id",
+            "anyOf",
+            0
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "GraphIdentity",
+            "properties",
+            "local_id"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
             "GraphRevision",
             "properties",
             "corpus_id"
@@ -12706,6 +13283,387 @@
         },
         {
           "schema_path": [
+            "$defs",
+            "VocabularyEntry",
+            "properties",
+            "entry_id"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyEntry",
+            "properties",
+            "term"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyEntry",
+            "properties",
+            "definition"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 24000
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyEntry",
+            "properties",
+            "aliases"
+          ],
+          "bounds": {
+            "maxItems": 32
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyEntry",
+            "properties",
+            "concept_ids"
+          ],
+          "bounds": {
+            "maxItems": 32
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyEntry",
+            "properties",
+            "notation"
+          ],
+          "bounds": {
+            "maxLength": 4000
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyEntry",
+            "properties",
+            "domain"
+          ],
+          "bounds": {
+            "maxLength": 4000
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyEntry",
+            "properties",
+            "assumptions"
+          ],
+          "bounds": {
+            "maxItems": 32
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyEntry",
+            "properties",
+            "qualifiers"
+          ],
+          "bounds": {
+            "maxItems": 32
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyEntry",
+            "properties",
+            "distinctions"
+          ],
+          "bounds": {
+            "maxItems": 32
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyEntry",
+            "properties",
+            "evidence"
+          ],
+          "bounds": {
+            "maxItems": 32
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "proposal_id"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "revision"
+          ],
+          "bounds": {
+            "minimum": 0
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "supersedes",
+            "anyOf",
+            0
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "corpus_id"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "project_id"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "task_id"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "term"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "definition"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 24000
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "motivation"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 8000
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "related_entry_ids"
+          ],
+          "bounds": {
+            "maxItems": 32
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "related_entry_ids",
+            "items"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "changed_assumptions"
+          ],
+          "bounds": {
+            "maxItems": 32
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "evidence"
+          ],
+          "bounds": {
+            "maxItems": 32
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "speculative_basis"
+          ],
+          "bounds": {
+            "maxLength": 8000
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "competing_interpretations"
+          ],
+          "bounds": {
+            "maxItems": 32
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularyExtension",
+            "properties",
+            "open_questions"
+          ],
+          "bounds": {
+            "maxItems": 32
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularySnapshot",
+            "properties",
+            "corpus_id"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularySnapshot",
+            "properties",
+            "project_id"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularySnapshot",
+            "properties",
+            "ontology_digests"
+          ],
+          "bounds": {
+            "maxItems": 32
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularySnapshot",
+            "properties",
+            "generated_at"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularySnapshot",
+            "properties",
+            "coverage_limitations"
+          ],
+          "bounds": {
+            "maxItems": 64
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "VocabularySnapshot",
+            "properties",
+            "entries"
+          ],
+          "bounds": {
+            "maxItems": 10000
+          }
+        },
+        {
+          "schema_path": [
             "properties",
             "operation_id",
             "anyOf",
@@ -12798,6 +13756,18 @@
           },
           "title": "Assumptions",
           "type": "array"
+        },
+        "normalized_reasoning": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized Reasoning"
         }
       },
       "required": [
@@ -12889,6 +13859,18 @@
           },
           "title": "Assumptions",
           "type": "array"
+        },
+        "normalized_reasoning": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized Reasoning"
         }
       },
       "required": [

@@ -746,9 +746,9 @@
     "source_sha256": "89f01e73df029b90645cf121d5f959a21f8e499a505a699eecd22e55c4226c58",
     "native_sources_sha256": {
       "calculation_values.py": "2227718cd02c2e0826b15c16be6023b1ba07dd8af4ce89efaab5ed4e25fceb05",
-      "math_mcp_contracts.py": "04f301fc29a690b60ede3810f26951b0096376b45202f987c747ec33574e9d8b",
+      "math_mcp_contracts.py": "24ceb54f9a8a27ff75cc67842e98bac2f7f5bfd5938855b2fa2a0716dda95879",
       "math_mcp.py": "a37a2033bc157fda191c95090f38de5d3993c5501e7cbb99dd7f9ca06da34a91",
-      "math_session_service.py": "eac9aaee6e14511c60ee53b4774977236d8a20e566507a819111f4b9e77f61d3",
+      "math_session_service.py": "555521d6d211a82de373df0cacd09f0cb64eae0fb6d9bc7888304456410a6278",
       "math_interface_helpers.py": "fc73d964acde88bff7083af9ee05493b68948d624354b5e5fb071e99e5ba5436",
       "math_repair_feedback.py": "8dfdc65e31b5a6a7c2b1ddd7a9e78cd81319fcbb4fd1c133e52f510731e1b6dc",
       "math_evidence_handoff.py": "fe5150d043efcbd17e5eab76fadf9f730724f1d1eb83fa23091e2fdf44119cc3",

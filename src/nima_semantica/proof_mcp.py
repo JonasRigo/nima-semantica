@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .math_graph_session import PrivateGraphSessionStore, _json
 from .private_record_reads import EnumerateRecords, ReadRecord, read_records
+from .vocabulary_contracts import VocabularyPolicy, VocabularyObservation, VocabularyExtension
 
 
 class Contract(BaseModel):
@@ -29,6 +30,7 @@ class ProofConfig(Contract):
     allow_execution: bool = False
     projection_id: str | None = None
     timeout_seconds: int = Field(default=60, ge=1, le=120)
+    normalized_reasoning: VocabularyPolicy | None = None
 
 
 class Open(Contract):
@@ -36,6 +38,7 @@ class Open(Contract):
     target: str = Field(min_length=1, max_length=24000)
     mode: Literal["draft", "conduct"] = "draft"
     assumptions: list[str] = Field(default_factory=list)
+    normalized_reasoning: bool | None = None
 
 
 class Session(Contract):
@@ -80,6 +83,9 @@ class Experiment(Mutation):
 class Submit(Mutation):
     conclusion_node: str
     argument: str = Field(min_length=1, max_length=64000)
+    vocabulary_assessment: str | None = Field(default=None, max_length=4000)
+    vocabulary_findings: tuple[VocabularyObservation, ...] = Field(default=(), max_length=16)
+    vocabulary_extensions: tuple[VocabularyExtension, ...] = Field(default=(), max_length=8)
 
 
 class Close(Mutation):
@@ -91,7 +97,7 @@ class Inspect(Session):
     identifier: str
     full_payload: bool = False
     resolve_receipt: bool = False
-    state_section: Literal["binding", "resolutions", "submission", "closure", "superseded"] | None = None
+    state_section: Literal["binding", "resolutions", "submission", "closure", "superseded", "vocabulary"] | None = None
 
 
 class Export(Session):
@@ -154,7 +160,10 @@ class ProofService(PrivateGraphSessionStore):
         return rid
 
     def invoke(self, operation, arguments):
-        args = TOOLS[operation][0].model_validate(arguments).model_dump(mode="json")
+        from .vocabulary_contracts import compatible_dump
+        args = compatible_dump(TOOLS[operation][0].model_validate(arguments))
+        if operation == "open" and args.get("normalized_reasoning") is None:
+            args.pop("normalized_reasoning", None)
         if operation == "open":
             return self.open(args)
         if operation in {"status", "frontier", "inspect", "export", "enumerate_records", "read_record"}:
@@ -172,6 +181,11 @@ class ProofService(PrivateGraphSessionStore):
             sid = "proof-" + uuid.uuid4().hex
             state = {"binding": args, "nodes": {}, "resolutions": {}, "superseded": [], "submission": None}
             state["nodes"]["target"] = {"kind": "target", "statement": args["target"], "depends_on": []}
+            from .vocabulary_context import private_vocabulary
+            vocabulary = private_vocabulary(self.config.corpus_id, self.config.project_id, args["target"],
+                override=args.get("normalized_reasoning"), configured=self.config.normalized_reasoning,
+                root=self.config.store_root)
+            state["vocabulary"] = vocabulary
             for n, assumption in enumerate(args["assumptions"]):
                 if not assumption.strip():
                     raise ValueError("empty assumption")
@@ -201,6 +215,8 @@ class ProofService(PrivateGraphSessionStore):
             row, state = self._load(db, args["session_id"])
             result = {"session_id": row["id"], "revision": row["revision"], "lifecycle": row["lifecycle"],
                       "scientific_status": "uncertified", "binding": state["binding"], "scope": json.loads(self.scope)}
+            from .vocabulary_context import vocabulary_summary
+            result["normalized_reasoning"] = vocabulary_summary(state.get("vocabulary", {"status": "disabled", "enabled": False}))
             if operation in {"enumerate_records", "read_record"}:
                 with self._research_store() as store:
                     result.update(read_records(store, operation, args))
@@ -209,7 +225,7 @@ class ProofService(PrivateGraphSessionStore):
             elif operation == "inspect":
                 identifier = args["identifier"]
                 if args.get("state_section"):
-                    section = state[args["state_section"]]
+                    section = state.get("vocabulary", {"status": "disabled", "enabled": False}) if args["state_section"] == "vocabulary" else state[args["state_section"]]
                     result["state_section"] = section.get(identifier) if isinstance(section, dict) and identifier in section else section
                 elif identifier in state["nodes"]:
                     result["node"] = state["nodes"][identifier]
@@ -368,6 +384,15 @@ class ProofService(PrivateGraphSessionStore):
             frontier = self.frontier(state)
             ready = args["conclusion_node"] not in frontier["stale_nodes"] and (state["binding"]["mode"] == "draft" or not frontier["open_obligations"])
             state["submission"] = {"conclusion_node": args["conclusion_node"], "argument": args["argument"], "ready": ready, **frontier}
+            packet = state.get("vocabulary", {"status": "disabled", "enabled": False})
+            if packet["status"] == "active":
+                from .vocabulary_review import assess_vocabulary
+                with self._research_store() as store:
+                    state["submission"]["vocabulary_review"] = assess_vocabulary(store, packet,
+                        corpus_id=self.config.corpus_id, project_id=self.config.project_id,
+                        target_id=args["conclusion_node"], argument=args["argument"],
+                        observations=args.get("vocabulary_findings", ()), extensions=args.get("vocabulary_extensions", ()),
+                        assessment=args.get("vocabulary_assessment"))
             result = state["submission"]
         elif operation == "close":
             if args["outcome"] == "completed" and not (state["submission"] or {}).get("ready"):

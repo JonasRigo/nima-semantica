@@ -9,6 +9,7 @@ from .math_retrieval import MathRetrievalPolicy,RetrieveMathContext
 from .reasoning_state import Anchor
 from .counterexample_contracts import IntegerSearch
 from .extraction_contracts import ReadRegions,EmptyAction
+from .vocabulary_contracts import VocabularyPolicy, VocabularyObservation, VocabularyExtension
 
 VERSION="hypothesis-generation-v1"
 
@@ -37,6 +38,7 @@ class GenerateHypothesesRequest(StrictModel):
     constraints: tuple[HypothesisConstraint,...] = Field(default=(),max_length=16)
     target_record_id: GraphIdentifier | None=None
     parent_record_id: GraphIdentifier | None=None
+    normalized_reasoning: StrictBool | None=None
 
     @model_validator(mode="after")
     def scope(self):
@@ -64,6 +66,7 @@ class HypothesisContext(StrictModel):
     timeout_seconds: StrictInt=Field(default=30,ge=1,le=120)
     model_manifest: ModelManifest | None=None
     retrieval: MathRetrievalPolicy=Field(default_factory=MathRetrievalPolicy)
+    normalized_reasoning: VocabularyPolicy | None=None
 
 
 class ConstraintResponse(StrictModel):
@@ -91,6 +94,9 @@ class ProposeHypothesis(StrictModel):
     verification_plans: tuple[str,...] = Field(min_length=1,max_length=8)
     constraints: tuple[ConstraintResponse,...] = Field(default=(),max_length=16)
     correction_reason: str = Field(default="",max_length=2000)
+    vocabulary_assessment: str | None = Field(default=None, max_length=4000)
+    vocabulary_findings: tuple[VocabularyObservation, ...] = Field(default=(), max_length=16)
+    vocabulary_extensions: tuple[VocabularyExtension, ...] = Field(default=(), max_length=8)
 
     @model_validator(mode="after")
     def bounded(self):

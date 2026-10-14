@@ -7,6 +7,7 @@ import threading
 import time
 
 import pytest
+from nima_semantica import __version__
 
 from nima_semantica.corpus_snapshot import CorpusSnapshot
 from nima_semantica.execution_receipts import ExecutionReceiptService
@@ -217,7 +218,7 @@ def test_diagnostics_specific_ownership_access_and_redaction(tmp_path, monkeypat
     path = tmp_path / "owned.sqlite3"
     with database_owner(path):
         report = owner_diagnostic(path)
-        assert report["state"] == "occupied" and report["owner"]["nima_version"] == "0.2.0"
+        assert report["state"] == "occupied" and report["owner"]["nima_version"] == __version__
     assert owner_diagnostic(path)["state"] == "unoccupied"
     monkeypatch.setenv("TEST_API_KEY", "a-very-secret-key")
     error = ExceptionGroup("startup", [ValueError("Bearer other-secret https://user:password@example.invalid token=another-secret a-very-secret-key")])
@@ -372,7 +373,7 @@ def test_two_real_mcp_clients_reconnect_during_active_mutation(tmp_path, kind):
                 read, write, _ = await stack.enter_async_context(streamable_http_client(f"http://127.0.0.1:{port}/mcp", http_client=http))
                 client = await stack.enter_async_context(ClientSession(read, write))
                 initialization = await client.initialize()
-                assert initialization.serverInfo.version == "0.2.0"
+                assert initialization.serverInfo.version == __version__
                 assert (await client.list_tools()).tools
                 return client
             async def call(client, op, request):
@@ -409,7 +410,7 @@ def test_two_real_mcp_clients_reconnect_during_active_mutation(tmp_path, kind):
                 report = await initialize_server({"command": sys.executable,
                     "args": ["-m", "nima_semantica.private_proxy", "--url", f"http://127.0.0.1:{port}/mcp", "--token-file", str(token_path)],
                     "env": {"PYTHONPATH": str(Path(__import__("nima_semantica").__file__).parent.parent)}})
-                assert report["transport"] == "verified" and report["server_version"] == "0.2.0"
+                assert report["transport"] == "verified" and report["server_version"] == __version__
                 from mcp import StdioServerParameters
                 from mcp.client.stdio import stdio_client
                 async with AsyncExitStack() as proxy_stack:

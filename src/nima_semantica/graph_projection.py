@@ -13,6 +13,7 @@ from .execution_receipts import ExecutionReceiptService
 from .models import ConflictError, NimaError, Record, StrictModel, canonical, identity
 from .receipts import ExecutionReceipt
 from .retrieval_contracts import EmbeddingProjectionManifest
+from .projection_limits import ProjectionLimitError
 
 
 ProjectionKind = Literal["lexical", "vector", "structural", "summary"]
@@ -84,6 +85,8 @@ class GraphProjectionService:
         previous = self.receipts.get(receipt_id, corpus_id=request.corpus_id, project_id=request.project_id)
         if previous is not None:
             metadata = previous.metadata
+            if metadata.get("request_hash") is not None and metadata["request_hash"] != identity(request):
+                raise ConflictError("projection attempt ID is already bound to a different request")
             manifest = metadata.get("manifest")
             return GraphProjectionResult(
                 operation_id=operation_id,
@@ -108,7 +111,7 @@ class GraphProjectionService:
             )
             regions = self._regions(request)
             if len(regions) > request.max_regions:
-                raise NimaError("projection region budget exceeded")
+                raise ProjectionLimitError("region", request.max_regions, len(regions))
             source_revision = request.source_revision or self._source_revision(request.corpus_id)
             if request.source_revision is not None and request.source_revision != self._source_revision(request.corpus_id):
                 raise ConflictError("projection request targets a stale source revision")
@@ -155,7 +158,7 @@ class GraphProjectionService:
             output_ids = (record.id, *artifact_ids.values())
             result_manifest = manifest
         except Exception as exc:
-            status, diagnostics, error = "failed", ({"code": type(exc).__name__, "message": str(exc)},), "graph projection rebuild failed"
+            status, diagnostics, error = "failed", (exc.diagnostic if isinstance(exc, ProjectionLimitError) else {"code": type(exc).__name__, "message": str(exc)},), "graph projection rebuild failed"
             output_ids, result_manifest = (), None
 
         receipt = ExecutionReceipt(
@@ -171,7 +174,8 @@ class GraphProjectionService:
             diagnostics=diagnostics,
             tool_version="graph-projection-v1",
             idempotency_key=request.idempotency_key,
-            metadata={"manifest": result_manifest.model_dump(mode="json") if result_manifest else None},
+            metadata={"manifest": result_manifest.model_dump(mode="json") if result_manifest else None,
+                      "request_hash": identity(request)},
         )
         self.receipts.record(receipt)
         return GraphProjectionResult(
@@ -230,7 +234,7 @@ class GraphProjectionService:
             for token in self._TOKEN.findall(text.casefold()):
                 token_count += 1
                 if token_count > max_tokens:
-                    raise NimaError("projection token budget exceeded")
+                    raise ProjectionLimitError("token", max_tokens, token_count)
                 if region_id not in inverted.setdefault(token, []):
                     inverted[token].append(region_id)
         return {"version": 1, "token_count": token_count, "terms": {key: value for key, value in sorted(inverted.items())}}

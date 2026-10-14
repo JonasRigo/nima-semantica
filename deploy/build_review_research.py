@@ -84,7 +84,7 @@ def build():
         "nima_tool_manifest": {"tool_id": tool, "contract_version": "1", "visual_approval": "pending",
             "controller_version":VERSION,"policy_digest":POLICY_DIGEST,
             "native_sources_sha256":{name:hashlib.sha256((ROOT/"src/nima_semantica"/(name+".py")).read_bytes()).hexdigest()
-                for name in ("review_contracts","review_state","review_tool","counterexample_tool","counterexample_contracts","substantiation_tool","substantiation_contracts","graph_analysis","claim_dependencies","evidence_contracts","math_retrieval","math_reasoning","reasoning_state","reasoning_kernel")},
+                for name in ("review_contracts","review_state","review_tool","counterexample_tool","counterexample_contracts","substantiation_tool","substantiation_contracts","graph_analysis","claim_dependencies","evidence_contracts","math_retrieval","math_reasoning","reasoning_state","reasoning_kernel","vocabulary_contracts","vocabulary_context","vocabulary_review")},
             "publication": "not_published_by_builder", "components": snapshots}}
 
 

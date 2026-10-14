@@ -1516,7 +1516,7 @@
       "graph_service": "8866d63819c0ed53a70bcb849fd8661ba7d6e61e6c3b63c3cf4424232aad32b5",
       "ontology_services": "ed5a5922951cd28cda31533b145511d77ae596fd9c2882b2a34fca7c9737a221",
       "reasoning_kernel": "71a592fe5f12b662bd5731c4d3917fb40f9e12475316f5e7df781a899821bd34",
-      "evidence_contracts": "30ad091006d4f35efca64a019a17580c2d8a0546daf15c6467b733775b9d5b7e"
+      "evidence_contracts": "16604bf7e734db15c0504969bb09651d215158dfdc51aa43665992cdee00a4fb"
     },
     "publication": "not_published_by_builder",
     "components": {

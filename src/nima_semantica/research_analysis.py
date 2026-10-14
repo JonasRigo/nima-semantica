@@ -15,6 +15,7 @@ from .evidence_provenance import EvidenceProvenanceService
 from .research_run_service import ResearchRunService
 from .graph_analysis import persist_graph_outcome
 from .tool_contracts import ToolResult
+from .vocabulary_contracts import VocabularySnapshot, VocabularyExtension, compatible_dump
 
 VERSION="save-research-analysis-v1"
 
@@ -53,17 +54,26 @@ class ResearchAnalysisBundle(StrictModel):
 
 
 class SaveAnalysisRequest(StrictModel):
-    mode: Literal["preview","save"]="preview"
+    mode: Literal["preview","save","save_vocabulary","propose_vocabulary"]="preview"
     operation_id: GraphIdentifier | None=None
     run_id: GraphIdentifier | None=None
     graph_revision: GraphRevision | None=None
     bundle: ResearchAnalysisBundle | None=None
     target_record_id: GraphIdentifier | None=None
     parent_record_id: GraphIdentifier | None=None
+    vocabulary_snapshot: VocabularySnapshot | None=None
+    vocabulary_extension: VocabularyExtension | None=None
 
     @model_validator(mode="after")
     def pinned(self):
         if self.mode=="save" and (not self.operation_id or self.graph_revision is None or self.bundle is None):raise ValueError("save requires operation, graph revision and analysis bundle")
+        if self.mode in {"save_vocabulary", "propose_vocabulary"}:
+            if not self.operation_id or self.graph_revision is None:
+                raise ValueError("vocabulary persistence requires operation and graph revision")
+            if self.mode == "save_vocabulary" and self.vocabulary_snapshot is None:
+                raise ValueError("snapshot required")
+            if self.mode == "propose_vocabulary" and self.vocabulary_extension is None:
+                raise ValueError("extension required")
         return self
 
 
@@ -161,8 +171,10 @@ def save_research_analysis(store,request,context):
     context=SaveAnalysisContext.model_validate(context.model_dump(mode="json"))
     if request.mode=="preview":return ToolResult(operation="Save Research Analysis",status="complete",data={"executed":False,"request":request.model_dump(mode="json"),"version":VERSION})
     if store is None or not context.allow_artifact_writes:return ToolResult(operation="Save Research Analysis",status="failed",diagnostics=({"code":"artifact_writes_or_store_unavailable"},))
+    if request.mode in {"save_vocabulary", "propose_vocabulary"}:
+        return save_vocabulary(store, request, context)
     scope=dict(corpus_id=context.corpus_id,project_id=context.project_id);receipts=ExecutionReceiptService(store)
-    rid=identity({"stage":"save_research_analysis","operation_id":request.operation_id,**scope});fingerprint=identity({"version":VERSION,"request":request,"context":context})
+    rid=identity({"stage":"save_research_analysis","operation_id":request.operation_id,**scope});fingerprint=identity({"version":VERSION,"request":compatible_dump(request),"context":context})
     previous=receipts.replay(rid,request_hash=fingerprint,**scope)
     if previous:return ToolResult.model_validate(previous.metadata["result"])
     data={"version":VERSION,"scientific_admission":False};artifacts={};interrupted=None
@@ -209,3 +221,33 @@ def save_research_analysis(store,request,context):
 def identity_bytes(data):
     import hashlib
     return hashlib.sha256(data).hexdigest()
+
+
+def save_vocabulary(store, request, context):
+    """Explicit persistence through the existing owner and artifact boundary."""
+    from .vocabulary_context import publish_snapshot
+    from .proposal_service import ProposalService
+    scope = dict(corpus_id=context.corpus_id, project_id=context.project_id)
+    receipts = ExecutionReceiptService(store)
+    rid = identity({"stage": request.mode, "operation_id": request.operation_id, **scope})
+    fingerprint = identity({"request": compatible_dump(request), "context": context})
+    previous = receipts.replay(rid, request_hash=fingerprint, **scope)
+    if previous:
+        return ToolResult.model_validate(previous.metadata["result"])
+    with store.joined_transaction():
+        if store.graph_revision(**scope) != request.graph_revision:
+            raise ConflictError("vocabulary persistence graph revision is stale or foreign")
+        if request.mode == "save_vocabulary":
+            policy = publish_snapshot(store, request.vocabulary_snapshot, **scope)
+            data = {"normalized_reasoning": policy.model_dump(mode="json"), "scientific_admission": False}
+            artifacts = {"vocabulary": policy.snapshot_artifact_id}
+        else:
+            record_id = ProposalService(store).persist_vocabulary(request.vocabulary_extension, **scope)
+            data, artifacts = {"record_id": record_id, "scientific_admission": False, "status": "proposed"}, {}
+        result = ToolResult(operation="Save Research Analysis", status="complete", data=data,
+            artifacts=artifacts, receipt_ids=(rid,), note="Vocabulary persistence is proposal-only; definitions and scientific claims remain distinct.")
+        receipts.record(ExecutionReceipt(receipt_id=rid, operation_id=request.operation_id,
+            stage=request.mode, **scope, graph_revision=request.graph_revision, status="completed",
+            tool_version="vocabulary-v1", output_ids=tuple(artifacts.values()),
+            metadata={"request_hash": fingerprint, "result": result.model_dump(mode="json")}))
+        return result

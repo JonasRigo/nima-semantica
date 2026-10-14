@@ -623,7 +623,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Public report request; operator authority cannot be supplied in JSON.\"\"\"\nfrom lfx.io import DropdownInput, StrInput, MultilineInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.research_analysis import SaveAnalysisRequest\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import RequestFields as BaseComponent\n\nclass SaveAnalysisFields(BaseComponent):\n    name=\"SaveAnalysisFields\"\n    display_name=\"Analysis · Bundle and Exact References\"\n    description=\"Caller-authored sections, exact evidence, immutable artifact and receipt references. JSON also accepts target/parent progress bindings. No scientific admission.\"\n    nima_manifest=manifest_for_component(\"SaveAnalysisFields\")\n    inputs=[DropdownInput(name=\"mode\",display_name=\"Mode\",options=[\"preview\",\"save\"],value=\"preview\"),\n        StrInput(name=\"operation_id\",display_name=\"Unique save operation\",value=\"\"),\n        StrInput(name=\"run_id\",display_name=\"Harness run ID\",value=\"\"),\n        MultilineInput(name=\"graph_revision_json\",display_name=\"Pinned graph revision (JSON)\",value=\"{}\"),\n        MultilineInput(name=\"bundle_json\",display_name=\"Research analysis bundle (JSON)\",value=\"{}\"),\n        HandleInput(name=\"mcp_request\",display_name=\"Request JSON\",input_types=[\"Message\",\"Data\",\"JSON\"],required=False)]\n    outputs=[Output(name=\"request\",display_name=\"Validated request\",method=\"request_data\",group_outputs=True),\n        Output(name=\"preview\",display_name=\"Request preview\",method=\"preview_message\",group_outputs=True)]\n    async def run(self):\n        override=native(getattr(self,\"mcp_request\",None))\n        if isinstance(override,str):\n            if len(override)>2_000_000:raise ValueError(\"request size limit\")\n            override=strict_json_object(override) if override.strip() else {}\n        if override is None:override={}\n        if not isinstance(override,dict):raise ValueError(\"expected object\")\n        payload={\"mode\":self.mode,\"operation_id\":self.operation_id or None,\"run_id\":self.run_id or None,\n            \"graph_revision\":strict_json_object(self.graph_revision_json) or None,\n            \"bundle\":strict_json_object(self.bundle_json) or None}\n        return SaveAnalysisRequest.model_validate(payload|override).model_dump(mode=\"json\")\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
+                "value": "\"\"\"Public report request; operator authority cannot be supplied in JSON.\"\"\"\nfrom lfx.io import DropdownInput, StrInput, MultilineInput, HandleInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.research_analysis import SaveAnalysisRequest\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import RequestFields as BaseComponent\n\nclass SaveAnalysisFields(BaseComponent):\n    name=\"SaveAnalysisFields\"\n    display_name=\"Analysis · Bundle and Exact References\"\n    description=\"Caller-authored sections, exact evidence, immutable artifact and receipt references. JSON also accepts target/parent progress bindings. No scientific admission.\"\n    nima_manifest=manifest_for_component(\"SaveAnalysisFields\")\n    inputs=[DropdownInput(name=\"mode\",display_name=\"Mode\",options=[\"preview\",\"save\",\"save_vocabulary\",\"propose_vocabulary\"],value=\"preview\"),\n        StrInput(name=\"operation_id\",display_name=\"Unique save operation\",value=\"\"),\n        StrInput(name=\"run_id\",display_name=\"Harness run ID\",value=\"\"),\n        MultilineInput(name=\"graph_revision_json\",display_name=\"Pinned graph revision (JSON)\",value=\"{}\"),\n        MultilineInput(name=\"bundle_json\",display_name=\"Research analysis bundle (JSON)\",value=\"{}\"),\n        HandleInput(name=\"mcp_request\",display_name=\"Request JSON\",input_types=[\"Message\",\"Data\",\"JSON\"],required=False)]\n    outputs=[Output(name=\"request\",display_name=\"Validated request\",method=\"request_data\",group_outputs=True),\n        Output(name=\"preview\",display_name=\"Request preview\",method=\"preview_message\",group_outputs=True)]\n    async def run(self):\n        override=native(getattr(self,\"mcp_request\",None))\n        if isinstance(override,str):\n            if len(override)>5_000_000:raise ValueError(\"request size limit\")\n            override=strict_json_object(override) if override.strip() else {}\n        if override is None:override={}\n        if not isinstance(override,dict):raise ValueError(\"expected object\")\n        payload={\"mode\":self.mode,\"operation_id\":self.operation_id or None,\"run_id\":self.run_id or None,\n            \"graph_revision\":strict_json_object(self.graph_revision_json) or None,\n            \"bundle\":strict_json_object(self.bundle_json) or None}\n        return SaveAnalysisRequest.model_validate(payload|override).model_dump(mode=\"json\")\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -670,7 +670,9 @@
                 "trace_as_metadata": true,
                 "options": [
                   "preview",
-                  "save"
+                  "save",
+                  "save_vocabulary",
+                  "propose_vocabulary"
                 ],
                 "options_metadata": [],
                 "combobox": false,
@@ -788,7 +790,7 @@
             "metadata": {
               "nima_component_id": "save_analysis_fields",
               "contract_version": "1",
-              "source_sha256": "c7409e673fc0a827e6906f60f0b264d92bb5b5cf3c8b7ddfb4c82479c6446638"
+              "source_sha256": "5fab4cab3072d3e321e67df6026e9487d6aa4ad958d3eb3ed30b47dca9e86dbb"
             },
             "tool_mode": false
           },
@@ -1246,14 +1248,18 @@
     "visual_approval": "pending",
     "controller_version": "save-research-analysis-v1",
     "native_sources_sha256": {
-      "research_analysis": "7fb5cec5193a505a51cca4a9563914326e3ebdf9cefcdb6cb77bf82b3d8b52d6"
+      "research_analysis": "bb44301cf231ae6b33acfa2811f1f1d148da558996743176eb32cbdbae8355d6",
+      "vocabulary_contracts": "c6ac46c64943fdd234c81a3f71a573ce545a8c55ddcef1b77327ad8f5a7304e7",
+      "vocabulary_context": "d9075cd5b1fe8e691f76f064c00cbd4a949e75deafb9ea60b72de03fd0c33778",
+      "vocabulary_review": "1e520446b25f8a82f3ba25d2839fce22376f227bc689cff0873243155575e27c",
+      "proposal_service": "6c81e858f6bbec3ff1056bf26ccf9a5540f636ec9f675b11bbdec3c2263c6d09"
     },
     "publication": "not_published_by_builder",
     "components": {
       "SaveAnalysisFields": {
         "nima_component_id": "save_analysis_fields",
         "contract_version": "1",
-        "source_sha256": "c7409e673fc0a827e6906f60f0b264d92bb5b5cf3c8b7ddfb4c82479c6446638"
+        "source_sha256": "5fab4cab3072d3e321e67df6026e9487d6aa4ad958d3eb3ed30b47dca9e86dbb"
       },
       "SaveResearchAnalysis": {
         "nima_component_id": "save_research_analysis",

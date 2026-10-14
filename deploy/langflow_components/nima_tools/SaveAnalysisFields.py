@@ -12,7 +12,7 @@ class SaveAnalysisFields(BaseComponent):
     display_name="Analysis · Bundle and Exact References"
     description="Caller-authored sections, exact evidence, immutable artifact and receipt references. JSON also accepts target/parent progress bindings. No scientific admission."
     nima_manifest=manifest_for_component("SaveAnalysisFields")
-    inputs=[DropdownInput(name="mode",display_name="Mode",options=["preview","save"],value="preview"),
+    inputs=[DropdownInput(name="mode",display_name="Mode",options=["preview","save","save_vocabulary","propose_vocabulary"],value="preview"),
         StrInput(name="operation_id",display_name="Unique save operation",value=""),
         StrInput(name="run_id",display_name="Harness run ID",value=""),
         MultilineInput(name="graph_revision_json",display_name="Pinned graph revision (JSON)",value="{}"),
@@ -23,7 +23,7 @@ class SaveAnalysisFields(BaseComponent):
     async def run(self):
         override=native(getattr(self,"mcp_request",None))
         if isinstance(override,str):
-            if len(override)>2_000_000:raise ValueError("request size limit")
+            if len(override)>5_000_000:raise ValueError("request size limit")
             override=strict_json_object(override) if override.strip() else {}
         if override is None:override={}
         if not isinstance(override,dict):raise ValueError("expected object")

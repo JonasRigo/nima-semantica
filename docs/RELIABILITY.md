@@ -1,4 +1,4 @@
-# NIMA v0.2.0 reliability
+# NIMA reliability and recovery
 
 Private mathematics and proof services retain exclusive ownership of their SQLite databases.
 For several harness clients, run one authenticated loopback HTTP owner per database and connect every client through the packaged stdio proxy.
@@ -120,6 +120,30 @@ Pinned source/environment checks, independent inspection, allowed-axiom checks, 
 Formal verification does not establish source correspondence or project admission.
 
 ## Retrieval and discovery
+
+The installation's `projection_limits` select the complete index construction budget: one million lexical tokens and 100,000 source regions by default.
+The maximum supported explicit request is ten million tokens and one million regions.
+CLI ingestion, project initialization and project refresh accept `--projection-max-tokens` and apply that override consistently.
+Limits never increase automatically.
+
+```bash
+nima index check CORPUS --project PROJECT --projection-max-tokens 5000000
+nima index rebuild CORPUS --project PROJECT --projection-max-tokens 5000000
+```
+
+Omit `--project` to check or rebuild the public corpus projection.
+Preflight checks source readability and integrity, token/region counts and existing embedding matrices through a coherent read-only snapshot alongside the writer.
+Rebuild reuses prepared sources and valid embeddings without acquisition, parsing or provider calls, and routes through the configured project MCP owner when its corpus lease is occupied.
+Only a successful, current projection updates future-session retrieval bindings.
+Existing sessions retain their source pins and failed receipts remain unchanged.
+An explicit `--attempt-id` starts a separately identified recovery attempt; do not reuse it with changed arguments.
+
+Permission, missing-artifact, integrity, stale-revision and budget failures retain structured diagnostics.
+For a corpus artifact that the configured reader cannot access, verify its scope and owner and grant only the required reader access through the operator's platform tooling.
+NIMA performs no automatic ACL or ownership changes, and private-project artifacts must retain their visibility boundary.
+Operator accounts running the corpus owner and CLI need coherent access to the selected corpus and SQLite shared-memory files.
+
+Optional [normalized reasoning](NORMALIZED_REASONING.md) is off by default and can be disabled when vocabulary is unavailable.
 
 Lexical retrieval and exact receipt/source reads use a consistent scoped SQLite snapshot alongside the corpus writer.
 Embedding attempts use the operator-configured project research MCP endpoint through `NIMA_RESEARCH_MCP_URL`, so their receipts are written by the corpus owner.

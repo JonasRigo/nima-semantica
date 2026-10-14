@@ -19,6 +19,7 @@ class EvidenceValidationIssue(StrictModel):
     message: str = Field(min_length=1, max_length=2_000)
     target_id: GraphIdentifier
     evidence_id: GraphIdentifier | None = None
+    artifact_id: Digest | None = None
 
 
 class EvidenceValidationReport(StrictModel):
@@ -100,7 +101,10 @@ def validate_reference(store, reference, *, corpus_id, project_id, target_id):
             actual = getattr(region, key) if key in {"start", "end", "ordinal"} else region.metadata[key]
             if value != actual:
                 return failure("evidence.locator_mismatch", "Locator differs from source region.")
-    except Exception:
+    except Exception as exc:
+        from .artifact_diagnostics import ArtifactReadError
+        if isinstance(exc, ArtifactReadError):
+            return [EvidenceValidationIssue(**exc.diagnostic, target_id=target_id, evidence_id=reference.region_id)]
         return failure("evidence.invalid_region", "Source region or artifact could not be validated.")
     return []
 
@@ -118,8 +122,9 @@ def require_source_region(store, region_id, *, corpus_id, project_id):
         artifact_id=region.artifact_id, content_hash=region.artifact_id,
         source_revision=region.source_revision, quotation=None, locator=evidence_locator(region),
     )
-    if validate_reference(store, reference, corpus_id=corpus_id, project_id=project_id, target_id=region_id):
-        raise ConflictError("source region failed exact-source validation")
+    if diagnostics := validate_reference(store, reference, corpus_id=corpus_id, project_id=project_id, target_id=region_id):
+        from .artifact_diagnostics import SourceValidationError
+        raise SourceValidationError(diagnostics, region_id)
     return record
 
 

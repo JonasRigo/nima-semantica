@@ -7,7 +7,7 @@ description: Create or refresh a corpus-named vocabulary from the linked NIMA pr
 
 Read [the shared tool and state contract](../_shared/tools.md).
 Resolve the corpus, project and configured CLI from `.nima/project.json`; consult project instructions and any existing vocabulary before choosing terminology.
-The default output is `<corpus_id>-vocab.md` in the project directory, even when the inspected graph belongs to a differently named project.
+The default outputs are matching `<corpus_id>-vocab.md` and `<corpus_id>-vocab.json` files in the project directory, even when the inspected graph belongs to a differently named project.
 Retain the exact inspected project scope in the file.
 
 ## Inspect an exact graph
@@ -43,12 +43,26 @@ Retain useful existing entries that the new snapshot cannot verify in a clearly 
 
 ## Write and verify the reference
 
-Write the corpus-named Markdown file with a scope header containing the corpus and project IDs, inspected graph revision, snapshot hash, ontology digest(s), generation date and coverage limitations.
+Read [the structured vocabulary procedure](references/vocabulary-json.md) when generating the JSON companion or binding it for optional normalized reasoning.
+Obtain the current scope header with `nima vocabulary header PROJECT_ID --corpus CORPUS_ID`; keep it consistent with the inspected graph export.
+Write the structured entries and seal them with the configured CLI to produce both reference files from the same snapshot.
+The header contains the corpus and project IDs, inspected graph revision, graph snapshot hash, vocabulary content hash, ontology digest(s), generation date and coverage limitations.
 Organize entries so preferred terms, aliases, definitions, usage distinctions and exact references can be searched directly.
 Include proposed additions, conflicting conventions and unresolved definitions as explicit sections when present.
 Use semantic source line breaks and preserve equations and source notation.
 Check entry citations against the inspected graph and exact source evidence; report the output path, scope and unresolved gaps.
 If the graph changes during inspection, retain the pinned revision and mark the reference as describing that earlier snapshot, or refresh it from a new coherent snapshot.
+The CLI refuses sealing a stale reference for new work; an already bound investigation retains its original immutable pin.
+
+## Optional reasoning guidance and discovery
+
+Generating a vocabulary does not enable normalized reasoning.
+It is off by default; enable it only when the user requests project configuration or a workflow explicitly selects it.
+When enabled, use the selected definitions before framing arguments and retain qualifiers, conflicting conventions and unresolved coverage.
+Missing vocabulary leaves guidance unavailable and permits ordinary research to continue.
+Introduce new concepts, borrowed terminology, distinctions and challenges to existing definitions as explicit provisional extensions with motivation, evidence or speculative basis, changed assumptions and open questions.
+An unfamiliar word alone is not a reason to reject an argument.
+Use the existing model/harness assessment to record changes of meaning and disagreements; do not add automatic review calls or force agreement with the reference.
 
 Writing this local terminology reference does not approve renaming graph entities, merging identities, saving a new ontology or admitting a graph delta.
 If the user also requests a persistent graph correction, prepare its exact proposal and use the existing graph-update approval contract.

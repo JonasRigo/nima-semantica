@@ -34,6 +34,7 @@ class GenerateHypotheses(BaseComponent):
         IntInput(name="max_evaluations",display_name="Maximum probe evaluations (operator)",value=1000),
         IntInput(name="timeout_seconds",display_name="Probe timeout (operator)",value=30),
         StrInput(name="model_manifest_json",display_name="Model identity JSON (operator)",value="{}",advanced=True),
+        StrInput(name="normalized_reasoning_json",display_name="Optional vocabulary policy (operator)",value="null",advanced=True),
         HandleInput(name="model",display_name="Hypothesis language model (operator)",input_types=["LanguageModel"],required=False)]
 
     def run_sync(self):
@@ -47,7 +48,8 @@ class GenerateHypotheses(BaseComponent):
             max_actions=self.max_actions,max_nodes=self.max_nodes,max_edges=self.max_edges,max_read_regions=self.max_read_regions,
             allow_counterexample_checks=self.allow_counterexample_checks,max_candidates=self.max_candidates,
             max_existing_hypotheses=self.max_existing_hypotheses,max_evaluations=self.max_evaluations,timeout_seconds=self.timeout_seconds,
-            model_manifest=manifest, retrieval=MathRetrievalPolicy.model_validate(_value(self.retrieval_policy))
+            model_manifest=manifest, normalized_reasoning=json.loads(getattr(self, "normalized_reasoning_json", "null")),
+            retrieval=MathRetrievalPolicy.model_validate(_value(self.retrieval_policy))
                 if getattr(self,"retrieval_policy",None) else MathRetrievalPolicy())
         language_model = getattr(self,"model",None)
         def invoke(prompt):

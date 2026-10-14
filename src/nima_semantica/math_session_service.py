@@ -11,6 +11,7 @@ import uuid
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from .vocabulary_contracts import VocabularyPolicy
 
 from .math_graph_session import GraphSessionBinding, PrivateGraphSessionStore, _json
 from .math_single_graph_state import SingleCalculationGraph
@@ -28,6 +29,7 @@ class MathServiceConfig(BaseModel):
     allow_retrieval: bool = False
     allow_execution: bool = False
     timeout_seconds: int = Field(default=60, ge=1, le=120)
+    normalized_reasoning: VocabularyPolicy | None = None
 
     @model_validator(mode="after")
     def require_pinned_retrieval(self):
@@ -72,10 +74,13 @@ class MathSessionService(PrivateGraphSessionStore):
                     arguments_json TEXT NOT NULL, session_id TEXT NOT NULL,
                     PRIMARY KEY(scope_json, request_id)
                 );
+                CREATE TABLE IF NOT EXISTS math_vocabulary (
+                    session_id TEXT PRIMARY KEY, payload TEXT NOT NULL
+                );
             """)
 
     def _scope(self):
-        return _json(self.config.model_dump(exclude={"database_path"}))
+        return _json(self.config.model_dump(exclude={"database_path", "normalized_reasoning"}))
 
     def _state(self, graph, *, db=None):
         from .private_payloads import compact
@@ -245,9 +250,9 @@ class MathSessionService(PrivateGraphSessionStore):
         return binding, row, life
 
     def open(self, task: str, required_paths: list[str], task_facts=(), indexed_sets=(),
-             session_id: str | None = None, request_id: str | None = None):
+             session_id: str | None = None, request_id: str | None = None, normalized_reasoning=None):
         identifier = session_id or uuid.uuid4().hex
-        scope = self.config.model_dump(exclude={"database_path"})
+        scope = self.config.model_dump(exclude={"database_path", "normalized_reasoning"})
         binding = GraphSessionBinding(**scope, session_id=identifier, task=task,
             required_paths=tuple(required_paths), task_facts=tuple(task_facts), indexed_sets=tuple(indexed_sets))
         with self._connect() as db:
@@ -255,6 +260,8 @@ class MathSessionService(PrivateGraphSessionStore):
             creation = _json({"task": task, "required_paths": required_paths,
                 "task_facts": [x.model_dump(mode="json") for x in binding.task_facts],
                 "indexed_sets": [x.model_dump(mode="json") for x in binding.indexed_sets]})
+            if normalized_reasoning is not None:
+                creation = _json({**json.loads(creation), "normalized_reasoning": normalized_reasoning})
             if request_id is not None and session_id is None:
                 prior = db.execute("SELECT * FROM math_creations WHERE scope_json=? AND request_id=?", (self._scope(), request_id)).fetchone()
                 if prior:
@@ -266,6 +273,9 @@ class MathSessionService(PrivateGraphSessionStore):
                 if existing.digest() != binding.digest():
                     raise ValueError("resume requires the exact original task binding")
             else:
+                from .vocabulary_context import private_vocabulary
+                vocabulary = private_vocabulary(binding.corpus_id, binding.project_id, task,
+                    override=normalized_reasoning, configured=self.config.normalized_reasoning)
                 graph = SingleCalculationGraph(task, binding.task_facts, binding.required_paths, binding.indexed_sets)
                 db.execute("INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?)",
                     (identifier, binding.project_id, binding.run_id, binding.digest(), 0, _json(self._state(graph, db=db))))
@@ -274,6 +284,7 @@ class MathSessionService(PrivateGraphSessionStore):
                 payload["indexed_sets"] = [x.model_dump(mode="json") for x in binding.indexed_sets]
                 db.execute("INSERT INTO math_lifecycle VALUES (?, ?, ?, 'open', NULL)",
                     (identifier, _json(payload), self._scope()))
+                db.execute("INSERT INTO math_vocabulary VALUES (?,?)", (identifier, _json(vocabulary)))
                 if request_id is not None:
                     db.execute("INSERT INTO math_creations VALUES (?, ?, ?, ?)", (self._scope(), request_id, creation, identifier))
         return self.read(identifier, "status")
@@ -315,12 +326,19 @@ class MathSessionService(PrivateGraphSessionStore):
                     raise ValueError("operator corpus store is unconfigured")
                 with CorpusSnapshot(root, corpus_id=binding.corpus_id, project_id=binding.project_id) as store:
                     result = read_records(store, name, {**args, "session_id": session_id})
+            elif name == "inspect_vocabulary":
+                found = db.execute("SELECT payload FROM math_vocabulary WHERE session_id=?", (session_id,)).fetchone()
+                packet = json.loads(found[0]) if found else {"status": "disabled", "enabled": False}
+                result = {"vocabulary": packet}
             elif name in {"frontier", "export", "inspect_node", "inspect_receipt"}:
                 result, _ = self._dispatch(graph, binding, name, args)
             else:
                 raise ValueError("unknown inspection")
             if name in {"status", "frontier"}:
                 result.update(self._repair_view(db, session_id, graph, support_nodes=args.get("support_nodes")))
+                from .vocabulary_context import vocabulary_summary
+                found = db.execute("SELECT payload FROM math_vocabulary WHERE session_id=?", (session_id,)).fetchone()
+                result["normalized_reasoning"] = vocabulary_summary(json.loads(found[0])) if found else {"status": "disabled", "enabled": False}
             if name == "export" and not args.get("full_payload"):
                 from .inspection_pages import graph_page
                 result, pagination = graph_page(result, session_id=session_id, revision=row["revision"],
@@ -409,6 +427,7 @@ class MathSessionService(PrivateGraphSessionStore):
                 return node
             normalized, support_repairs = normalize_support_nodes(arguments) if name == "submit" else (arguments, [])
             dispatched_arguments, resolutions = resolve_references(normalized, resolve)
+            vocabulary_input = {k: dispatched_arguments.pop(k) for k in ("vocabulary_assessment", "vocabulary_findings", "vocabulary_extensions") if k in dispatched_arguments}
             repair_target = dispatched_arguments.pop("repair_target", None)
             if repair_target is not None:
                 if name not in {"run_experiment", "run_calculation_graph", "retrieve_context"}:
@@ -435,6 +454,20 @@ class MathSessionService(PrivateGraphSessionStore):
                 raise ValueError("unknown mutation")
             if resolutions:
                 result["resolved_references"] = resolutions
+            if name == "submit":
+                with self._connect() as db:
+                    found = db.execute("SELECT payload FROM math_vocabulary WHERE session_id=?", (session_id,)).fetchone()
+                packet = json.loads(found[0]) if found else {"status": "disabled", "enabled": False}
+                if packet["status"] == "active":
+                    from .corpus_snapshot import CorpusSnapshot
+                    from .vocabulary_review import assess_vocabulary
+                    import os
+                    with CorpusSnapshot(os.environ["NIMA_STORE_ROOT"], corpus_id=binding.corpus_id, project_id=binding.project_id) as store:
+                        result["vocabulary_review"] = assess_vocabulary(store, packet, corpus_id=binding.corpus_id,
+                            project_id=binding.project_id, target_id=session_id, argument=_json({"submission": dispatched_arguments}),
+                            observations=vocabulary_input.get("vocabulary_findings", ()),
+                            extensions=vocabulary_input.get("vocabulary_extensions", ()),
+                            assessment=vocabulary_input.get("vocabulary_assessment"))
             if support_repairs:
                 result.setdefault("interface_normalizations", []).extend(support_repairs)
             if repair_target is not None:

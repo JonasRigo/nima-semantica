@@ -95,6 +95,44 @@ class ProposalService:
                              project_id=report.project_id,
                              expected_store_revision=expected_store_revision)
 
+    def persist_vocabulary(self, proposal, *, corpus_id, project_id):
+        """Append a provisional revision; never merge concepts or admit claims."""
+        from .vocabulary_contracts import VocabularyExtension
+        from .evidence_contracts import validate_reference
+        proposal = VocabularyExtension.model_validate(proposal)
+        if (proposal.corpus_id, proposal.project_id) != (corpus_id, project_id):
+            raise ConflictError("vocabulary proposal scope mismatch")
+        from .vocabulary_context import load_snapshot
+        from .vocabulary_contracts import VocabularyPolicy
+        matches = [(key, r) for key, r in self.store.records_matching("ArtifactEnvelope", "content.snapshot_hash",
+            proposal.base_snapshot_hash, corpus_id=corpus_id, project_id=project_id)
+            if r.project_id == project_id and r.content.get("artifact_kind") == "vocabulary_snapshot"]
+        if not matches:
+            raise ConflictError("vocabulary proposal base snapshot is unavailable")
+        snapshot = load_snapshot(self.store, VocabularyPolicy(enabled=True, snapshot_artifact_id=matches[0][1].content["artifact_id"],
+            snapshot_hash=proposal.base_snapshot_hash), corpus_id=corpus_id, project_id=project_id, current=False)
+        if not set(proposal.related_entry_ids) <= {e.entry_id for e in snapshot.entries}:
+            raise ConflictError("vocabulary proposal references unknown entries")
+        for ref in proposal.evidence:
+            if validate_reference(self.store, ref, corpus_id=corpus_id, project_id=project_id, target_id=proposal.proposal_id):
+                raise ConflictError("vocabulary proposal exact evidence is invalid")
+        payload = proposal.model_dump(mode="json")
+        with self.store.joined_transaction():
+            for record_id, record in self.store.records_matching("VocabularyExtension", "proposal_id", proposal.proposal_id,
+                    corpus_id=corpus_id, project_id=project_id):
+                if record.project_id == project_id and record.content.get("revision") == proposal.revision:
+                    if record.content != payload:
+                        raise ConflictError("vocabulary proposal revision replay differs")
+                    return record_id
+            if proposal.supersedes:
+                previous = self.store.get(proposal.supersedes, corpus_id=corpus_id, project_id=project_id)
+                if previous is None or previous.kind != "VocabularyExtension" or previous.project_id != project_id:
+                    raise ConflictError("previous vocabulary proposal is missing or foreign")
+                if previous.content["proposal_id"] != proposal.proposal_id or previous.content["revision"] + 1 != proposal.revision:
+                    raise ConflictError("vocabulary proposal revision chain differs")
+            return self.store.put(Record(kind="VocabularyExtension", corpus_id=corpus_id, project_id=project_id,
+                parents=(proposal.supersedes,) if proposal.supersedes else (), content=payload))
+
     def persist_graph_candidate(
         self,
         artifact: GraphArtifact,

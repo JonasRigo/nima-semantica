@@ -1,6 +1,6 @@
 # v0.1.1 platform qualification
 
-For the current release, see [v0.2.0 qualification](PLATFORM_SUPPORT_v0.2.0.md).
+For the current release, see [v0.2.1 qualification](PLATFORM_SUPPORT_v0.2.1.md).
 The evidence below is retained for v0.1.1 and does not substitute for testing the new release.
 
 Status: qualified for v0.1.1 under the tested configurations below. All 12 hosted CI jobs passed; the operator authorized release on 2026-09-28.

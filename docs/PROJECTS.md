@@ -9,8 +9,7 @@ List registered corpora and projects in the configured installation:
 
 ```sh
 nima list
-nima project list
-nima project list --corpus papers
+nima list --corpus papers
 ```
 
 These commands emit JSON (`corpora` or `projects` arrays), sorted by corpus and
@@ -20,6 +19,41 @@ not acquire the corpus writer lock. Project entries include the registration
 directory and configured MCP URL; listing does not check service health.
 Use `nima --config /path/to/installation.json ...` to select another installation.
 Project folders without a `project.json` registration are not listed.
+`nima project list` has been removed; select a corpus with `nima list --corpus NAME`.
+
+## Safely delete a project or corpus
+
+Project deletion removes only the selected project's active records, graph history, private sessions, indexes, published workflows and managed connections.
+Corpus deletion also removes every project linked to that corpus.
+Both preserve workspace documents, reports, figures, exports and original inputs.
+Immutable artifact bytes are retained conservatively because they can be shared or referenced by historical evidence; deletion removes their scoped active registrations.
+Recovery backups remain private and are retained until you explicitly remove them.
+
+Preview the exact scope and save its approval hash:
+
+```sh
+nima project delete my-research --corpus papers --preview-file project-deletion.json
+nima corpus delete papers --preview-file corpus-deletion.json
+```
+
+Stop affected database owners and close harness sessions before applying.
+NIMA refuses active owners and provides managed service instructions; it never stops services automatically.
+Keep Langflow reachable for removal of published workflows; an installation using only offline projects does not require it.
+Older project bindings require `--workspace /absolute/path` to identify their workspace; repeat this option for multiple workspaces.
+Recorded workspace locations are used automatically for newly initialized projects.
+
+After reviewing the preview, repeat the same command with `--apply HASH`, using the exact returned `preview_hash`.
+Changed state requires a new preview and approval.
+NIMA backs up the database and managed files before deletion and returns a recovery manifest.
+If interrupted, complete the approved operation with:
+
+```sh
+nima maintenance deletion-recover /path/to/recovery.json --mode complete
+```
+
+Recovery revalidates surviving state and resumes completed phases without deleting unrelated data.
+It refuses changed files, damaged backups and unresolved dependencies rather than overwriting them.
+Backups support operator-led restoration; this command completes deletion and does not restore an entire shared database over newer work.
 
 A corpus is shared within one NIMA installation; a project holds private notes and investigation-specific knowledge.
 A private mathematics or proof session belongs to that project but does not itself become project knowledge.

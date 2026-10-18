@@ -16,6 +16,7 @@
     "deploy/build_draft_lean.py",
     "deploy/build_hypothesis_generation.py",
     "deploy/build_inspect_corpus.py",
+    "deploy/qualify_macos_studio.py",
     "deploy/build_math_mcp_canvases.py",
     "deploy/build_ontology_tools.py",
     "deploy/build_read_evidence.py",

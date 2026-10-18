@@ -1,6 +1,41 @@
 name: tests
 on: [push, pull_request]
 jobs:
+  macos-studio:
+    runs-on: macos-15
+    needs: package
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-candidate
+          path: /tmp/nima-artifacts
+      - run: python -c "import pathlib, subprocess, sys; wheel, = pathlib.Path('/tmp/nima-artifacts').glob('*.whl'); subprocess.run([sys.executable, '-m', 'pip', 'install', '-c', 'constraints-tested.txt', str(wheel) + '[mcp]'], check=True)"
+      - name: Build pinned upstream Studio using the documented macOS commands
+        run: |
+          xcode-select -p
+          rustup update stable
+          rustup default stable
+          npm install --global pnpm@11.20.0
+          git clone --branch v0.10.0 --depth 1 https://github.com/saschb2b/okf-studio.git "$RUNNER_TEMP/okf-studio"
+          cd "$RUNNER_TEMP/okf-studio"
+          pnpm install --frozen-lockfile
+          pnpm tauri build --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - name: Launch native Studio from the installed NIMA CLI
+        env:
+          NIMA_OKF_STUDIO: ${{ runner.temp }}/okf-studio/target/release/bundle/macos/OKF Studio.app/Contents/MacOS/okf-viewer
+        run: python deploy/qualify_macos_studio.py "$RUNNER_TEMP/studio-evidence"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-studio-evidence
+          path: ${{ runner.temp }}/studio-evidence
   package:
     runs-on: ubuntu-24.04
     steps:

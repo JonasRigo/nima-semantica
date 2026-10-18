@@ -93,27 +93,36 @@ Standard graphical NIMA setup can install the pinned official Debian package int
 Headless installations still support exports.
 
 **macOS:** build OKF Studio from source; upstream does not provide a macOS installer in its releases.
-Install the Xcode Command Line Tools (`xcode-select --install`), a stable Rust toolchain through rustup, and Node.js 20.19+ or 22.12+ with pnpm, following the [upstream build instructions](https://github.com/saschb2b/okf-studio/blob/v0.10.0/README.md#develop-and-run).
+Install the Xcode Command Line Tools (`xcode-select --install`), a stable Rust toolchain through rustup, Node.js 24 and pnpm 11.20.0 (the version pinned in upstream `package.json`).
+See the [upstream build instructions](https://github.com/saschb2b/okf-studio/blob/v0.10.0/README.md#develop-and-run).
 Build the version used by NIMA's Linux installer:
 
 ```bash
 git clone --branch v0.10.0 --depth 1 https://github.com/saschb2b/okf-studio.git
 cd okf-studio
-pnpm install
-pnpm tauri build
+rustup default stable
+npm install --global pnpm@11.20.0
+pnpm install --frozen-lockfile
+pnpm tauri build --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'
 ```
 
-The macOS build produces the native executable and `.app`/`.dmg` bundles.
+This builds a local `.app` without requiring an upstream updater signing key or creating a disk image.
 With the default build output directory, configure NIMA to use the executable:
 
 ```bash
-export NIMA_OKF_STUDIO="$PWD/target/release/okf-viewer"
+export NIMA_OKF_STUDIO="$PWD/target/release/bundle/macos/OKF Studio.app/Contents/MacOS/okf-viewer"
+test -x "$NIMA_OKF_STUDIO"
 nima project graph experiment --corpus papers --path /path/to/workspace --open
 ```
 
 On either platform, an existing executable can be selected with `studio_executable` in the installation JSON or `NIMA_OKF_STUDIO` in the shell environment.
 Use an absolute path to the executable itself, rather than a macOS `.app` directory.
 Save the environment setting in your shell startup file or use the installation JSON to retain it for future sessions.
+Resolve this path while in the Studio checkout and save the resulting absolute path; later changes of directory must not change it.
+If `CARGO_TARGET_DIR` is set, substitute that directory for `target`.
+NIMA passes `open` and the absolute export directory as separate arguments, including when paths contain spaces.
+Studio may request permission to open the exported folder; approve that request in the application.
+The build is unsigned and macOS may require its normal first-launch approval.
 
 ## Detailed atomistic calculation documents
 

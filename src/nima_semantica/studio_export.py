@@ -110,5 +110,11 @@ def open_studio(directory,executable=None):
     import os
     candidate=executable or os.environ.get('NIMA_OKF_STUDIO') or shutil.which('okf-viewer')
     if not candidate:raise ValueError('OKF bundle is exported. Install OKF Studio or configure studio_executable / NIMA_OKF_STUDIO, then open this folder.')
-    process=subprocess.Popen([candidate,'open',str(Path(directory).resolve())],start_new_session=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    resolved=shutil.which(str(candidate))
+    if not resolved or not Path(resolved).is_file():
+        raise ValueError('OKF bundle is exported. Studio must be an executable file; for macOS use OKF Studio.app/Contents/MacOS/okf-viewer, or the source-build executable. Check studio_executable / NIMA_OKF_STUDIO.')
+    try:
+        process=subprocess.Popen([resolved,'open',str(Path(directory).resolve())],start_new_session=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    except OSError as error:
+        raise ValueError('OKF bundle is exported. Studio could not launch: '+str(error)) from error
     return process.pid

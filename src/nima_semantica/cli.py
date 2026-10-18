@@ -295,6 +295,12 @@ def private_sessions(binding):
 
 
 def project_init(args, config):
+    from .deletion import installation_lifecycle
+    with installation_lifecycle(config):
+        return _project_init(args, config)
+
+
+def _project_init(args, config):
     from .storage import GraphStore
     corpus, project = identifier(args.corpus), identifier(args.project)
     directory = project_path(config, corpus, project)
@@ -333,7 +339,9 @@ def project_init(args, config):
     if args.layout or not local_manifest.exists():
         override = json.loads(Path(args.layout).read_text()) if args.layout else None
         binding["layout"] = resolve_layout(binding.get("layout", config.project_layout.model_dump()), override).model_dump()
+    binding["workspaces"] = sorted(set(binding.get("workspaces", []) + [str(Path(args.path).resolve())]))
     changed = install_harness(args.path, args.config or configuration_path(), binding, args.harness.split(","))
+    write_json(manifest, binding)
     if binding.get("layout"):
         write_json(manifest, binding)
         scaffold(args.path, binding)
@@ -625,10 +633,24 @@ def main(argv=None):
     service_setup.add_argument("--proof-port", type=int, default=7881)
     service_setup.add_argument("--math-port", type=int, default=7882)
     service_setup.add_argument("--start", action="store_true")
-    commands.add_parser("list", help="List registered corpora (local, no service calls)")
+    listing = commands.add_parser("list", help="List registered corpora, or projects in --corpus (local, no service calls)")
+    listing.add_argument("--corpus", help="List projects registered in this corpus")
     project = commands.add_parser("project").add_subparsers(dest="action", required=True)
-    listing = project.add_parser("list", help="List locally registered projects")
-    listing.add_argument("--corpus", help="Only list projects in this corpus; defaults to all corpora")
+    corpus_commands = commands.add_parser("corpus", help="Manage corpus lifecycle").add_subparsers(dest="action", required=True)
+    for parent, is_project in ((project, True), (corpus_commands, False)):
+        deletion = parent.add_parser("delete", help="Preview deletion; apply only an exact saved preview hash")
+        if is_project:
+            deletion.add_argument("project")
+            deletion.add_argument("--corpus", required=True)
+        else:
+            deletion.add_argument("corpus")
+            deletion.set_defaults(project=None)
+        deletion.add_argument("--preview-file")
+        deletion.add_argument("--apply", help="Exact saved preview hash")
+        deletion.add_argument("--workspace", action="append", default=[], help="Workspace location for a legacy binding; repeat as needed")
+    deletion_recovery = maintenance.add_parser("deletion-recover", help="Complete an interrupted approved deletion")
+    deletion_recovery.add_argument("manifest")
+    deletion_recovery.add_argument("--mode", choices=["complete"], required=True)
     promotion = project.add_parser("promote", help="Preview or explicitly approve sharing the project's graph with its corpus")
     promotion.add_argument("project"); promotion.add_argument("--corpus", default="papers")
     promotion.add_argument("--rationale", required=True)
@@ -702,8 +724,12 @@ def main(argv=None):
                 else: emit(result)
             return 0
         if args.command == "list":
-            from .installation import list_corpora
-            emit({"corpora": list_corpora(config)})
+            from .installation import list_corpora, list_projects
+            emit({"projects": list_projects(config, args.corpus)} if args.corpus is not None else {"corpora": list_corpora(config)})
+            return 0
+        if args.command in {"project", "corpus"} and args.action == "delete":
+            from .deletion import deletion_command
+            emit(deletion_command(args, config))
             return 0
         if args.command == "doctor":
             return doctor(config, args)
@@ -726,6 +752,10 @@ def main(argv=None):
                       "preview_file": args.preview_file, "skill_conflicts": preview.get("skill_conflicts",[])})
             return 0
         if args.command == "maintenance":
+            if args.action == "deletion-recover":
+                from .deletion import recover_deletion
+                emit(recover_deletion(config, args.manifest))
+                return 0
             from .private_service import database_owner
             from .receipt_migration import migrate_proof_receipts, migrate_math_payloads, reclaim_sqlite
             if args.action == "receipt-migration":
@@ -751,10 +781,7 @@ def main(argv=None):
             emit(result)
             return 0
         if args.command == "project":
-            if args.action == "list":
-                from .installation import list_projects
-                emit({"projects": list_projects(config, args.corpus)})
-            elif args.action == "promote":
+            if args.action == "promote":
                 return project_promote(args, config)
             elif args.action == "graph":
                 from .release_cli import graph_command

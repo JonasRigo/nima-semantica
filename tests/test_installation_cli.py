@@ -10,8 +10,8 @@ def test_list_empty_installation_does_not_create_storage(tmp_path, capsys):
     config = tmp_path / "installation.json"
     data = tmp_path / "not-created"
     write_json(config, Installation(data_root=str(data), llm=ModelProfile(model="fixture")).model_dump())
-    for command, key in [(["list"], "corpora"), (["project", "list"], "projects"),
-                         (["project", "list", "--corpus", "missing"], "projects")]:
+    for command, key in [(["list"], "corpora"),
+                         (["list", "--corpus", "missing"], "projects")]:
         assert main(["--config", str(config), *command]) == 0
         assert json.loads(capsys.readouterr().out) == {key: []}
     assert not data.exists()
@@ -43,17 +43,17 @@ def test_project_list_filters_and_checks_registration(tmp_path, capsys):
         write_json(tmp_path / "projects" / corpus / project / "project.json",
                    {"corpus_id": corpus, "project_id": project})
     (tmp_path / "projects/alpha/incomplete").mkdir()
-    prefix = ["--config", str(config), "project", "list"]
-    assert main(prefix) == 0
+    prefix = ["--config", str(config), "list"]
+    assert main(prefix + ["--corpus", "alpha"]) == 0
     projects = json.loads(capsys.readouterr().out)["projects"]
-    assert [(p["corpus_id"], p["project_id"]) for p in projects] == [("alpha", "one"), ("alpha", "two"), ("zeta", "one")]
+    assert [(p["corpus_id"], p["project_id"]) for p in projects] == [("alpha", "one"), ("alpha", "two")]
     assert all(p["mcp_url"] == "" for p in projects)
     assert main(prefix + ["--corpus", "alpha"]) == 0
     assert len(json.loads(capsys.readouterr().out)["projects"]) == 2
     assert main(prefix + ["--corpus", "../alpha"]) == 2
     assert "IDs must" in capsys.readouterr().err
     write_json(tmp_path / "projects/alpha/one/project.json", {"corpus_id": "other", "project_id": "one"})
-    assert main(prefix) == 2
+    assert main(prefix + ["--corpus", "alpha"]) == 2
     assert "scope mismatch" in capsys.readouterr().err
 
 

@@ -16,6 +16,9 @@ class ResearchRetrievalFields(BaseComponent):
     nima_manifest = manifest_for_component("ResearchRetrievalFields")
     inputs = [MessageTextInput(name="query", display_name="Research query", value="x"),
         DropdownInput(name="mode", display_name="Retrieval mode", options=["lexical", "vector", "hybrid"], value="hybrid"),
+        DropdownInput(name="knowledge",display_name="Knowledge selection",options=["legacy","sources","graph","both"],value="legacy"),
+        DropdownInput(name="visibility",display_name="Visible content",options=["corpus","project","both"],value="both"),
+        IntInput(name="max_context_tokens",display_name="Context token upper bound (0 = legacy)",value=0),
         BoolInput(name="include_provisional", display_name="Include provisional fast evidence", value=True),
         StrInput(name="projection_id", display_name="Exact projection ID (optional)", value=""),
         StrInput(name="expected_store_revision", display_name="Expected store revision (optional)", value=""),
@@ -42,7 +45,9 @@ class ResearchRetrievalFields(BaseComponent):
             override = strict_json_object(override) if override.strip() else {}
         if not isinstance(override, dict):
             raise ValueError("expected a JSON object")
-        payload = {name: getattr(self, name) for name in ResearchRetrievalRequest.model_fields}
+        payload = {name: getattr(self, name, field.default) for name,field in ResearchRetrievalRequest.model_fields.items()}
+        if payload["knowledge"] == "legacy": payload["knowledge"] = None
+        if not payload["max_context_tokens"]: payload["max_context_tokens"] = None
         for name in ("projection_id", "expected_store_revision", "operation_id", "run_id"):
             payload[name] = payload[name] or None
         payload.update(override)

@@ -25,7 +25,7 @@ def bind_input_origins(graph, arguments):
         op, value = step.get("op"), step.get("value")
         if op == "symbol" and (not isinstance(value, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", value)):
             raise ValueError("symbol input must be a simple name")
-        if op not in {"symbol", "integer", "rational", "imaginary_unit"}:
+        if op not in {"symbol", "integer", "rational", "imaginary_unit", "infinity"}:
             if assumption:
                 raise ValueError("assumption belongs on an input; derive operations from operands")
             continue
@@ -46,8 +46,8 @@ def bind_input_origins(graph, arguments):
             if exact:
                 provenance.extend(exact)
                 bindings.append({"step_id": step["id"], "node_ids": exact, "basis": "exact_task_symbol"})
-        elif not provenance and (op == "imaginary_unit" or (op == "integer" and type(value) is int and value in (0, 1))):
-            node = graph._put("arithmetic_literal", "I" if op == "imaginary_unit" else value,
+        elif not provenance and (op in {"imaginary_unit", "infinity"} or (op == "integer" and type(value) is int and value in (0, 1))):
+            node = graph._put("arithmetic_literal", "I" if op == "imaginary_unit" else "oo" if op == "infinity" else value,
                 "observed", [], {"kind": "controller_arithmetic", "authority": "Arithmetic literal only; not evidence for a domain coefficient or cancellation."})
             provenance.append(node["id"])
             bindings.append({"step_id": step["id"], "node_id": node["id"], "basis": "arithmetic_literal_only"})

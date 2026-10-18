@@ -59,6 +59,17 @@ class SourceInput(StrictModel):
         return data
 
 
+class LocalStagedSourceInput(StrictModel):
+    name: str = Field(min_length=1,max_length=256)
+    staging_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def filename(self):
+        if "/" in self.name or "\\" in self.name or PurePath(self.name).suffix.lower() not in MEDIA:
+            raise ValueError("Staged source name must be a supported filename")
+        return self
+
+
 class AcquiredSourceInput(StrictModel):
     """A scoped, already archived acquisition; no source bytes in the request."""
     name: str = Field(min_length=1, max_length=256)
@@ -80,6 +91,9 @@ MAX_ACQUIRED_SOURCE_BYTES = 20_000_000
 def _source_bytes(source, store, context):
     if isinstance(source, SourceInput):
         return source.bytes()
+    if isinstance(source, LocalStagedSourceInput):
+        from .local_staging import resolve_staged
+        source = resolve_staged(source, store, context)
     if store is None or context is None:
         raise NimaError("acquired source requires a scoped store and receipted preparation")
     scope = {"corpus_id": context.corpus_id, "project_id": context.project_id}
@@ -106,9 +120,10 @@ def _source_bytes(source, store, context):
 
 class PrepareSourcesRequest(StrictModel):
     mode: Literal["preview", "prepare_index", "index_check", "index_rebuild"] = "preview"
-    sources: tuple[SourceInput | AcquiredSourceInput, ...] = Field(default=(), max_length=16)
+    sources: tuple[SourceInput | AcquiredSourceInput | LocalStagedSourceInput, ...] = Field(default=(), max_length=16)
     index_mode: Literal["lexical", "vector"] = "lexical"
     preparation_mode: Literal["full", "fast"] = "full"
+    source_scope: Literal["corpus", "project"] | None = None
     operation_id: GraphIdentifier | None = None
     run_id: GraphIdentifier | None = None
     expected_store_revision: GraphIdentifier | None = None
@@ -144,6 +159,8 @@ class SourceToolContext(StrictModel):
     allow_embeddings: StrictBool = False
     allow_pdf: StrictBool = False
     projection_limits: dict | None = None
+    local_staging_root: str | None = None
+    max_pdf_evidence_bytes: int = Field(default=20_000_000,ge=1,le=2_000_000_000)
 
 
 def failure(code, *, status="failed", data=None, receipts=()):
@@ -167,7 +184,8 @@ def _attempt(store, context, stage, operation_id, payload, work, *, run_id=None,
     identifier = identity({"stage": stage, "operation_id": operation_id, **_scope(context)})
     # Projection policy changes must not invalidate historical preparation or
     # embedding receipts; only the projection stage binds its effective limits.
-    request_hash = identity({"payload": payload, "context": context.model_dump(mode="json", exclude={"projection_limits"})})
+    payload_identity = payload.model_dump(mode="json", exclude={"source_scope"} if payload.source_scope is None else set()) if isinstance(payload,PrepareSourcesRequest) else payload
+    request_hash = identity({"payload": payload_identity, "context": context.model_dump(mode="json", exclude={"projection_limits", "local_staging_root", "max_pdf_evidence_bytes"})})
     with store.joined_transaction():
         replay = receipts.replay(identifier, **_scope(context), request_hash=request_hash)
         if replay is not None:
@@ -239,7 +257,7 @@ def _normalize(source, pdf_normalizer, *, store=None, context=None, preparation_
                 raise NimaError("PDF evidence artifact integrity mismatch")
             artifacts[digest] = content
             diagnostic["artifact_ids"].append(digest)
-    if sum(len(data) for data in artifacts.values()) > 20_000_000:
+    if sum(len(data) for data in artifacts.values()) > (context.max_pdf_evidence_bytes if context else 20_000_000):
         raise NimaError("PDF evidence bundle exceeds input limit")
     return data, text, diagnostics, artifacts
 
@@ -247,6 +265,8 @@ def _normalize(source, pdf_normalizer, *, store=None, context=None, preparation_
 def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolContext, *, pdf_normalizer=None):
     request = PrepareSourcesRequest.model_validate(request.model_dump(mode="json"))
     context = SourceToolContext.model_validate(context.model_dump(mode="json"))
+    if request.source_scope is not None:
+        context=context.model_copy(update={"source_scope":request.source_scope})
     if request.mode in {"index_check", "index_rebuild"}:
         from .index_recovery import check_index, rebuild_index
         from .projection_limits import ProjectionLimits
@@ -301,6 +321,9 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
         all_regions, prepared, service_receipts = [], [], []
         unresolved_region_count = 0
         for source in request.sources:
+            if isinstance(source,LocalStagedSourceInput):
+                from .local_staging import resolve_staged
+                source=resolve_staged(source,store,context)
             data, text, diagnostics, artifacts = _normalize(source, pdf_normalizer, store=store, context=context,
                                                            preparation_mode=request.preparation_mode)
             unresolved = sum(item.get("status") == "unresolved" for item in diagnostics)
@@ -392,6 +415,7 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
     if request.index_scope == "project" and request.projection_max_tokens is None and request.projection_max_regions is None:
         payload.pop("index_scope", None); payload.pop("projection_max_tokens", None)
         payload.pop("projection_max_regions", None)
+    if payload.get("source_scope") is None: payload.pop("source_scope",None)
     return _attempt(store, context, "source_preparation", request.operation_id, payload, work,
         run_id=request.run_id, expected=request.expected_store_revision)
 

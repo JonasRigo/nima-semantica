@@ -42,6 +42,7 @@ _INVENTORY = (
     ("save_ontology", "Save Ontology", "Validate and save an immutable ontology profile.", "Explicit ontology write; no scientific claim admission."),
     ("prepare_and_index_sources", "Prepare and Index Sources", "Prepare exact source regions and derived retrieval indexes.", "Explicit source/index writes; source content is not verified truth."),
     ("inspect_corpus", "Inspect Corpus", "Inspect scoped corpus inventory and readiness.", "Read-only inventory; readiness is not evidence fidelity."),
+    ("answer_knowledge", "Answer Knowledge", "Answer from bounded corpus and project knowledge.", "One answer call with exact current citations; no scientific graph mutation."),
     ("retrieve_research_context", "Retrieve Research Context", "Retrieve revision-bound passages and graph context.", "Read-only retrieval with authorized scope and exact evidence references."),
     ("read_evidence", "Read Evidence", "Read exact source passages and provenance.", "Read-only, scope-checked source access."),
     ("calculate_mathematics", "Calculate Mathematics", "Execute symbolic or numerical calculations.", "Isolated execution; results do not certify correspondence to a source claim."),
@@ -101,6 +102,11 @@ def public_tool_catalog() -> tuple[PublicToolDescriptor, ...]:
                 input_schema=InspectCorpusRequest.model_json_schema(), output_schema=ToolResult.model_json_schema(),
                 examples=({}, {"offset": 0, "limit": 10}),
                 canvas_path="examples/langflow_replacement/inspect_corpus.json")
+        elif tool_id == "answer_knowledge":
+            from .knowledge_chat import KnowledgeAnswerRequest
+            details=dict(implementation="implemented",visual_approval="not_ready",contract_version="1",
+                input_schema=KnowledgeAnswerRequest.model_json_schema(),output_schema=ToolResult.model_json_schema(),
+                examples=({"query":"What assumptions are stated?","mode":"lexical"},),canvas_path="examples/langflow_replacement/answer_knowledge.json")
         elif tool_id == "retrieve_research_context":
             from .research_retrieval import ResearchRetrievalRequest
             details = dict(implementation="implemented", visual_approval="approved", contract_version="1",

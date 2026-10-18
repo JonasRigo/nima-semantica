@@ -14,14 +14,14 @@ def evidence_locator(region):
     locator = {key: value[key] for key in ("start", "end", "ordinal")}
     if preparation_quality(region) == PROVISIONAL:
         locator.update(preparation_quality=PROVISIONAL, warning=WARNING)
-    for key in ("extraction_method", "acquisition_id", "provenance_artifact_id"):
+    for key in ("extraction_method", "acquisition_id", "provenance_artifact_id", "pdf_pages", "pdf_page_precision", "normalization_record_id", "math_transcription"):
         if key in value.get("metadata", {}):
             locator[key] = value["metadata"][key]
     return locator
 
 
 def provisional_object(item):
-    return item.properties.get("preparation_quality") == PROVISIONAL or any(
+    return item.properties.get("preparation_quality") == PROVISIONAL or any(ref.locator.get("math_transcription")=="unresolved" for ref in item.evidence) or any(
         ref.locator.get("preparation_quality") == PROVISIONAL for ref in item.evidence)
 
 

@@ -147,7 +147,7 @@ def expand_reuse(graph, arguments):
             index += 1
         alias = f"reuse_{index}"
         used.add(alias)
-        item = {k: copy.deepcopy(step[k]) for k in ("op", "meaning", "application", "value", "raw_definition", "index_scope", "index_sum") if k in step}
+        item = {k: copy.deepcopy(step[k]) for k in ("op", "meaning", "application", "value", "raw_definition", "index_scope", "index_sum", "options", "symbol_assumptions") if k in step}
         if step["op"] == "matrix":
             item["value"] = step["shape"]
         if step.get("declared_physical_input_premise"):

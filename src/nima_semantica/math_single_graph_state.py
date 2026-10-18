@@ -214,8 +214,8 @@ class SingleCalculationGraph:
             args = step["args"]
             parents = list(dict.fromkeys([staged["nodes"][identifier]["id"],
                 *[local_nodes[arg]["id"] for arg in args], *step["provenance"]]))
-            input_step = op in {"symbol", "integer", "rational", "imaginary_unit"}
-            structural = op == "imaginary_unit" or (op == "integer" and step.get("value") in (0, 1))
+            input_step = op in {"symbol", "integer", "rational", "imaginary_unit", "infinity"}
+            structural = op in {"imaginary_unit", "infinity"} or (op == "integer" and step.get("value") in (0, 1))
             task_dependent[identifier] = (op == "symbol" and bool(step["provenance"])) or any(
                 task_dependent[arg] for arg in args)
             structural_scalar[identifier] = structural or (op in {
@@ -236,7 +236,7 @@ class SingleCalculationGraph:
                 _proper_rational(values[args[1]]))
             duplicate_derived = (op in {"add", "sum"} and len(set(args)) != len(args) and
                 any(args.count(arg) > 1 and task_dependent[arg] and
-                    local_nodes[arg]["operation"] not in {"symbol", "integer", "rational", "imaginary_unit"}
+                    local_nodes[arg]["operation"] not in {"symbol", "integer", "rational", "imaginary_unit", "infinity"}
                     for arg in set(args)))
             application_reason = ("declared_physical_rule" if physical_application else
                 "structural_scalar_applied_to_task_quantity" if inferred_application else
@@ -264,9 +264,19 @@ class SingleCalculationGraph:
                 operation=op, meaning=step["meaning"], raw_definition=raw_definition,
                 application=step.get("application", "algebraic"),
                 application_reason=application_reason,
-                declared_value=step.get("value") if input_step else None)
+                declared_value=step.get("value") if input_step else None,
+                calculus=payload.get("calculus", {}).get(identifier),
+                options=step.get("options"), symbol_assumptions=step.get("symbol_assumptions"),
+                discarded_remainder=(payload.get("calculus", {}).get(args[0], {}).get("remainder") if op == "truncate_series" else None))
             local_nodes[identifier] = node
-            if plan.get("typed_applicability") and re.search(r"\b(?:zoo|nan|oo)\b", values[identifier]):
+            calculus_info = payload.get("calculus", {}).get(identifier, {})
+            calculus_issue = ("symbol domain assumptions require independent support" if step.get("symbol_assumptions") else
+                "conditional or unevaluated calculus result requires applicability review" if calculus_info.get("conditional") or calculus_info.get("unevaluated") else
+                "asymptotic truncation requires a stated order and validity regime" if op == "truncate_series" else
+                "selected conditional branch requires its retained condition" if op == "piecewise_branch" else None)
+            if calculus_issue:
+                self.obligations[node["id"]] = {"root_id": node["id"], "status": "open", "reason": calculus_issue}
+            elif op != "infinity" and plan.get("typed_applicability") and re.search(r"\b(?:zoo|nan|oo)\b", values[identifier]):
                 self.obligations[node["id"]] = {"root_id": node["id"], "status": "open",
                     "reason": "nonfinite calculation result requires inspection of its operands"}
             elif provisional:

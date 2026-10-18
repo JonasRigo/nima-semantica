@@ -72,3 +72,19 @@ def test_pending_flow_edit_is_not_overwritten(monkeypatch, tmp_path):
         workflow.publish_flows(config, 'corpus', 'project', directory)
     assert calls.count(('POST', '/api/v1/flows/')) == 1
     assert json.loads((directory / 'publication.json').read_text())['flows']['tool']['pending_verification']
+
+
+def test_new_project_names_distinguish_scopes_before_slug_truncation(monkeypatch,tmp_path):
+    names=[]
+    for project in ['first','second']:
+        (tmp_path/project).mkdir()
+        config,directory,calls,_=publisher(monkeypatch,tmp_path/project,[200])
+        client_factory=workflow.api
+        def client(config):
+            original=client_factory(config)
+            original.event_hooks['request']=[lambda request: names.append(json.loads(request.content)['name']) if request.method=='POST' and request.url.path=='/api/v1/projects/' else None]
+            return original
+        monkeypatch.setattr(workflow,'api',client)
+        workflow.publish_flows(config,'shared-corpus',project,directory)
+    assert len(names)==2 and names[0][:20]!=names[1][:20]
+    assert all('/' not in name for name in names)

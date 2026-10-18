@@ -8,7 +8,7 @@ from .assets import verify_assets
 from .support import PdfError, canonical_json, sha256_bytes, sha256_file
 
 
-def normalize_pdf(source, models, output, *, progress=None):
+def normalize_single_pdf(source, models, output, *, progress=None):
     # These must be in force before importing the model framework.
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -55,6 +55,11 @@ def normalize_pdf(source, models, output, *, progress=None):
     _atomic_formula_artifact(document_dir / "result.json", canonical_json(response))
     _atomic_formula_artifact(document_dir / "result.sha256", sha256_bytes(canonical_json(response)).encode())
     return response
+
+
+def normalize_pdf(source, models, output, *, progress=None):
+    from .book import normalize_book
+    return normalize_book(source, models, output, verify_assets(models), progress=progress)
 
 
 def main():

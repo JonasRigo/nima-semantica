@@ -34,7 +34,7 @@ Install the release wheel, then run the setup wizard:
 
 ```sh
 python -m venv .venv
-.venv/bin/pip install 'nima_semantica-0.2.1-py3-none-any.whl[mcp]'
+.venv/bin/pip install 'nima_semantica-0.3.0-py3-none-any.whl[mcp]'
 .venv/bin/nima setup --provision --pdf --lean
 .venv/bin/nima project init my-research --corpus papers --path /path/to/project
 ```
@@ -59,7 +59,7 @@ See [workflow contribution](docs/CONTRIBUTING_WORKFLOWS.md) to add your own Lang
 ## Research skills
 
 Skills give your coding agent adaptable procedures for using the tools and retaining useful results.
-Project initialization installs all ten for your selected harnesses.
+Project initialization installs all twelve for your selected harnesses.
 
 | Skill | What you can ask for |
 | --- | --- |
@@ -74,6 +74,7 @@ Project initialization installs all ten for your selected harnesses.
 | [Draft proof](docs/skills/nima-draft-proof.md) | Alternative strategies, lemmas and open obligations. |
 | [Conduct proof](docs/skills/nima-conduct-proof.md) | A developed argument in a private proof graph. |
 | [LaTeX to Lean](docs/skills/nima-latex-to-lean.md) | Formalization and scoped Lean verification. |
+| [Write reports](docs/skills/nima-write-report.md) | Scientific papers, research reports, progress reports and proof reports from retained evidence. |
 
 See the [skill guide](docs/skills/README.md) for examples and the [tool catalogue](docs/TOOLS.md) for callable interfaces.
 
@@ -85,9 +86,11 @@ python -m pytest -q
 ```
 
 NIMA is under active development; contributions, including custom Langflow workflows, are welcome.
-Use [CITATION.cff](CITATION.cff) for author and release metadata. The [v0.1.0 archive](https://doi.org/10.5281/zenodo.22998905) remains available; no versioned DOI is asserted for the GitHub-only v0.2.1 release.
+Use [CITATION.cff](CITATION.cff) for author and release metadata. The [v0.1.0 archive](https://doi.org/10.5281/zenodo.22998905) remains available; no versioned DOI is asserted for the v0.3.0 source update.
 See the [reliability guide](docs/RELIABILITY.md) for shared private MCP owners, receipt references, execution budgets and recoverable configuration changes.
 See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for project and third-party terms.
 
 Optional [normalized reasoning](docs/NORMALIZED_REASONING.md) uses project definitions while retaining provisional new concepts and definition challenges.
 It is off by default and remains non-blocking when vocabulary is unavailable.
+
+See [standard knowledge, workspace layouts, Studio, calculation documents and reporting](docs/KNOWLEDGE_AND_REPORTING.md) for the v0.3.0 features.

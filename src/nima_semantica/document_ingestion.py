@@ -99,16 +99,31 @@ class DocumentIngestionService:
             document_record_id = self._put_idempotent(document)
             self._put_idempotent(normalized)
         region_ids = []
+        # Large parser manifests are stored once; only local diagnostics travel with a chunk.
+        from .models import canonical
+        large_diagnostics = len(diagnostics)>1024 or len(canonical(diagnostics))>65536
+        located = []
+        if large_diagnostics:
+            for d in diagnostics:
+                if type(d.get("start")) is int and type(d.get("end")) is int:
+                    located.append((d["start"],d["end"],d))
+                elif d.get("kind")=="source_item" and len(d.get("text",""))>=40:
+                    first=text.find(d["text"])
+                    if first>=0 and text.find(d["text"],first+1)<0: located.append((first,first+len(d["text"]),d))
         for item in selected:
             regional_diagnostics = diagnostics
             diagnostic_links = {}
-            if len(diagnostics) > 1024:
+            if large_diagnostics:
                 start, end = item.content["start"], item.content["end"]
-                regional_diagnostics = [d for d in diagnostics
-                    if not (type(d.get("start")) is int and type(d.get("end")) is int)
-                    or (d["start"] < end and d["end"] > start)]
+                regional_diagnostics = [d for a,b,d in located if a<end and b>start]
+                pages=sorted({p["page"] for d in regional_diagnostics for p in d.get("provenance",[]) if type(p.get("page")) is int})
                 diagnostic_links = {"normalization_record_id": normalized.id,
                                     "document_diagnostic_count": len(diagnostics)}
+                if pages: diagnostic_links.update(pdf_pages=pages,pdf_page_precision="located_source_items")
+            if any(d.get("kind")=="formula" for d in regional_diagnostics):
+                diagnostic_links["math_transcription"]="machine_transcribed_unverified"
+            if any(d.get("status")=="unresolved" and type(d.get("start")) is int and d["start"]<item.content["end"] and d.get("end",0)>item.content["start"] for d in regional_diagnostics):
+                diagnostic_links["math_transcription"]="unresolved"
             region = SourceRegion(
                 source_id=descriptor.source_id,
                 corpus_id=descriptor.corpus_id,

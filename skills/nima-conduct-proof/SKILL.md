@@ -16,4 +16,6 @@ Resolve represented obligations only with exact supporting nodes and an explicit
 Inspect the frontier before submitting a selected argument. Superseded support and open necessary obligations prevent completed conduct sessions.
 A completed informal argument remains uncertified. Optional Lean evidence retains its exact formal scope.
 Close partial with remaining work when appropriate. Save requested reports through Save Research Analysis and record project knowledge only through approved updates.
-For requested LaTeX output use [the SciPost-style report template](assets/scipost-report.tex), adapting sections to the actual result rather than filling them with invented evidence.
+For requested LaTeX output use the [shared scientific reporting skill](../nima-write-report/SKILL.md) and its SciPost-style proof-report template.
+Adapt sections to the actual result and retain every open obligation in the appendix.
+The old local template path remains available for compatibility.

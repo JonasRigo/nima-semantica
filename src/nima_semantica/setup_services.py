@@ -157,8 +157,10 @@ def provision(config, config_path, *, pdf=False, lean=False):
         allowed_hosts.add(urlsplit(config.embedding.container_url or config.embedding.base_url).hostname)
     allowed_hosts.discard(None)
     compose = {"services": {"langflow": {"image": f"nima-langflow:{__version__}", "network_mode": "host",
+        "user": f"{root.stat().st_uid}:{root.stat().st_gid}",
         "environment": {"LANGFLOW_AUTO_LOGIN": "true", "LANGFLOW_SKIP_AUTH_AUTO_LOGIN": "true", "DO_NOT_TRACK": "true",
             "LANGFLOW_SSRF_ALLOWED_HOSTS": ",".join(sorted(allowed_hosts)),
+            "HOME": "/var/lib/langflow", "XDG_CACHE_HOME": "/var/lib/langflow/cache",
             "LANGFLOW_CONFIG_DIR": "/var/lib/langflow", "LANGFLOW_SAVE_DB_IN_CONFIG_DIR": "true", "LANGFLOW_COMPONENTS_PATH": "/nima-components",
             "LANGFLOW_WORKFLOW_EXECUTION_TIMEOUT": "3600", "LANGFLOW_WORKER_TIMEOUT": "3600",
             "LANGFLOW_MCP_TOOL_EXECUTION_TIMEOUT": "3600", "LANGFLOW_MCP_SESSION_IDLE_TIMEOUT": "4000",

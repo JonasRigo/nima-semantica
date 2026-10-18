@@ -53,3 +53,13 @@ Use a new request ID for a new action; replay uncertain delivery only with ident
 Never automatically retry interrupted execution.
 Tool access does not authorize changing scope, enabling capabilities, ingesting sources, publishing graphs or spending beyond user approval.
 Private graph export does not record project progress; use separately authorized research-recording tools when required.
+
+## Human-readable calculation document
+
+After completed or partial work, run the configured CLI's `nima math report SESSION --path WORKSPACE`.
+Resolve the calculations folder through `.nima/project.json` rather than inventing a destination.
+The exporter writes a detailed derivation of the selected outputs and their atomic dependencies, exact node values and provenance, plus a full historical audit and every open obligation.
+It uses the session's pinned vocabulary; an unsealed glossary is explicitly provisional.
+Exporting does not rerun mathematics, resolve obligations or admit project knowledge.
+Keep `calculation.md`, `graph.json` and `provenance.json` together and link the document in the final response.
+For a requested paper or report use [the shared reporting skill](../nima-write-report/SKILL.md).

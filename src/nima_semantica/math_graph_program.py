@@ -9,6 +9,8 @@ import ast
 import hashlib
 import re
 
+from .math_calculus import ARITIES, WORKER_HELPERS, expression as calculus_expression, validate_options
+
 
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,63}\Z")
 _ARITY = {"add": (2, 2), "subtract": (2, 2), "multiply": (2, 2),
@@ -17,11 +19,11 @@ _ARITY = {"add": (2, 2), "subtract": (2, 2), "multiply": (2, 2),
     "kronecker": (2, 2), "trace": (1, 1), "transpose": (1, 1),
     "adjoint": (1, 1), "substitute": (3, 3), "sum": (1, 64),
     "matrix": (1, 64), "symbol": (0, 0), "integer": (0, 0),
-    "rational": (0, 0), "imaginary_unit": (0, 0)}
+    "rational": (0, 0), "imaginary_unit": (0, 0), **ARITIES}
 
 
 def _input_step(step: dict) -> bool:
-    return step["op"] in {"symbol", "integer", "rational", "imaginary_unit"}
+    return step["op"] in {"symbol", "integer", "rational", "imaginary_unit", "infinity"}
 
 
 def _raw_numeric_definition(graph, identifier, op, value, provenance, declaration):
@@ -251,10 +253,14 @@ def compile_graph_program(graph, steps: list[dict], outputs: dict[str, str], ind
         "    try:", "        return compute()", "    except Exception as error:",
         "        print(json.dumps({'operation_error': {'step_id': step, 'operation': op, 'inputs': {k:str(v) for k,v in inputs.items()}, 'error': type(error).__name__, 'diagnostic': str(error)[:1000]}}))",
         "        raise"])
+    calculus = any(isinstance(step, dict) and ((isinstance(step.get("op"), str) and step["op"] in ARITIES) or step.get("symbol_assumptions")) for step in steps)
+    if calculus:
+        lines.extend(WORKER_HELPERS)
+    symbol_domains = {}
     sets = {item.set_id: item for item in indexed_sets}
     counts, suspected_counts, member_scopes, sums = {}, {}, {}, {}
     for index, raw in enumerate(steps):
-        if not isinstance(raw, dict) or set(raw) - {"id", "op", "args", "value", "provenance", "meaning", "application", "proposal_step_id", "index_scope", "index_sum", "index_count_of", "raw_definition"}:
+        if not isinstance(raw, dict) or set(raw) - {"id", "op", "args", "value", "provenance", "meaning", "application", "proposal_step_id", "index_scope", "index_sum", "index_count_of", "raw_definition", "options", "symbol_assumptions"}:
             raise ValueError("invalid atomic calculation step fields")
         identifier, op = raw.get("id"), raw.get("op")
         args, provenance = raw.get("args", []), raw.get("provenance", [])
@@ -262,6 +268,7 @@ def compile_graph_program(graph, steps: list[dict], outputs: dict[str, str], ind
             raise ValueError("atomic step needs a unique simple ID")
         if not isinstance(op, str) or op not in _ARITY or not isinstance(args, list) or not isinstance(provenance, list):
             raise ValueError("unknown operation or malformed atomic inputs")
+        validate_options(raw)
         lower, upper = _ARITY[op]
         if not lower <= len(args) <= upper:
             expected = str(lower) if lower == upper else f"{lower}–{upper}"
@@ -352,7 +359,11 @@ def compile_graph_program(graph, steps: list[dict], outputs: dict[str, str], ind
         if op == "symbol":
             if not isinstance(value, str) or not _NAME.fullmatch(value):
                 raise ValueError("symbol input must be a simple name")
-            expression = f"sp.Symbol({value!r})"
+            domains = raw.get("symbol_assumptions") or {}
+            if value in symbol_domains and symbol_domains[value] != domains:
+                raise ValueError("same symbol cannot have different domain assumptions")
+            symbol_domains[value] = domains
+            expression = f"sp.Symbol({value!r}, **{domains!r})" if domains else f"sp.Symbol({value!r})"
         elif op == "integer":
             if type(value) is not int or abs(value) > 10**9:
                 raise ValueError("integer input out of range")
@@ -362,6 +373,9 @@ def compile_graph_program(graph, steps: list[dict], outputs: dict[str, str], ind
                     any(type(item) is not int or abs(item) > 10**9 for item in value) or value[1] == 0):
                 raise ValueError("rational input requires two bounded integers and nonzero denominator")
             expression = f"sp.Rational({value[0]}, {value[1]})"
+        elif op == "infinity":
+            if value is not None: raise ValueError("infinity takes no value")
+            expression = "sp.oo"
         elif op == "imaginary_unit":
             if value is not None:
                 raise ValueError("imaginary unit takes no value")
@@ -384,7 +398,9 @@ def compile_graph_program(graph, steps: list[dict], outputs: dict[str, str], ind
                 "substitute": lambda: f"{a[0]}.subs({a[1]}, {a[2]})",
                 "sum": lambda: "(" + " + ".join(a) + ")",
             }
-            if op == "matrix":
+            if op in ARITIES:
+                expression = calculus_expression(raw, a)
+            elif op == "matrix":
                 if (not isinstance(value, list) or len(value) != 2 or
                         any(type(item) is not int or not 1 <= item <= 8 for item in value) or
                         value[0] * value[1] != len(a)):
@@ -395,6 +411,8 @@ def compile_graph_program(graph, steps: list[dict], outputs: dict[str, str], ind
         local = f"v{index}"
         actual_inputs = ", ".join(f"{arg!r}: {names[arg]}" for arg in args)
         lines.append(f"{local} = _nima_eval({identifier!r}, {op!r}, {{{actual_inputs}}}, lambda: {expression})" if diagnostics else f"{local} = {expression}")
+        if op == "piecewise_branch":
+            lines.append(f"nima_condition_{index} = str({a[0]}.args[int({a[1]})][1])")
         names[identifier] = local
         ancestry[identifier] = inherited_ids
         normalized.append({"id": identifier, "op": op, "args": list(args),
@@ -408,7 +426,8 @@ def compile_graph_program(graph, steps: list[dict], outputs: dict[str, str], ind
             **({"index_count_of": sorted(local_counts)} if op == "integer" and local_counts else {}),
             **({"raw_definition": raw_definition} if raw_definition is not None else {}),
             **({"value": value} if _input_step(raw) else {}),
-            **({"shape": value} if op == "matrix" else {})})
+            **({"shape": value} if op == "matrix" else {}),
+            **({key: raw[key] for key in ("options", "symbol_assumptions") if raw.get(key) is not None})})
     if (any(not isinstance(key, str) or not key or not isinstance(value, str) or value not in names
             for key, value in outputs.items()) or len(outputs) > 64):
         raise ValueError("outputs must name existing atomic step IDs")
@@ -421,7 +440,11 @@ def compile_graph_program(graph, steps: list[dict], outputs: dict[str, str], ind
     # One JSON result binds every intermediate value to the operation that produced it.
     step_values = ", ".join(f"{identifier!r}: str({local})" for identifier, local in names.items())
     output_values = ", ".join(f"{key!r}: str({names[value]})" for key, value in outputs.items())
-    lines.append(f"print(json.dumps({{'steps': {{{step_values}}}, 'outputs': {{{output_values}}}}}))")
+    extras = ""
+    if calculus:
+        infos = ", ".join(f"{identifier!r}: {{**_nima_calculus_info({local}), 'required_condition': nima_condition_{i}}}" if normalized[i]["op"] == "piecewise_branch" else f"{identifier!r}: _nima_calculus_info({local})" for i, (identifier, local) in enumerate(names.items()))
+        extras = ", 'calculus': {" + infos + "}"
+    lines.append(f"print(json.dumps({{'steps': {{{step_values}}}, 'outputs': {{{output_values}}}{extras}}}))")
     source = "\n".join(lines) + "\n"
     if len(source) > 32000:
         raise ValueError("compiled calculation exceeds 32000 source characters; split the calculation")

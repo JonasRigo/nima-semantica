@@ -28,7 +28,7 @@ def test_scripted_all_local_setup_has_independent_models_and_no_credentials(tmp_
     monkeypatch.setattr(setup_services, 'probe_embedding', lambda model, base_url: dict(
         model=model, base_url=base_url, provider='ollama', revision='pinned', dimension=1024))
     path = tmp_path/'config.json'
-    assert main(['--config',str(path),'setup','--non-interactive','--provider','ollama',
+    assert main(['--config',str(path),'setup','--no-modify-path','--non-interactive','--provider','ollama',
         '--model','local-chat','--base-url','http://localhost:11435','--data-root',str(tmp_path/'data'),
         '--embedding-provider','ollama','--embedding-model','local-embedding',
         '--embedding-base-url','http://localhost:11436']) == 0
@@ -52,7 +52,7 @@ def test_interactive_local_compatible_llm_and_embeddings(tmp_path, monkeypatch):
                     'compatible','local-embed','http://localhost:8080/v1','revision-1','768','-'])
     monkeypatch.setattr('builtins.input', lambda prompt: next(answers))
     path = tmp_path/'config.json'
-    assert main(['--config',str(path),'setup','--data-root',str(tmp_path/'data')]) == 0
+    assert main(['--config',str(path),'setup','--no-modify-path','--data-root',str(tmp_path/'data')]) == 0
     config = Installation.model_validate_json(path.read_text())
     assert config.llm.base_url == 'http://localhost:1234/v1' and not config.llm.credential
     assert config.embedding.base_url == 'http://localhost:8080/v1' and not config.embedding.credential

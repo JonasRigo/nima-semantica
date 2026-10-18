@@ -88,7 +88,9 @@ class Experiment(Mutation):
 
 class AtomicStep(Arguments):
     id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
-    op: Literal["add", "subtract", "multiply", "divide", "power", "negative", "simplify", "differentiate", "kronecker", "trace", "transpose", "adjoint", "substitute", "sum", "matrix", "symbol", "integer", "rational", "imaginary_unit"]
+    op: Literal["add", "subtract", "multiply", "divide", "power", "negative", "simplify", "differentiate", "kronecker", "trace", "transpose", "adjoint", "substitute", "sum", "matrix", "symbol", "integer", "rational", "imaginary_unit", "integrate", "limit", "series", "truncate_series", "gamma", "log", "exp", "infinity", "piecewise_branch"]
+    options: dict[str, str] | None = Field(default=None, description="limit/series: explicit direction +, - (limit also +-).")
+    symbol_assumptions: dict[str, bool] | None = Field(default=None, description="symbol only: true real/positive/nonnegative/negative/nonzero/integer flags; remain explicit support obligations.")
     args: list[str] = Field(default_factory=list, description="Prior local step IDs in this batch; substitute takes expression, old symbol, new value.")
     value: Any = Field(default=None, description='symbol: a simple string such as "x"; integer: integer; rational: [numerator,denominator]; matrix: [rows,columns]. Omit on computed operations.')
     provenance: list[NodeReference] = Field(default_factory=list)
@@ -182,13 +184,17 @@ for _operation, (_schema, _description) in list(TOOLS.items()):
 def operation_catalogue():
     return {"contract_version": "math-session-v1", "operations": {
         name: {"min_args": bounds[0], "max_args": bounds[1]} for name, bounds in _ARITY.items()},
-        "notes": ["symbol: value is a simple string, e.g. x; SymPy assumption dictionaries are not supported; use the separate assumption field for an explicitly provisional premise",
+        "notes": ["symbol: value is a simple string; optional symbol_assumptions accepts true real/positive/nonnegative/negative/nonzero/integer flags and creates an explicit support obligation",
             "Treat the task as a novel calculation: retrieve atomic definitions and general methods rather than relying on a remembered final formula. Derive consequential coefficients and cancellations.",
             "Explore before qualification: open support does not prevent independent calculation. Request frontier when ready to qualify selected outputs; only existing substantiation rules resolve obligations. Routine responses are compact; inspect/export retain full history.",
             "Every input needs exact provenance or an explicit assumption. Exact task-symbol bindings and arithmetic 0,1,i origins are controller-recorded; they do not justify domain interpretations. Derived steps inherit actual operand dependencies.",
             'Optional aggregations=[{"id":"total","set_id":"branches","contributions":{"left":"left_value","right":"right_value"}}] generates annotations and sum from explicit existing step IDs; never supplies missing terms.',
             'Graph reference fields accept a node ID or {"request_id":"prior-request","output_path":"answer"}; references are exact, session-local and retain the original evidence status.',
             "matrix: declare entry steps first, args in row-major order, value=[rows,columns]",
+            "integrate: args=[expression,variable] or [expression,variable,lower,upper]; indefinite output is one antiderivative (arbitrary constant is not determined). Conditions remain explicit.",
+            "limit: args=[expression,variable,point], options={direction: +|-|+-}; series: args=[expression,variable,point,order], options={direction: +|-}, order is an integer operand from 1 through 20.",
+            "piecewise_branch: args=[conditional_expression,zero_based_integer_index]; exposes a branch expression while retaining required_condition and an open applicability obligation.",
+            "series retains its Order term; truncate_series explicitly removes it and retains discarded_remainder plus an applicability obligation. gamma/log/exp are unary operations; infinity is the controlled positive infinite endpoint.",
             "Reuse compiled atomic definitions with reuse={local_alias: node_reference}; their dependency closure and unresolved support are retained. No exploratory stdout is promoted.",
             "Reconstruction compares captured observations by shared names or optional comparison_bindings. Inspect first_difference and calculation_diagnostics; representation matches are not scientific certification.",
             "Inspect exact source nodes for source_line_spans; method_span copies the selected quotation without retranscription. Applicability remains separately checked.",

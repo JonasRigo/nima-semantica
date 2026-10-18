@@ -1,0 +1,36 @@
+\documentclass[11pt]{article}
+% General SciPost-style report. Use the official journal class when required for submission.
+\usepackage[a4paper,margin=22mm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{graphicx,booktabs,enumitem,hyperref,xcolor}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{definition}[theorem]{Definition}
+\title{NIMA_REPORT_TITLE}
+\author{Author names}
+\date{\today}
+\begin{document}
+\maketitle
+\begin{abstract}
+State the question, actual result, assumptions and remaining uncertainty.
+\end{abstract}
+
+NIMA_REPORT_BODY
+
+% Use vector PDF plots or hybrid illustrations at their designed physical size.
+% Place detailed figure explanations from the companion Markdown in captions or surrounding prose.
+% Example: \includegraphics[width=\linewidth]{../../figures/example/figure.pdf}
+\appendix
+\section{Vocabulary and conventions}
+Define the symbols, domains and project-specific terms used in this document.
+Identify the sealed vocabulary and its revision when available; distinguish a provisional glossary.
+
+\section{Evidence, provenance and reproducibility}
+Record exact sources, calculation or proof sessions, code, data and execution references.
+Put detailed software identifiers here when they would interrupt the scientific explanation.
+
+\section{Open obligations and limitations}
+Report every open obligation relevant to the reported results and retain additional audit-only obligations separately.
+Distinguish completed operations from established physical or mathematical conclusions.
+\end{document}

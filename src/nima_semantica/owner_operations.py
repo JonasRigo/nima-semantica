@@ -25,7 +25,17 @@ def call_owner(url, operation, request, *, timeout=1200):
                     fields = tool.inputSchema.get("properties", {})
                     args = {"input_value": json.dumps(request)} if "input_value" in fields else {"request": request}
                     return await client.call_tool(tool.name, args)
-    response = asyncio.run(asyncio.wait_for(call(), timeout))
+    try:
+        response = asyncio.run(asyncio.wait_for(call(), timeout))
+    except BaseExceptionGroup as group:
+        leaves=[]
+        def collect(error):
+            if isinstance(error,BaseExceptionGroup):
+                for child in error.exceptions:collect(child)
+            else:leaves.append(error)
+        collect(group)
+        if len(leaves)==1 and isinstance(leaves[0],Exception):raise leaves[0] from group
+        raise
     return native_result(response, operation)
 
 

@@ -25,7 +25,7 @@ def verify_assets(root, manifest=None, *, check_versions=True):
             versions[name] = metadata.version(name)
             if versions[name] not in SpecifierSet(manifest["compatible_" + name]):
                 raise PdfError("incompatible PDF runtime", details={"package": name, "version": versions[name]})
-    code_hashes = {name: sha256_file(Path(__file__).with_name(name)) for name in ("_ported.py", "worker.py", "support.py")}
+    code_hashes = {name: sha256_file(Path(__file__).with_name(name)) for name in ("_ported.py", "worker.py", "support.py", "book.py")}
     result = {"manifest_hash": sha256_bytes(canonical_json(manifest)), "versions": versions, "code_hashes": code_hashes}
     result["profile_hash"] = sha256_bytes(canonical_json(result))
     return result

@@ -83,6 +83,34 @@
       "wrapper": "deploy/langflow_components/nima_tools/AnalyzeGraph.py"
     },
     {
+      "identity": "AnswerKnowledge",
+      "manifest": {
+        "authority": "artifact_write",
+        "capabilities": [
+          "model_call"
+        ],
+        "component_id": "answer_knowledge",
+        "diagnostics": "required",
+        "input_contract": "knowledge_answer_request",
+        "output_contract": "tool_result",
+        "receipt": {
+          "contract_id": "execution_receipt",
+          "field": "receipt_ids",
+          "mode": "emitted"
+        },
+        "registry_resource_kinds": [],
+        "revision_fields": [],
+        "schema_version": 1,
+        "scope_fields": [
+          "corpus_id",
+          "project_id"
+        ],
+        "side_effect_class": "artifact_write",
+        "version": "1"
+      },
+      "wrapper": "deploy/langflow_components/nima_tools/AnswerKnowledge.py"
+    },
+    {
       "identity": "BuildSourceProjection",
       "manifest": {
         "authority": "artifact_write",
@@ -3868,6 +3896,28 @@
             "title": "AcquiredSourceInput",
             "type": "object"
           },
+          "LocalStagedSourceInput": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Name",
+                "type": "string"
+              },
+              "staging_id": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Staging Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "staging_id"
+            ],
+            "title": "LocalStagedSourceInput",
+            "type": "object"
+          },
           "SourceInput": {
             "additionalProperties": false,
             "properties": {
@@ -4027,6 +4077,22 @@
             "default": null,
             "title": "Run Id"
           },
+          "source_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "corpus",
+                  "project"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Scope"
+          },
           "sources": {
             "default": [],
             "items": {
@@ -4036,6 +4102,9 @@
                 },
                 {
                   "$ref": "#/$defs/AcquiredSourceInput"
+                },
+                {
+                  "$ref": "#/$defs/LocalStagedSourceInput"
                 }
               ]
             },
@@ -4144,6 +4213,18 @@
               "AcquiredSourceInput",
               "properties",
               "acquired_name"
+            ]
+          },
+          {
+            "bounds": {
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "schema_path": [
+              "$defs",
+              "LocalStagedSourceInput",
+              "properties",
+              "name"
             ]
           },
           {
@@ -4421,6 +4502,208 @@
       "visual_approval": "approved"
     },
     {
+      "boundary": "One answer call with exact current citations; no scientific graph mutation.",
+      "canvas_path": "examples/langflow_replacement/answer_knowledge.json",
+      "contract_version": "1",
+      "description": "Answer from bounded corpus and project knowledge.",
+      "examples": [
+        {
+          "mode": "lexical",
+          "query": "What assumptions are stated?"
+        }
+      ],
+      "implementation": "implemented",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer_tokens": {
+            "default": 1024,
+            "maximum": 16000,
+            "minimum": 64,
+            "title": "Answer Tokens",
+            "type": "integer"
+          },
+          "context_tokens": {
+            "default": 4000,
+            "maximum": 100000,
+            "minimum": 1024,
+            "title": "Context Tokens",
+            "type": "integer"
+          },
+          "history": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 100,
+            "title": "History",
+            "type": "array"
+          },
+          "knowledge": {
+            "default": "both",
+            "enum": [
+              "sources",
+              "graph",
+              "both"
+            ],
+            "title": "Knowledge",
+            "type": "string"
+          },
+          "mode": {
+            "default": "hybrid",
+            "enum": [
+              "lexical",
+              "vector",
+              "hybrid"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "query": {
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "both",
+            "enum": [
+              "corpus",
+              "project",
+              "both"
+            ],
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "KnowledgeAnswerRequest",
+        "type": "object"
+      },
+      "name": "Answer Knowledge",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "artifacts": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Artifacts",
+            "type": "object"
+          },
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "diagnostics": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "note": {
+            "default": "Completion is operational, not mathematical certification.",
+            "title": "Note",
+            "type": "string"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          },
+          "receipt_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Receipt Ids",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "partial",
+              "failed",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation",
+          "status"
+        ],
+        "title": "ToolResult",
+        "type": "object"
+      },
+      "tool_id": "answer_knowledge",
+      "usage": {
+        "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+        "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+        "guidance": "Ask a bounded source/graph question with the selected visibility. Answers cite only the current packet; inspect assumptions and partial retrieval. One answer call uses the configured operator model.",
+        "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+        "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+        "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+        "request_limits": [
+          {
+            "bounds": {
+              "maxLength": 8000,
+              "minLength": 1
+            },
+            "schema_path": [
+              "properties",
+              "query"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 100000,
+              "minimum": 1024
+            },
+            "schema_path": [
+              "properties",
+              "context_tokens"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 16000,
+              "minimum": 64
+            },
+            "schema_path": [
+              "properties",
+              "answer_tokens"
+            ]
+          },
+          {
+            "bounds": {
+              "maxItems": 100
+            },
+            "schema_path": [
+              "properties",
+              "history"
+            ]
+          }
+        ],
+        "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+        "transport": "JSON object serialized in input_value"
+      },
+      "visual_approval": "not_ready"
+    },
+    {
       "boundary": "Read-only retrieval with authorized scope and exact evidence references.",
       "canvas_path": "examples/langflow_replacement/retrieve_research_context.json",
       "contract_version": "1",
@@ -4456,6 +4739,23 @@
             "title": "Include Provisional",
             "type": "boolean"
           },
+          "knowledge": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sources",
+                  "graph",
+                  "both"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Knowledge"
+          },
           "limit": {
             "default": 8,
             "maximum": 32,
@@ -4469,6 +4769,20 @@
             "minimum": 1,
             "title": "Max Chars",
             "type": "integer"
+          },
+          "max_context_tokens": {
+            "anyOf": [
+              {
+                "maximum": 100000,
+                "minimum": 1024,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Context Tokens"
           },
           "max_edges": {
             "default": 128,
@@ -4568,6 +4882,16 @@
             ],
             "default": null,
             "title": "Run Id"
+          },
+          "visibility": {
+            "default": "both",
+            "enum": [
+              "corpus",
+              "project",
+              "both"
+            ],
+            "title": "Visibility",
+            "type": "string"
           }
         },
         "required": [
@@ -4753,6 +5077,18 @@
             "schema_path": [
               "properties",
               "max_chars"
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 100000,
+              "minimum": 1024
+            },
+            "schema_path": [
+              "properties",
+              "max_context_tokens",
+              "anyOf",
+              0
             ]
           },
           {

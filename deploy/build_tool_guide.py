@@ -24,7 +24,7 @@ def build():
     flow = json.loads(CANVAS.read_text())
     flow.pop("id", None)
     flow["name"] = "Tool Guide"
-    flow["description"] = "Deterministic NIMA catalog lookup. Empty tool lists all 24 maintained capabilities; exact name or ID selects one. No model, dispatch, storage, or automatic tool selection. Optional MCP JSON overrides only tool. Canvas visually approved."
+    flow["description"] = "Deterministic NIMA catalog lookup. Empty tool lists the maintained capabilities; exact name or ID selects one. No model, dispatch, storage, or automatic tool selection. Optional MCP JSON overrides only tool. Canvas visually approved."
     flow["endpoint_name"] = "nima-tool-guide"
     snapshots = {}
     for index, saved in enumerate(flow["data"]["nodes"]):

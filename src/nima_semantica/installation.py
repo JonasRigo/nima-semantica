@@ -71,6 +71,10 @@ class EmbeddingProfile(Config):
     credential: str = "NIMA_EMBEDDING_API_KEY"
 
 
+from .project_layout import ProjectLayout
+from .knowledge_chat import ChatDefaults
+
+
 class Installation(Config):
     schema_version: int = 1
     data_root: str
@@ -95,6 +99,12 @@ class Installation(Config):
     lean_policy: LeanExecutionPolicy = Field(default_factory=LeanExecutionPolicy)
     retrieval_limits: RetrievalLimits = Field(default_factory=RetrievalLimits)
     projection_limits: ProjectionLimits = Field(default_factory=ProjectionLimits)
+    project_layout: ProjectLayout = Field(default_factory=ProjectLayout)
+    chat: ChatDefaults = Field(default_factory=ChatDefaults)
+    studio_executable: str = ""
+    blender_executable: str = ""
+    reporting_enabled: bool = True
+    max_pdf_evidence_bytes: int = Field(default=512_000_000,ge=1,le=2_000_000_000)
 
 
 def configuration_path():

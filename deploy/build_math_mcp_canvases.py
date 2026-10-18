@@ -109,7 +109,7 @@ def build(operation, description):
     base["nima_tool_manifest"] = {"tool_id": "nima_math_" + operation, "contract_version": "math-session-v1",
         "visual_approval": "pending", "publication": "candidate", "source_sha256": hashlib.sha256(source.encode()).hexdigest(),
         "native_sources_sha256": {file: hashlib.sha256((ROOT / "src/nima_semantica" / file).read_bytes()).hexdigest()
-            for file in ("calculation_values.py", "math_mcp_contracts.py", "math_mcp.py", "math_session_service.py", "math_interface_helpers.py", "math_repair_feedback.py", "math_evidence_handoff.py", "math_calculation_assistance.py", "math_response_views.py", "math_graph_program.py", "math_single_graph_state.py")}}
+            for file in ("calculation_values.py", "math_mcp_contracts.py", "math_mcp.py", "math_session_service.py", "math_interface_helpers.py", "math_repair_feedback.py", "math_evidence_handoff.py", "math_calculation_assistance.py", "math_response_views.py", "math_graph_program.py", "math_single_graph_state.py", "math_calculus.py")}}
     return name, source, base
 
 

@@ -4,6 +4,7 @@
 services:
   proof:
     image: ${NIMA_PRIVATE_IMAGE:?Select the installed NIMA image}
+    user: ${NIMA_SERVICE_UID:-1000}:${NIMA_SERVICE_GID:-1000}
     network_mode: host
     restart: unless-stopped
     command: ["python", "-m", "nima_semantica.private_service", "--kind", "proof", "--config", "/operator/proof.json", "--token-file", "/operator/proof.token", "--port", "7881"]
@@ -22,6 +23,7 @@ services:
     stop_grace_period: 45s
   math:
     image: ${NIMA_PRIVATE_IMAGE}
+    user: ${NIMA_SERVICE_UID:-1000}:${NIMA_SERVICE_GID:-1000}
     network_mode: host
     restart: unless-stopped
     command: ["python", "-m", "nima_semantica.private_service", "--kind", "math", "--config", "/operator/math.json", "--token-file", "/operator/math.token", "--port", "7882"]

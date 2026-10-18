@@ -66,7 +66,7 @@ def test_preview_table_and_json_share_one_execution(monkeypatch):
     result, preview, table = asyncio.run(run())
     assert len(calls) == 1
     assert result.data["status"] == "complete"
-    assert len(table) == 24
+    assert len(table) == 25
     assert json.loads(preview.text) == result.data
     assert len(preview.text.encode()) <= 32768
 

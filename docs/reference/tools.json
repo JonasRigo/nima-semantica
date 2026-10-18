@@ -1220,6 +1220,28 @@
           "title": "AcquiredSourceInput",
           "type": "object"
         },
+        "LocalStagedSourceInput": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "maxLength": 256,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "staging_id": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Staging Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "staging_id"
+          ],
+          "title": "LocalStagedSourceInput",
+          "type": "object"
+        },
         "SourceInput": {
           "additionalProperties": false,
           "properties": {
@@ -1285,6 +1307,9 @@
               },
               {
                 "$ref": "#/$defs/AcquiredSourceInput"
+              },
+              {
+                "$ref": "#/$defs/LocalStagedSourceInput"
               }
             ]
           },
@@ -1309,6 +1334,22 @@
           ],
           "title": "Preparation Mode",
           "type": "string"
+        },
+        "source_scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "corpus",
+                "project"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Scope"
         },
         "operation_id": {
           "anyOf": [
@@ -1514,6 +1555,18 @@
           "bounds": {
             "minLength": 1,
             "maxLength": 1024
+          }
+        },
+        {
+          "schema_path": [
+            "$defs",
+            "LocalStagedSourceInput",
+            "properties",
+            "name"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 256
           }
         },
         {
@@ -1794,6 +1847,208 @@
     }
   },
   {
+    "tool_id": "answer_knowledge",
+    "name": "Answer Knowledge",
+    "description": "Answer from bounded corpus and project knowledge.",
+    "implementation": "implemented",
+    "visual_approval": "not_ready",
+    "contract_version": "1",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "title": "Query",
+          "type": "string"
+        },
+        "knowledge": {
+          "default": "both",
+          "enum": [
+            "sources",
+            "graph",
+            "both"
+          ],
+          "title": "Knowledge",
+          "type": "string"
+        },
+        "visibility": {
+          "default": "both",
+          "enum": [
+            "corpus",
+            "project",
+            "both"
+          ],
+          "title": "Visibility",
+          "type": "string"
+        },
+        "mode": {
+          "default": "hybrid",
+          "enum": [
+            "lexical",
+            "vector",
+            "hybrid"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "context_tokens": {
+          "default": 4000,
+          "maximum": 100000,
+          "minimum": 1024,
+          "title": "Context Tokens",
+          "type": "integer"
+        },
+        "answer_tokens": {
+          "default": 1024,
+          "maximum": 16000,
+          "minimum": 64,
+          "title": "Answer Tokens",
+          "type": "integer"
+        },
+        "history": {
+          "default": [],
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "maxItems": 100,
+          "title": "History",
+          "type": "array"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "KnowledgeAnswerRequest",
+      "type": "object"
+    },
+    "output_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "operation": {
+          "title": "Operation",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "complete",
+            "partial",
+            "failed",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "diagnostics": {
+          "default": [],
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Diagnostics",
+          "type": "array"
+        },
+        "receipt_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Receipt Ids",
+          "type": "array"
+        },
+        "artifacts": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Artifacts",
+          "type": "object"
+        },
+        "note": {
+          "default": "Completion is operational, not mathematical certification.",
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "status"
+      ],
+      "title": "ToolResult",
+      "type": "object"
+    },
+    "examples": [
+      {
+        "query": "What assumptions are stated?",
+        "mode": "lexical"
+      }
+    ],
+    "boundary": "One answer call with exact current citations; no scientific graph mutation.",
+    "canvas_path": "examples/langflow_replacement/answer_knowledge.json",
+    "usage": {
+      "transport": "JSON object serialized in input_value",
+      "guidance": "Ask a bounded source/graph question with the selected visibility. Answers cite only the current packet; inspect assumptions and partial retrieval. One answer call uses the configured operator model.",
+      "request_limits": [
+        {
+          "schema_path": [
+            "properties",
+            "query"
+          ],
+          "bounds": {
+            "minLength": 1,
+            "maxLength": 8000
+          }
+        },
+        {
+          "schema_path": [
+            "properties",
+            "context_tokens"
+          ],
+          "bounds": {
+            "minimum": 1024,
+            "maximum": 100000
+          }
+        },
+        {
+          "schema_path": [
+            "properties",
+            "answer_tokens"
+          ],
+          "bounds": {
+            "minimum": 64,
+            "maximum": 16000
+          }
+        },
+        {
+          "schema_path": [
+            "properties",
+            "history"
+          ],
+          "bounds": {
+            "maxItems": 100
+          }
+        }
+      ],
+      "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
+      "mode_requirements": "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution.",
+      "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
+      "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
+      "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
+      "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage."
+    }
+  },
+  {
     "tool_id": "retrieve_research_context",
     "name": "Retrieve Research Context",
     "description": "Retrieve revision-bound passages and graph context.",
@@ -1904,6 +2159,47 @@
           "minimum": 1,
           "title": "Max Chars",
           "type": "integer"
+        },
+        "knowledge": {
+          "anyOf": [
+            {
+              "enum": [
+                "sources",
+                "graph",
+                "both"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge"
+        },
+        "visibility": {
+          "default": "both",
+          "enum": [
+            "corpus",
+            "project",
+            "both"
+          ],
+          "title": "Visibility",
+          "type": "string"
+        },
+        "max_context_tokens": {
+          "anyOf": [
+            {
+              "maximum": 100000,
+              "minimum": 1024,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Context Tokens"
         },
         "operation_id": {
           "anyOf": [
@@ -2122,6 +2418,18 @@
           ],
           "bounds": {
             "minimum": 1,
+            "maximum": 100000
+          }
+        },
+        {
+          "schema_path": [
+            "properties",
+            "max_context_tokens",
+            "anyOf",
+            0
+          ],
+          "bounds": {
+            "minimum": 1024,
             "maximum": 100000
           }
         },

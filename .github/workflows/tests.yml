@@ -38,7 +38,7 @@ jobs:
       - if: runner.os == 'macOS'
         run: python -c "import platform; assert platform.machine() == 'arm64'"
       - run: python -c "import pathlib, subprocess, sys; wheel, = pathlib.Path('/tmp/nima-artifacts').glob('*.whl'); subprocess.run([sys.executable, '-m', 'pip', 'install', '-c', 'constraints-tested.txt', str(wheel) + '[test,mcp]'], check=True)"
-      - run: python -c "import nima_semantica, pathlib; assert not pathlib.Path(nima_semantica.__file__).resolve().is_relative_to(pathlib.Path('src').resolve()); assert nima_semantica.__version__ == '0.2.1'"
+      - run: python -c "import nima_semantica, pathlib, tomllib; assert not pathlib.Path(nima_semantica.__file__).resolve().is_relative_to(pathlib.Path('src').resolve()); assert nima_semantica.__version__ == tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version']"
       - if: runner.os == 'Linux'
         run: docker build -f deploy/sympy.Dockerfile -t nima-sympy:1.14.0-pilot .
       - run: python -m pytest -q -ra --junitxml=test-results.xml
@@ -68,7 +68,7 @@ jobs:
       - if: runner.os == 'Linux'
         run: python -m pip install torch==2.13.0+cpu --index-url https://download.pytorch.org/whl/cpu
       - run: python -c "import pathlib, subprocess, sys; wheel, = pathlib.Path('/tmp/nima-artifacts').glob('*.whl'); subprocess.run([sys.executable, '-m', 'pip', 'install', '-c', 'constraints-tested.txt', str(wheel) + '[test,langflow,mcp]'], check=True)"
-      - run: python -c "import nima_semantica, pathlib; assert not pathlib.Path(nima_semantica.__file__).resolve().is_relative_to(pathlib.Path('src').resolve()); assert nima_semantica.__version__ == '0.2.1'"
+      - run: python -c "import nima_semantica, pathlib, tomllib; assert not pathlib.Path(nima_semantica.__file__).resolve().is_relative_to(pathlib.Path('src').resolve()); assert nima_semantica.__version__ == tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version']"
       - if: runner.os == 'Linux'
         run: docker build -f deploy/sympy.Dockerfile -t nima-sympy:1.14.0-pilot .
       - run: python -m pytest -q -ra --junitxml=langflow-results.xml

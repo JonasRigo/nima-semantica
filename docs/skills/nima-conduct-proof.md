@@ -1,28 +1,21 @@
-# Conduct proof
+---
+name: nima-conduct-proof
+description: Develop mathematical arguments using a private NIMA proof graph, existing specialist tools and optional Lean verification.
+---
 
-Use `nima-conduct-proof` when you want the following outcome: a durable argument with addressed represented obligations and scoped verification evidence where available. Request a LaTeX report to use the bundled SciPost-style template.
+# Conduct Proof
 
-## Ask your agent
+Read [the shared tool and state contract](../../skills/_shared/tools.md) before acting.
 
-> Use `nima-conduct-proof`: Develop this argument in a private proof graph and check each consequential step.
-
-Project initialization installs this skill for your selected harnesses.
-See [projects and harness connections](../PROJECTS.md) if it is not available in a new session.
-
-## Before you start
-
-Specify the target, assumptions and selected approach or existing conduct session.
-
-## How the investigation proceeds
-
-Record and revise proof steps, attach specialist evidence, inspect the obligation frontier and submit the selected argument.
-These steps guide your agent’s choices; adapt them to the evidence and the task.
-
-## What you keep
-
-A durable argument with addressed represented obligations and scoped verification evidence where available. Request a LaTeX report to use the bundled SciPost-style template.
-Save substantive analyses through [Save Research Analysis](../tools/save_research_analysis.md) and inspect the returned artifact IDs.
-Admit selected graph changes through [Update Project Graph](../tools/update_project_graph.md) with exact approval.
-For a new chat, retain the project binding and relevant artifact or private session IDs, then inspect the current state before continuing.
-
-[Portable skill instructions](../../skills/nima-conduct-proof/SKILL.md) · [All skills](README.md)
+Open a conduct-mode `nima_proof_open` session with the exact target and assumptions, or resume an existing conduct session.
+A prior draft can be inspected and used to initialize a conduct session with explicit references; do not silently change an existing session binding.
+Record scoped lemmas, steps, assumptions and necessary obligations with exact dependency IDs.
+Use the full toolbox as the mathematics requires: Compare Research Objects, Search for Counterexamples, Deep Extraction, Analyze Graph, Trace Claim Dependencies, Hypothesis Generation, retrieval, review, calculation and Lean.
+Attach authentic tool receipts. Use `run_experiment` for isolated exploratory checks when authorized; executed code is not automatically a proof inference.
+Resolve represented obligations only with exact supporting nodes and an explicit rationale. Revise failed routes by adding replacements that supersede old nodes.
+Inspect the frontier before submitting a selected argument. Superseded support and open necessary obligations prevent completed conduct sessions.
+A completed informal argument remains uncertified. Optional Lean evidence retains its exact formal scope.
+Close partial with remaining work when appropriate. Save requested reports through Save Research Analysis and record project knowledge only through approved updates.
+For requested LaTeX output use the [shared scientific reporting skill](nima-write-report.md) and its SciPost-style proof-report template.
+Adapt sections to the actual result and retain every open obligation in the appendix.
+The old local template path remains available for compatibility.

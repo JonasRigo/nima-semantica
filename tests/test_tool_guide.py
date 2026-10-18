@@ -10,12 +10,12 @@ from nima_semantica.tool_guide import ToolGuideRequest, public_tool_catalog, too
 
 def test_catalog_matches_approved_inventory_and_is_honest():
     catalog = public_tool_catalog()
-    assert len(catalog) == len({item.tool_id for item in catalog}) == 24
+    assert len(catalog) == len({item.tool_id for item in catalog}) == 25
     for index, item in enumerate(catalog, 1):
         assert item.input_schema is not None
         if item.tool_id in {"draft_proof", "conduct_proof"}:
             continue
-        if item.tool_id not in ("tool_guide", "research_run", "load_ontology", "save_ontology", "prepare_and_index_sources", "inspect_corpus", "retrieve_research_context", "read_evidence", "calculate_mathematics", "search_for_counterexamples", "verify_lean", "deep_extraction", "analyze_graph", "trace_claim_dependencies", "substantiate_graph_snapshot", "update_project_graph", "hypothesis_generation", "compare_research_objects", "deep_research", "review_research", "save_research_analysis", "develop_proof", "draft_lean"):
+        if item.tool_id not in ("answer_knowledge", "tool_guide", "research_run", "load_ontology", "save_ontology", "prepare_and_index_sources", "inspect_corpus", "retrieve_research_context", "read_evidence", "calculate_mathematics", "search_for_counterexamples", "verify_lean", "deep_extraction", "analyze_graph", "trace_claim_dependencies", "substantiate_graph_snapshot", "update_project_graph", "hypothesis_generation", "compare_research_objects", "deep_research", "review_research", "save_research_analysis", "develop_proof", "draft_lean"):
             assert item.implementation == "planned"
             assert item.input_schema is None and item.output_schema is None
             assert item.examples == ()

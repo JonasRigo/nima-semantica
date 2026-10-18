@@ -144,6 +144,9 @@ def configure_flow(flow, name, installation, corpus, project):
         template = node["data"]["node"]["template"]
         values = {"corpus_id": corpus, "project_id": project, "pdf_url": installation.pdf_container_url or installation.pdf_url,
                   "pdf_token_file": installation.pdf_token_file,
+                  "local_staging_root": str(Path(installation.data_root) / "ingestion-inbox"),
+                  "max_pdf_evidence_bytes": installation.max_pdf_evidence_bytes,
+                  "chat_defaults_json": installation.chat.model_dump_json(),
                   "discovery_providers_json": json.dumps(installation.discovery.discovery_providers),
                   "max_discoveries": installation.discovery.max_discoveries,
                   "acquisition_policy_json": installation.acquisition.model_dump_json(),
@@ -155,7 +158,7 @@ def configure_flow(flow, name, installation, corpus, project):
                 template[field]["value"] = value
         # Model and audit capabilities are operator-configured at installation.
         # Graph commits retain their separate exact approval requirements.
-        for field in ("allow_model_calls", "allow_audit_writes", "allow_attempt_writes", "allow_artifact_writes", "allow_corpus_writes", "allow_writes", "allow_projection_writes", "allow_graph_writes"):
+        for field in ("allow_model_calls", "allow_audit_writes", "allow_attempt_writes", "allow_artifact_writes", "allow_corpus_writes", "allow_project_writes", "allow_writes", "allow_projection_writes", "allow_graph_writes"):
             if field in template:
                 template[field]["value"] = True
         if node["data"]["type"].endswith("Retrieval") and "enabled" in template:
@@ -243,7 +246,7 @@ def publish_flows(installation, corpus, project, directory):
     with api(installation) as client:
         ensure_credentials(client, installation)
         if not state.get("folder_id"):
-            response = client.post("/api/v1/projects/", json={"name": f"NIMA {corpus}/{project}", "description": "Project-bound NIMA toolbox"})
+            response = client.post("/api/v1/projects/", json={"name": f"NIMA {hashlib.sha256((corpus+'/'+project).encode()).hexdigest()[:12]} {project} ({corpus})", "description": "Project-bound NIMA toolbox"})
             response.raise_for_status(); state["folder_id"] = response.json()["id"]
             write_json(state_path, state)
         for name, path in maintained_flows().items():

@@ -2,6 +2,7 @@
 
 # These describe recovery, not mandatory pipelines or autonomous dispatch.
 GUIDANCE = {
+    "answer_knowledge": "Ask a bounded source/graph question with the selected visibility. Answers cite only the current packet; inspect assumptions and partial retrieval. One answer call uses the configured operator model.",
     "tool_guide": "Use an empty request to list tools; select tool by exact name or ID for its schema and examples.",
     "research_run": "Inspect using next_run_revision and next_receipt_id while more_transitions or more_attempts is true. Re-read current run revision before transitions.",
     "load_ontology": "List with {}; load a returned name/version or digest. A missing profile requires selecting or explicitly saving an ontology, not inventing an identity.",

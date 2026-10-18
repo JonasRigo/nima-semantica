@@ -116,6 +116,10 @@ def reconciliation_preview(root, config_path, binding, harnesses, *, project_man
             settings[name] = {**{k: v for k, v in settings.get(name, {}).items()
                 if k not in {"type", "command", "args", "env", "environment", "url"}}, **value}
         planned[path] = (json.dumps(data, indent=2) + "\n").encode()
+    from .installation import assets
+    from .skill_installation import managed_skill_plan
+    skill_writes,skill_conflicts=managed_skill_plan(root,binding,harnesses,assets()/"skills")
+    planned.update(skill_writes)
     changes = [{"path": str(path), "expected_sha256": file_identity(path),
                 "payload_base64": base64.b64encode(payload).decode(),
                 "after_sha256": hashlib.sha256(payload).hexdigest(), "mode": 0o600,
@@ -126,7 +130,7 @@ def reconciliation_preview(root, config_path, binding, harnesses, *, project_man
     inputs.extend({"path": str(Path(binding[k + "_config"]).resolve()),
                    "expected_sha256": file_identity(binding[k + "_config"])} for k in ("math", "proof"))
     result = {"format_version": 1, "scope": {"corpus_id": scope[0], "project_id": scope[1]},
-              "changes": changes, "inputs": inputs}
+              "changes": changes, "inputs": inputs, "skill_conflicts": skill_conflicts}
     result["preview_hash"] = identity(result)
     return result
 
@@ -161,6 +165,7 @@ def recover_reconciliation(manifest, mode, *, checkpoint=None):
     manifest = Path(manifest)
     journal = json.loads(manifest.read_text())
     original = {key: journal[key] for key in ("format_version", "scope", "inputs")}
+    if "skill_conflicts" in journal: original["skill_conflicts"]=journal["skill_conflicts"]
     original["changes"] = [{key: item[key] for key in ("path", "expected_sha256", "payload_base64", "after_sha256", "mode", "owner_uid", "owner_gid") if key in item}
                            for item in journal["changes"]]
     if identity(original) != journal["preview_hash"]:

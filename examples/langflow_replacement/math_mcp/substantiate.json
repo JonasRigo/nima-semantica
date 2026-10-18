@@ -746,16 +746,17 @@
     "source_sha256": "27486c221a1fbb0a48443b21e399e4dfefd9cf857cba595d760c9a25c6b3cbc5",
     "native_sources_sha256": {
       "calculation_values.py": "2227718cd02c2e0826b15c16be6023b1ba07dd8af4ce89efaab5ed4e25fceb05",
-      "math_mcp_contracts.py": "24ceb54f9a8a27ff75cc67842e98bac2f7f5bfd5938855b2fa2a0716dda95879",
+      "math_mcp_contracts.py": "556a51c4f936b32be0e2fa4b3746407be5803e3249d0278fddca18411efe70bf",
       "math_mcp.py": "a37a2033bc157fda191c95090f38de5d3993c5501e7cbb99dd7f9ca06da34a91",
       "math_session_service.py": "555521d6d211a82de373df0cacd09f0cb64eae0fb6d9bc7888304456410a6278",
-      "math_interface_helpers.py": "fc73d964acde88bff7083af9ee05493b68948d624354b5e5fb071e99e5ba5436",
+      "math_interface_helpers.py": "0f18f2e014c1207a002c39a8b1653b85f1af1c8c655ddeaf7f029ddccbd0465f",
       "math_repair_feedback.py": "8dfdc65e31b5a6a7c2b1ddd7a9e78cd81319fcbb4fd1c133e52f510731e1b6dc",
       "math_evidence_handoff.py": "fe5150d043efcbd17e5eab76fadf9f730724f1d1eb83fa23091e2fdf44119cc3",
-      "math_calculation_assistance.py": "1fe7bb065a14da050fd83b8f5b89443309f89f6d7168795ff92e57ab64ecf76c",
+      "math_calculation_assistance.py": "125cd12f0978f2022bf7d3880e10baaa9bc60a01d53e0f3477ba5fc81f255c62",
       "math_response_views.py": "cd8f99a5b8ac1876c51ed0e97cce7179304026c05bf61d6a20d8c06198b93fe2",
-      "math_graph_program.py": "57a301194e03ab5a39ee3c968709d86b18f73e8b64753559e00b779e3515403b",
-      "math_single_graph_state.py": "27d48c5fedac59ee40db07be4c3036f9bacb4ce2447e83d56a97a34d9d24b2fc"
+      "math_graph_program.py": "3921afbbc67b94f5a41f2a993f28f1935f5404a6b1c0729d15c88ec7f2ae05c6",
+      "math_single_graph_state.py": "ae5b1f51b15db4670ba8c1e4af853f1b2224cbf07d85c83f874ff9a8cf77e0fe",
+      "math_calculus.py": "29c39a737e512210e7c8b5e59c71246eac7482cfea7e15591707c88946d2280e"
     }
   }
 }

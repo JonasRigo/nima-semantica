@@ -1,0 +1,55 @@
+{
+  "versions": [
+    "0.2.1"
+  ],
+  "files": {
+    "_shared/tools.md": [
+      "012664c53220ee39200f60febc8733ee36dcf56c905a5728ff879443426eb7b3"
+    ],
+    "nima-calculate-mathematics/SKILL.md": [
+      "7dd0685bfdcae0a2135b87fe9a904e36fa5fe20e0f9818f75e21d3fd4a0558cb"
+    ],
+    "nima-calculate-mathematics/references/operations.md": [
+      "af74075950572e663cec0344d8c02e31b0288d25c1e54ecf788b0d5d5a53da00"
+    ],
+    "nima-conduct-proof/SKILL.md": [
+      "a5ad15448ede14cf324baf70cdf737868319e42dec7fa2ba2afc159014bab1ff"
+    ],
+    "nima-conduct-proof/assets/scipost-report.tex": [
+      "ee51f980a229b7dab705c7a354ac2b47d13c2c76ae88899ae63e910c611b91cd"
+    ],
+    "nima-corpus-chat/SKILL.md": [
+      "608384ddf10c99f5e216deda0f6c1d42ef31810b0ed8ca4e63baf1d6eddb07b3"
+    ],
+    "nima-critique/SKILL.md": [
+      "08e270de5924886c32bc860ccc58b4d36bc8bf9766243bb7b8d8fbffd1ef4b76"
+    ],
+    "nima-draft-proof/SKILL.md": [
+      "656ab0461d3dfd960376af6c495e9259cff6db7b75b644b29cc59da9a824ef70"
+    ],
+    "nima-ingest/SKILL.md": [
+      "5d0256cd67f9a4361aaf7a479a6dace00dd0460ab724078bdc0aaae9f94cfc3f"
+    ],
+    "nima-ingest/references/consolidation.md": [
+      "cfb383198df7e0dfa7ec756cf613479c168264543c1446ace1c24d6fa0eb99dd"
+    ],
+    "nima-latex-to-lean/SKILL.md": [
+      "6b4fb98e6d12c0447f7a305c932827e387452dfc4a7b43e9e345569eb1007ae7"
+    ],
+    "nima-literature-review/SKILL.md": [
+      "91e32a552b94f4c8ca3981f1c8a6585c224fbc94af2a6f506854ec0fff9f127d"
+    ],
+    "nima-research/SKILL.md": [
+      "2cc62e92663a45574ee0d99b7fc4315d0b27c5f8a5eec7c363e6ab570a0635b4"
+    ],
+    "nima-review/SKILL.md": [
+      "b3b092802ad848cde4411592c1f9a68d42c83819545d751cc675fc872bceb9ac"
+    ],
+    "normalize-vocabulary/SKILL.md": [
+      "56905e5159eae0004e39f7437eb58eb0a4b4a29fc900aab031666f15efab74f0"
+    ],
+    "normalize-vocabulary/references/vocabulary-json.md": [
+      "6c6daeb4403bd5fea10893bca8c9ac86ea342f434d39da16dbdc0835645a9ee4"
+    ]
+  }
+}

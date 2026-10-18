@@ -16,6 +16,7 @@ class SourceFields(BaseComponent):
     inputs = [
         DropdownInput(name="mode", display_name="Mode", options=["preview", "prepare_index", "index_check", "index_rebuild"], value="preview"),
         DropdownInput(name="index_mode", display_name="Index mode", options=["lexical", "vector"], value="lexical"),
+        DropdownInput(name="source_scope",display_name="Source visibility",options=["legacy","corpus","project"],value="legacy"),
         DropdownInput(name="preparation_mode", display_name="Preparation quality", options=["full", "fast"], value="full"),
         MultilineInput(name="sources_json", display_name="Sources JSON", value='{"sources":[{"name":"inspection.md","data_base64":"IyBJbnNwZWN0aW9uIGZpeHR1cmUKCkZvciB4ID0gMiwgJHheMiA9IDQkLgo="}]}',
             info="Use base64 for exact multiline/LaTeX bytes: Langflow string fields unescape backslash-n before JSON parsing. Native Data/JSON handles can carry text directly."),
@@ -45,6 +46,8 @@ class SourceFields(BaseComponent):
             payload.update(strict_json_object(self.sources_json))
         if mode in {"prepare_index", "index_rebuild"}:
             payload["operation_id"] = self.operation_id or None
+        scope=getattr(self,"source_scope","legacy")
+        if scope != "legacy": payload["source_scope"]=scope
         payload.update(override)
         return PrepareSourcesRequest.model_validate(payload).model_dump(mode="json")
 

@@ -50,3 +50,5 @@ benchmarks/deep_research/passes_v11/live_v1_paid_r1/*/model-*-response.json
 /release-fixtures.json
 /docs/CLEAN_HOST_TEST.md
 /TOOL_BLUEPRINT_files/
+
+!/references/managed-skill-baselines.json

@@ -17,7 +17,20 @@ For the Linux CPU stack, install `torch==2.13.0+cpu` from `https://download.pyto
 Linux managed Langflow and PDF provisioning select CPU builds explicitly. Native macOS Langflow uses native macOS wheels.
 The Langflow application, base package and LFX runtime are pinned together at 1.12.0, with `lfx-openai==0.1.4`; managed builds apply the bundled `constraints-tested.txt` as well. Newer OpenAI extension bundles can satisfy dependency metadata yet fail to import against this LFX runtime; native setup checks those imports explicitly.
 
+For OKF Studio visualization, Linux x86_64 users can install the upstream package; graphical NIMA setup can install its pinned Debian package.
+macOS users must build OKF Studio from source and configure the resulting executable with `studio_executable` or `NIMA_OKF_STUDIO`.
+Follow the [platform-specific OKF Studio installation and macOS build instructions](KNOWLEDGE_AND_REPORTING.md#the-complete-project-in-upstream-okf-studio).
+
 ## Wizard
+
+On Linux and macOS, setup installs `~/.local/bin/nima` using the installation's Python environment and adds `~/.local/bin` to the startup files for your login shell.
+Bash login and interactive shells and Zsh login and interactive shells are configured; Zsh respects `ZDOTDIR`.
+You can then run `nima` without activating the virtual environment.
+For the first setup, activate that environment or run `/path/to/environment/bin/nima setup`.
+Open a new terminal afterward, or run the `export PATH=...` command printed by setup in the current terminal.
+Rerunning setup keeps one managed PATH block per file and backs up changed existing files beside their originals.
+Use `nima setup --no-modify-path` to manage the launcher and PATH yourself, including when your startup files are symlinks.
+Other shells receive the launcher and instructions for adding its directory to PATH manually.
 
 The same wizard configures independent LLM and embedding providers. LLM choices are OpenRouter, OpenAI, native Anthropic, native Gemini, native Ollama, or an arbitrary OpenAI-compatible endpoint (for example a local LM Studio or vLLM server). Model identifiers are operator-selected, not restricted to a cloud model list. Custom endpoint URLs, credential variable names, token limits and provider generation parameters are supported. A credential value is never written into installation JSON; `--credential -` explicitly selects a no-key compatible endpoint. Native Ollama does not require a cloud credential.
 
@@ -124,3 +137,5 @@ This setting does not automatically ingest sources into canonical corpus knowled
 
 Lean verification is enabled when its worker is configured.
 External LeanSearch is optional: set `allow_lean_search` to `true` to permit sending theorem queries to that service.
+
+See [standard knowledge, workspace layouts, Studio, calculation documents and reporting](KNOWLEDGE_AND_REPORTING.md) for the v0.3.0 features.

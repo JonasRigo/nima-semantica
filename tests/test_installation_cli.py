@@ -109,14 +109,14 @@ def test_all_model_inputs_and_both_embedding_nodes_are_connected(tmp_path):
                 assert template["project_id"]["value"] == "project"
         if name == "review_research":
             assert all(v["model"] == "reviewer" for v in roles.values())
-    assert len(assignments) == sum(len(v) for v in model_inventory().values()) == 8
+    assert len(assignments) == sum(len(v) for v in model_inventory().values()) == 9
 
 
 def test_setup_project_harness_merge_replay_and_ingestion(tmp_path, capsys):
     config_path = tmp_path / "installation.json"
     root = tmp_path / "data"
     prefix = ["--config", str(config_path)]
-    assert main(prefix + ["setup", "--non-interactive", "--model", "fixture", "--data-root", str(root)]) == 0
+    assert main(prefix + ["setup", "--no-modify-path", "--non-interactive", "--model", "fixture", "--data-root", str(root)]) == 0
     project = tmp_path / "work"; project.mkdir()
     (project / "opencode.json").write_text('{"theme":"dark"}')
     init = prefix + ["project", "init", "test", "--corpus", "papers", "--path", str(project), "--offline"]

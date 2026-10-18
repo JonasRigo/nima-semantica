@@ -15,3 +15,10 @@ Broaden into Deep Research only when the user requests a wider investigation.
 For an ordinary KB conversation, no ingestion, graph update or report save is required.
 For a requested saved answer, use Save Research Analysis and verify its returned artifact through Read Evidence.
 A new conversation resumes by reading the project manifest and canonical state, not by reconstructing prior chat from memory.
+
+For direct graph questions select Retrieve Research Context `knowledge="graph"`; use `knowledge="both"` for combined evidence.
+Choose `visibility="corpus"`, `"project"` or `"both"` and preserve the operator binding.
+Begin with a bounded context (default 4,000 conservative tokens), four seeds and at most two graph hops.
+Fetch exact cited nodes/passages when needed rather than dumping inventories, private graph histories or the full corpus into the conversation.
+Do not add a separate NIMA answering-model call inside harness chat.
+The terminal equivalent is `nima chat --corpus CORPUS --project PROJECT --knowledge both`; use `--question` and `--json` for a single inspectable answer.

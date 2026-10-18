@@ -4,7 +4,8 @@ Use NIMA to carry an investigation across papers, calculations and coding-agent 
 You choose the questions and decide what belongs in the research record.
 We provide persistent knowledge, inspectable tools and adaptable skills to support that work.
 
-See the [v0.2.1 release notes](RELEASE_NOTES_v0.2.1.md) and [qualification scope](PLATFORM_SUPPORT_v0.2.1.md) for this release.
+See the [v0.3.0 release notes](RELEASE_NOTES_v0.3.0.md) for the current source version.
+The [v0.2.1 qualification scope](PLATFORM_SUPPORT_v0.2.1.md) records the previous release and does not qualify this revision.
 
 ## Get started
 
@@ -33,3 +34,5 @@ NIMA retains this distinction through a shared corpus, project knowledge and pri
 An ontology makes the vocabulary of an interpretation explicit, while provenance lets you return to its source.
 Neither a tidy graph nor a fluent summary settles the underlying scientific question.
 The useful result is an argument you can inspect, challenge and resume.
+
+See [standard knowledge, workspace layouts, Studio, calculation documents and reporting](KNOWLEDGE_AND_REPORTING.md) for the v0.3.0 features.

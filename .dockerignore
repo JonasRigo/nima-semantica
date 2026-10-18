@@ -31,3 +31,5 @@
 !references/Graph_Extraction_Strcutured_Output.json
 !references/ontology.py
 !references/structured_output_model.py
+
+!references/managed-skill-baselines.json

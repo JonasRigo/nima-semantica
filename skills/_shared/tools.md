@@ -69,7 +69,11 @@ Existing user authorization persists; seek additional approval only for an actio
 
 ## LaTeX output
 
-For requested mathematical reports, start from [the SciPost-style template](../nima-conduct-proof/assets/scipost-report.tex).
+For requested mathematical reports, start from [the shared SciPost-style template](reporting/scipost-report.tex).
 Write complete mathematical statements and source references, keeping NIMA IDs and detailed receipts in the evidence appendix where useful.
 Keep Markdown and TeX prose on semantic source lines, not fixed-width hard wraps.
 Produce `.tex` and bibliography sources; compile a PDF when a TeX installation is available and requested.
+
+Papers, research reports, progress reports and proof reports share [reporting guidance](../nima-write-report/SKILL.md).
+Read `layout.paths` in the workspace binding for human-readable output folders.
+Use the standard `nima project graph PROJECT --corpus CORPUS --path WORKSPACE --open` command for complete OKF Studio visualization.

@@ -4,7 +4,7 @@ A skill gives your coding agent a method for using NIMA’s tools.
 You choose the question and judge the result; your agent can revise its approach as evidence changes.
 We keep this guidance separate from the tool implementation so that a proof, a literature review and a calculation can use different reasoning strategies over the same persistent evidence.
 
-Project initialization installs these eleven skills for your selected harnesses.
+Project initialization installs these twelve skills for your selected harnesses.
 Name a skill in your request, or ask your agent to choose the appropriate one.
 
 | Skill | Use it to |
@@ -20,6 +20,7 @@ Name a skill in your request, or ask your agent to choose the appropriate one.
 | [Draft proof](nima-draft-proof.md) | Develop alternative proof strategies for this statement and identify the lemmas each route needs. |
 | [Conduct proof](nima-conduct-proof.md) | Develop this argument in a private proof graph and check each consequential step. |
 | [LaTeX to Lean](nima-latex-to-lean.md) | Formalize this LaTeX statement in Lean and verify the exact declaration in the configured environment. |
+| [Write reports](nima-write-report.md) | Write papers, research reports, progress reports and proof reports from retained source and calculation evidence. |
 
 For installation and resumption, see [projects](../PROJECTS.md).
 For exact callable interfaces, see the [tool catalogue](../TOOLS.md).

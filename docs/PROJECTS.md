@@ -71,3 +71,5 @@ Project bindings live under `DATA_ROOT/projects/CORPUS_ID/PROJECT_ID/`.
 The shared canonical store is `DATA_ROOT/corpus/graph.sqlite3`, with immutable bytes under `DATA_ROOT/corpus/artifacts/`.
 Private `math.sqlite3` and `proof.sqlite3` databases are in the project directory.
 Keep installation-private paths and credentials out of public source control.
+
+See [standard knowledge, workspace layouts, Studio, calculation documents and reporting](KNOWLEDGE_AND_REPORTING.md) for the v0.3.0 features.

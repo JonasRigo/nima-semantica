@@ -1081,7 +1081,7 @@
   },
   "is_component": false,
   "name": "Tool Guide",
-  "description": "Deterministic NIMA catalog lookup. Empty tool lists all 24 maintained capabilities; exact name or ID selects one. No model, dispatch, storage, or automatic tool selection. Optional MCP JSON overrides only tool. Canvas visually approved.",
+  "description": "Deterministic NIMA catalog lookup. Empty tool lists the maintained capabilities; exact name or ID selects one. No model, dispatch, storage, or automatic tool selection. Optional MCP JSON overrides only tool. Canvas visually approved.",
   "endpoint_name": "nima-tool-guide",
   "nima_tool_manifest": {
     "tool_id": "tool_guide",

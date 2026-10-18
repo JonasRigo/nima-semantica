@@ -593,7 +593,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Visible source bytes, mode, and stable operation identity; no path fetching.\"\"\"\nfrom lfx.io import DropdownInput, HandleInput, MessageTextInput, MultilineInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.source_tools import PrepareSourcesRequest\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import RequestFields as BaseComponent\n\n\nclass SourceFields(BaseComponent):\n    name = \"SourceFields\"\n    display_name = \"Source Preparation Inputs\"\n    description = \"Supply text or base64 bytes, never server paths or URLs. Preview is read-only; preparation requires an operation ID.\"\n    nima_manifest = manifest_for_component(\"SourceFields\")\n    inputs = [\n        DropdownInput(name=\"mode\", display_name=\"Mode\", options=[\"preview\", \"prepare_index\", \"index_check\", \"index_rebuild\"], value=\"preview\"),\n        DropdownInput(name=\"index_mode\", display_name=\"Index mode\", options=[\"lexical\", \"vector\"], value=\"lexical\"),\n        DropdownInput(name=\"preparation_mode\", display_name=\"Preparation quality\", options=[\"full\", \"fast\"], value=\"full\"),\n        MultilineInput(name=\"sources_json\", display_name=\"Sources JSON\", value='{\"sources\":[{\"name\":\"inspection.md\",\"data_base64\":\"IyBJbnNwZWN0aW9uIGZpeHR1cmUKCkZvciB4ID0gMiwgJHheMiA9IDQkLgo=\"}]}',\n            info=\"Use base64 for exact multiline/LaTeX bytes: Langflow string fields unescape backslash-n before JSON parsing. Native Data/JSON handles can carry text directly.\"),\n        MessageTextInput(name=\"operation_id\", display_name=\"Write operation ID\", value=\"\"),\n        MessageTextInput(name=\"run_id\", display_name=\"Optional Research Run ID\", value=\"\"),\n        HandleInput(name=\"mcp_request\", display_name=\"Optional request JSON\", input_types=[\"Message\", \"Data\", \"JSON\"], required=False),\n    ]\n    outputs = [Output(name=\"request\", display_name=\"Validated request\", method=\"request_data\", group_outputs=True),\n        Output(name=\"preview\", display_name=\"Request preview\", method=\"preview_message\", group_outputs=True)]\n\n    async def run(self):\n        override = native(getattr(self, \"mcp_request\", None))\n        if override is None:\n            override = {}\n        if isinstance(override, str):\n            if len(override) > 8_100_000:\n                raise ValueError(\"source request exceeds input limit\")\n            override = strict_json_object(override) if override.strip() else {}\n        if not isinstance(override, dict):\n            raise ValueError(\"expected a JSON object\")\n        mode = override.get(\"mode\", self.mode)\n        payload = {\"mode\": mode, \"index_mode\": self.index_mode,\n                   \"preparation_mode\": self.preparation_mode, \"run_id\": self.run_id or None}\n        if \"sources\" not in override and mode in {\"preview\", \"prepare_index\"}:\n            if len(self.sources_json) > 8_100_000:\n                raise ValueError(\"sources exceed input limit\")\n            payload.update(strict_json_object(self.sources_json))\n        if mode in {\"prepare_index\", \"index_rebuild\"}:\n            payload[\"operation_id\"] = self.operation_id or None\n        payload.update(override)\n        return PrepareSourcesRequest.model_validate(payload).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
+                "value": "\"\"\"Visible source bytes, mode, and stable operation identity; no path fetching.\"\"\"\nfrom lfx.io import DropdownInput, HandleInput, MessageTextInput, MultilineInput, Output\nfrom lfx.schema import Data\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.providers import strict_json_object\nfrom nima_semantica.source_tools import PrepareSourcesRequest\nfrom nima_semantica.orchestration.langflow.adapter_support import native\nfrom nima_semantica.orchestration.langflow.stages.base import RequestFields as BaseComponent\n\n\nclass SourceFields(BaseComponent):\n    name = \"SourceFields\"\n    display_name = \"Source Preparation Inputs\"\n    description = \"Supply text or base64 bytes, never server paths or URLs. Preview is read-only; preparation requires an operation ID.\"\n    nima_manifest = manifest_for_component(\"SourceFields\")\n    inputs = [\n        DropdownInput(name=\"mode\", display_name=\"Mode\", options=[\"preview\", \"prepare_index\", \"index_check\", \"index_rebuild\"], value=\"preview\"),\n        DropdownInput(name=\"index_mode\", display_name=\"Index mode\", options=[\"lexical\", \"vector\"], value=\"lexical\"),\n        DropdownInput(name=\"source_scope\",display_name=\"Source visibility\",options=[\"legacy\",\"corpus\",\"project\"],value=\"legacy\"),\n        DropdownInput(name=\"preparation_mode\", display_name=\"Preparation quality\", options=[\"full\", \"fast\"], value=\"full\"),\n        MultilineInput(name=\"sources_json\", display_name=\"Sources JSON\", value='{\"sources\":[{\"name\":\"inspection.md\",\"data_base64\":\"IyBJbnNwZWN0aW9uIGZpeHR1cmUKCkZvciB4ID0gMiwgJHheMiA9IDQkLgo=\"}]}',\n            info=\"Use base64 for exact multiline/LaTeX bytes: Langflow string fields unescape backslash-n before JSON parsing. Native Data/JSON handles can carry text directly.\"),\n        MessageTextInput(name=\"operation_id\", display_name=\"Write operation ID\", value=\"\"),\n        MessageTextInput(name=\"run_id\", display_name=\"Optional Research Run ID\", value=\"\"),\n        HandleInput(name=\"mcp_request\", display_name=\"Optional request JSON\", input_types=[\"Message\", \"Data\", \"JSON\"], required=False),\n    ]\n    outputs = [Output(name=\"request\", display_name=\"Validated request\", method=\"request_data\", group_outputs=True),\n        Output(name=\"preview\", display_name=\"Request preview\", method=\"preview_message\", group_outputs=True)]\n\n    async def run(self):\n        override = native(getattr(self, \"mcp_request\", None))\n        if override is None:\n            override = {}\n        if isinstance(override, str):\n            if len(override) > 8_100_000:\n                raise ValueError(\"source request exceeds input limit\")\n            override = strict_json_object(override) if override.strip() else {}\n        if not isinstance(override, dict):\n            raise ValueError(\"expected a JSON object\")\n        mode = override.get(\"mode\", self.mode)\n        payload = {\"mode\": mode, \"index_mode\": self.index_mode,\n                   \"preparation_mode\": self.preparation_mode, \"run_id\": self.run_id or None}\n        if \"sources\" not in override and mode in {\"preview\", \"prepare_index\"}:\n            if len(self.sources_json) > 8_100_000:\n                raise ValueError(\"sources exceed input limit\")\n            payload.update(strict_json_object(self.sources_json))\n        if mode in {\"prepare_index\", \"index_rebuild\"}:\n            payload[\"operation_id\"] = self.operation_id or None\n        scope=getattr(self,\"source_scope\",\"legacy\")\n        if scope != \"legacy\": payload[\"source_scope\"]=scope\n        payload.update(override)\n        return PrepareSourcesRequest.model_validate(payload).model_dump(mode=\"json\")\n\n    async def request_data(self) -> Data:\n        return await self.result_data()\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -743,6 +743,35 @@
                 "type": "str",
                 "_input_type": "MessageTextInput"
               },
+              "source_scope": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "options": [
+                  "legacy",
+                  "corpus",
+                  "project"
+                ],
+                "options_metadata": [],
+                "combobox": false,
+                "dialog_inputs": {},
+                "toggle": false,
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "source_scope",
+                "value": "legacy",
+                "display_name": "Source visibility",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "external_options": {},
+                "type": "str",
+                "_input_type": "DropdownInput"
+              },
               "sources_json": {
                 "tool_mode": false,
                 "trace_as_input": true,
@@ -824,7 +853,7 @@
             "metadata": {
               "nima_component_id": "source_fields",
               "contract_version": "1",
-              "source_sha256": "7a6ce42a8f3cdb1215c85eec667dcf528aca7385fe5543b29e8c0602424dac90"
+              "source_sha256": "1a1b914ae7ed338f649aaeed08d188ad2b61f08932f49ad1cc424091433d6ebd"
             },
             "tool_mode": false
           },
@@ -931,6 +960,27 @@
                 "type": "bool",
                 "_input_type": "BoolInput"
               },
+              "allow_project_writes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "allow_project_writes",
+                "value": false,
+                "display_name": "Allow notes in the bound project (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "bool",
+                "_input_type": "BoolInput"
+              },
               "code": {
                 "type": "code",
                 "required": true,
@@ -938,7 +988,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Visible normalization, PDF worker configuration, and corpus publication boundary.\"\"\"\nfrom lfx.io import BoolInput, StrInput\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.source_tools import PrepareSourcesRequest, SourceToolContext, prepare_sources\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.pdf_client import PdfNormalizerClient\nfrom nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass PrepareSources(BaseComponent):\n    name = \"PrepareSources\"\n    display_name = \"Normalize, Chunk and Store Sources\"\n    description = \"Normalize mathematics-preserving text/PDF, retain original bytes and PDF evidence, validate exact regions, and register immutable corpus-wide sources.\"\n    nima_manifest = manifest_for_component(\"PrepareSources\")\n    inputs = [handle(\"payload\", \"Validated sources\"),\n        StrInput(name=\"corpus_id\", display_name=\"Authorized corpus (operator)\", value=\"papers\"),\n        StrInput(name=\"project_id\", display_name=\"Index/run project (operator)\", value=\"research\"),\n        StrInput(name=\"actor\", display_name=\"Actor (operator)\", value=\"harness\"),\n        StrInput(name=\"projection_limits_json\", display_name=\"Projection limits (operator)\", value='{}'),\n        BoolInput(name=\"allow_corpus_writes\", display_name=\"Allow CORPUS source writes (operator)\", value=False,\n            info=\"Sources are corpus-wide, not private to the index project. Requires an existing registered corpus.\"),\n        BoolInput(name=\"allow_pdf\", display_name=\"Allow configured PDF worker (operator)\", value=False),\n        StrInput(name=\"pdf_url\", display_name=\"PDF worker URL (operator)\", value=\"\"),\n        StrInput(name=\"pdf_token_file\", display_name=\"PDF worker token file (operator)\", value=\"\"),\n    ]\n\n    def run_sync(self):\n        request = PrepareSourcesRequest.model_validate(_value(self.payload))\n        context = SourceToolContext(corpus_id=self.corpus_id, project_id=self.project_id or None,\n            actor=self.actor, allow_corpus_writes=self.allow_corpus_writes, allow_pdf=self.allow_pdf,\n            projection_limits=__import__('json').loads(self.projection_limits_json))\n        # Client construction/secret access happens inside the receipted attempt,\n        # only if authorized PDF input actually requires the worker.\n        def pdf_normalizer(data):\n            result = PdfNormalizerClient(self.pdf_url, self.pdf_token_file).normalize(data)\n            return result[\"text\"], result[\"diagnostics\"]\n        if request.mode == \"preview\":\n            return prepare_sources(None, request, context).model_dump(mode=\"json\")\n        with configured_store(required=False) as store:\n            return prepare_sources(store, request, context,\n                pdf_normalizer=pdf_normalizer if self.allow_pdf else None).model_dump(mode=\"json\")\n",
+                "value": "\"\"\"Visible normalization, PDF worker configuration, and corpus publication boundary.\"\"\"\nfrom lfx.io import BoolInput, StrInput, IntInput\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.source_tools import PrepareSourcesRequest, SourceToolContext, prepare_sources\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.pdf_client import PdfNormalizerClient\nfrom nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent, handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass PrepareSources(BaseComponent):\n    name = \"PrepareSources\"\n    display_name = \"Normalize, Chunk and Store Sources\"\n    description = \"Normalize mathematics-preserving text/PDF, retain original bytes and PDF evidence, validate exact regions, and register immutable corpus-wide sources.\"\n    nima_manifest = manifest_for_component(\"PrepareSources\")\n    inputs = [handle(\"payload\", \"Validated sources\"),\n        StrInput(name=\"corpus_id\", display_name=\"Authorized corpus (operator)\", value=\"papers\"),\n        StrInput(name=\"project_id\", display_name=\"Index/run project (operator)\", value=\"research\"),\n        StrInput(name=\"actor\", display_name=\"Actor (operator)\", value=\"harness\"),\n        IntInput(name=\"max_pdf_evidence_bytes\",display_name=\"Derived PDF evidence byte budget (operator)\",value=20000000),\n        StrInput(name=\"local_staging_root\", display_name=\"Scoped local-file staging directory (operator)\", value=\"\"),\n        StrInput(name=\"projection_limits_json\", display_name=\"Projection limits (operator)\", value='{}'),\n        BoolInput(name=\"allow_corpus_writes\", display_name=\"Allow CORPUS source writes (operator)\", value=False,\n            info=\"Sources are corpus-wide, not private to the index project. Requires an existing registered corpus.\"),\n        BoolInput(name=\"allow_project_writes\",display_name=\"Allow notes in the bound project (operator)\",value=False),\n        BoolInput(name=\"allow_pdf\", display_name=\"Allow configured PDF worker (operator)\", value=False),\n        StrInput(name=\"pdf_url\", display_name=\"PDF worker URL (operator)\", value=\"\"),\n        StrInput(name=\"pdf_token_file\", display_name=\"PDF worker token file (operator)\", value=\"\"),\n    ]\n\n    def run_sync(self):\n        request = PrepareSourcesRequest.model_validate(_value(self.payload))\n        context = SourceToolContext(corpus_id=self.corpus_id, project_id=self.project_id or None,\n            actor=self.actor, allow_corpus_writes=self.allow_corpus_writes, allow_pdf=self.allow_pdf, allow_project_writes=getattr(self,\"allow_project_writes\",False),\n            projection_limits=__import__('json').loads(self.projection_limits_json), local_staging_root=getattr(self,\"local_staging_root\",\"\") or None, max_pdf_evidence_bytes=getattr(self,\"max_pdf_evidence_bytes\",20000000))\n        # Client construction/secret access happens inside the receipted attempt,\n        # only if authorized PDF input actually requires the worker.\n        def pdf_normalizer(data):\n            result = PdfNormalizerClient(self.pdf_url, self.pdf_token_file).normalize(data)\n            return result[\"text\"], result[\"diagnostics\"]\n        if request.mode == \"preview\":\n            return prepare_sources(None, request, context).model_dump(mode=\"json\")\n        with configured_store(required=False) as store:\n            return prepare_sources(store, request, context,\n                pdf_normalizer=pdf_normalizer if self.allow_pdf else None).model_dump(mode=\"json\")\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -971,6 +1021,49 @@
                 "track_in_telemetry": false,
                 "type": "str",
                 "_input_type": "StrInput"
+              },
+              "local_staging_root": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "local_staging_root",
+                "value": "",
+                "display_name": "Scoped local-file staging directory (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "StrInput"
+              },
+              "max_pdf_evidence_bytes": {
+                "tool_mode": false,
+                "trace_as_metadata": true,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "max_pdf_evidence_bytes",
+                "value": 20000000,
+                "display_name": "Derived PDF evidence byte budget (operator)",
+                "advanced": false,
+                "api_editable": false,
+                "dynamic": false,
+                "info": "",
+                "title_case": false,
+                "track_in_telemetry": true,
+                "type": "int",
+                "_input_type": "IntInput"
               },
               "pdf_token_file": {
                 "tool_mode": false,
@@ -1126,7 +1219,7 @@
             "metadata": {
               "nima_component_id": "prepare_sources",
               "contract_version": "1",
-              "source_sha256": "85df92a2ba5e091b0767c98d9f8e010aad668045b7492542b9fda2038da2729a"
+              "source_sha256": "877af21bf7a10f5f8516693de3ecf5b2dc16be22a1e0b24f5345d37d94715064"
             },
             "tool_mode": false
           },
@@ -1810,12 +1903,12 @@
       "SourceFields": {
         "nima_component_id": "source_fields",
         "contract_version": "1",
-        "source_sha256": "7a6ce42a8f3cdb1215c85eec667dcf528aca7385fe5543b29e8c0602424dac90"
+        "source_sha256": "1a1b914ae7ed338f649aaeed08d188ad2b61f08932f49ad1cc424091433d6ebd"
       },
       "PrepareSources": {
         "nima_component_id": "prepare_sources",
         "contract_version": "1",
-        "source_sha256": "85df92a2ba5e091b0767c98d9f8e010aad668045b7492542b9fda2038da2729a"
+        "source_sha256": "877af21bf7a10f5f8516693de3ecf5b2dc16be22a1e0b24f5345d37d94715064"
       },
       "EmbedSourceRegions": {
         "nima_component_id": "embed_source_regions",

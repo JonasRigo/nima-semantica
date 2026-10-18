@@ -16,6 +16,44 @@ def emit(value):
     print(json.dumps(value, indent=2, ensure_ascii=False, default=str))
 
 
+def _langflow_connection_hint(error, config):
+    import httpx
+    import shlex
+    from urllib.parse import urlsplit
+
+    if config is None or not isinstance(error, (httpx.ConnectError, httpx.ConnectTimeout)):
+        return ""
+    try:
+        failed = urlsplit(str(error.request.url))
+        configured = urlsplit(config.langflow_url)
+        origin = lambda url: (url.scheme, url.hostname, url.port or (443 if url.scheme == "https" else 80))
+        same_service = origin(failed) == origin(configured)
+    except (RuntimeError, ValueError):
+        return ""
+    if not same_service and not failed.path.startswith("/api/v1/mcp/project/"):
+        return ""
+    # Display the service address without credentials, query strings or project IDs.
+    host = failed.hostname or "localhost"
+    display_host = f"[{host}]" if ":" in host else host
+    port = origin(failed)[2]
+    hint = f" Make sure Langflow is running and reachable at {failed.scheme}://{display_host}:{port}."
+    if not same_service or host not in {"localhost", "127.0.0.1", "::1"} or failed.scheme != "http":
+        return hint
+    root = Path(config.data_root).expanduser()
+    compose = root / "installation/compose.yaml"
+    label = "org.nima.langflow." + hashlib.sha256(str(root).encode()).hexdigest()[:12]
+    agent = Path.home() / "Library/LaunchAgents" / (label + ".plist")
+    native_python = root / "langflow-env/bin/python"
+    if sys.platform == "darwin" and agent.is_file():
+        command = ["launchctl", "kickstart", f"gui/{os.getuid()}/{label}"]
+    elif sys.platform == "linux" and compose.is_file():
+        command = ["docker", "compose", "-p", "nima-release", "-f", str(compose), "start", "langflow"]
+    else:
+        command = ([str(native_python), "-m", "langflow"] if native_python.is_file() else ["langflow"])
+        command += ["run", "--host", host, "--port", str(port)]
+    return hint + " You can start it with: " + shlex.join(command)
+
+
 def register_corpus(store, corpus):
     from .corpus_registry import CorpusRegistry
     from .registry_contracts import CorpusDescriptor
@@ -59,12 +97,27 @@ def setup(args):
         if not backup.exists():
             shutil.copy2(path, backup)
     write_json(path, config.model_dump())
+    cli_path = {"status": "skipped"}
+    if not args.no_modify_path:
+        from .cli_path import install_cli_path
+        cli_path = install_cli_path()
+        print("NIMA CLI: " + cli_path["message"], file=sys.stderr)
+        if cli_path.get("activation_command"):
+            print(cli_path["activation_command"], file=sys.stderr)
+    if args.minimal: config.reporting_enabled = False
+    if args.provision and config.reporting_enabled:
+        from .reporting import provision_reporting
+        provision_reporting(config)
+        from .desktop_dependencies import provision_studio
+        provision_studio(config)
+        write_json(path, config.model_dump())
     if args.provision:
         from .setup_services import provision
         config = provision(config, path, pdf=args.pdf, lean=args.lean)
     effective = {name: {role: config.overrides.get(f"{name}:{role}", config.overrides.get(name, config.llm)).model_dump() for role in roles}
                  for name, roles in inventory.items()}
-    emit({"configuration": path, "models": effective, "embedding": config.embedding, "next": "nima project init PROJECT_ID --corpus CORPUS_ID"})
+    emit({"configuration": path, "models": effective, "embedding": config.embedding, "cli_path": cli_path,
+          "next": "nima project init PROJECT_ID --corpus CORPUS_ID"})
 
 
 def install_harness(root, config_path, binding, harnesses):
@@ -121,21 +174,16 @@ def install_harness(root, config_path, binding, harnesses):
                 raise ValueError(f"Existing {harness} {key} configuration differs; reconcile it first")
             settings[key] = server
         planned[path] = json.dumps(value, indent=2) + "\n"
-    skill_roots = [root / ".agents/skills"]
-    if "claude" in harnesses:
-        skill_roots.append(root / ".claude/skills")
-    for destination in skill_roots:
-        for source in (assets() / "skills").rglob("*"):
-            if source.is_file() and "__pycache__" not in source.parts:
-                target = destination / source.relative_to(assets() / "skills")
-                data = source.read_text()
-                if target.exists() and target.read_text() != data:
-                    raise ValueError(f"Installed skill changed: {target}; reconcile before upgrading")
-                planned[target] = data
+    from .skill_installation import managed_skill_plan
+    skill_writes,conflicts=managed_skill_plan(root,binding,harnesses,assets()/"skills")
+    if conflicts: raise ValueError("Installed skills were edited; preserve and reconcile: "+", ".join(conflicts))
+    planned.update({target: data.decode() for target,data in skill_writes.items()})
     instruction = root / "NIMA_PROJECT.md"
     text = f"# NIMA project\n\nCorpus: `{binding['corpus_id']}`. Project: `{binding['project_id']}`.\nRead `.nima/project.json` and run `nima project status {binding['project_id']} --corpus {binding['corpus_id']}` to reconnect to canonical state.\nDiscover the configured NIMA MCP tools and read the relevant installed skill before work.\nPrivate graph sessions and project knowledge are separate; exports are inspection snapshots.\n"
     legacy_text = text
     text += "\nIf `nima` is not on PATH, use the `cli_command` argument array in `.nima/project.json`.\n"
+    if binding.get("layout"):
+        text += "\nResolve human-readable output folders from the `layout.paths` entries in `.nima/project.json`.\n"
     if instruction.exists() and instruction.read_text() not in (text, legacy_text):
         raise ValueError("Existing NIMA_PROJECT.md differs")
     planned[instruction] = text
@@ -251,11 +299,16 @@ def project_init(args, config):
     corpus, project = identifier(args.corpus), identifier(args.project)
     directory = project_path(config, corpus, project)
     directory.mkdir(parents=True, exist_ok=True)
-    store = GraphStore(store_path(config))
-    try:
-        register_corpus(store, corpus)
-    finally:
-        store.close()
+    from .corpus_snapshot import CorpusSnapshot
+    from .corpus_registry import CorpusRegistry
+    registered = False
+    if (store_path(config) / "graph.sqlite3").exists():
+        with CorpusSnapshot(store_path(config),corpus_id=corpus,project_id=project) as reader:
+            registered = CorpusRegistry(reader).corpus(corpus) is not None
+    if not registered:
+        store = GraphStore(store_path(config))
+        try: register_corpus(store, corpus)
+        finally: store.close()
     manifest = directory / "project.json"
     binding = json.loads(manifest.read_text()) if manifest.exists() else {
         "schema_version": 1, "corpus_id": corpus, "project_id": project, "store_root": str(store_path(config)),
@@ -275,7 +328,15 @@ def project_init(args, config):
         published = publish_flows(config, corpus, project, directory)
         binding["mcp_url"] = published["mcp_url"]
     write_json(manifest, binding)
+    from .project_layout import resolve_layout, scaffold
+    local_manifest = Path(args.path) / ".nima/project.json"
+    if args.layout or not local_manifest.exists():
+        override = json.loads(Path(args.layout).read_text()) if args.layout else None
+        binding["layout"] = resolve_layout(binding.get("layout", config.project_layout.model_dump()), override).model_dump()
     changed = install_harness(args.path, args.config or configuration_path(), binding, args.harness.split(","))
+    if binding.get("layout"):
+        write_json(manifest, binding)
+        scaffold(args.path, binding)
     emit({"project": binding, "installed_files": changed, "toolbox_configured": bool(binding.get("mcp_url")),
           "toolbox_verified": False, "verification_command": "nima doctor --project " + binding["project_id"] + " --corpus " + binding["corpus_id"] + " --mcp"})
 
@@ -377,12 +438,18 @@ def _ingest_one(args, config):
     ctx = SourceToolContext(corpus_id=corpus, project_id=args.project,
         source_scope="project" if args.project else "corpus", allow_corpus_writes=not args.project,
         allow_project_writes=bool(args.project), allow_pdf=bool(config.pdf_url) or preparation_mode == "fast", allow_embeddings=args.index_mode == "vector",
+        max_pdf_evidence_bytes=config.max_pdf_evidence_bytes,
         projection_limits=projection_limits(config, getattr(args, "projection_max_tokens", None)).model_dump())
     def pdf_normalizer(content):
         from .orchestration.langflow.pdf_client import PdfNormalizerClient
         result = PdfNormalizerClient(config.pdf_url, config.pdf_token_file).normalize(content)
         return result["text"], result["diagnostics"]
-    store = GraphStore(store_path(config))
+    try:
+        store = GraphStore(store_path(config))
+    except __import__("nima_semantica.models",fromlist=["ConflictError"]).ConflictError as error:
+        if str(error)!="another service owns this corpus" or remote: raise
+        from .local_staging import ingest_through_owner
+        return ingest_through_owner(args,config)
     try:
         register_corpus(store, corpus)
         if remote:
@@ -505,6 +572,7 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     install = commands.add_parser("setup")
     install.add_argument("--from-config"); install.add_argument("--non-interactive", action="store_true")
+    install.add_argument("--no-modify-path", action="store_true", help="Skip installing the user CLI launcher and editing shell startup files")
     from .installation import MODEL_ENDPOINTS
     install.add_argument("--model"); install.add_argument("--provider", choices=list(MODEL_ENDPOINTS))
     install.add_argument("--base-url"); install.add_argument("--data-root")
@@ -519,6 +587,7 @@ def main(argv=None):
     install.add_argument("--embedding-revision"); install.add_argument("--embedding-dimension", type=int)
     install.add_argument("--provision", action="store_true", help="Install/start the local stack, including dependency and model downloads")
     install.add_argument("--pdf", action="store_true"); install.add_argument("--lean", action="store_true")
+    install.add_argument("--minimal", action="store_true", help="Explicitly omit managed Blender and reporting dependencies")
     diagnostic = commands.add_parser("doctor")
     diagnostic.add_argument("--mcp", action="store_true")
     diagnostic.add_argument("--project")
@@ -569,12 +638,15 @@ def main(argv=None):
         sub = project.add_parser(action); sub.add_argument("project"); sub.add_argument("--corpus", default="papers")
         if action == "init":
             sub.add_argument("--path", default="."); sub.add_argument("--harness", default="codex,claude,opencode")
+            sub.add_argument("--layout", help="JSON folder-role overrides for this workspace")
             sub.add_argument("--offline", action="store_true", help="Initialize storage and graph MCPs without publishing the Langflow toolbox")
         if action in {"init", "refresh"}:
             sub.add_argument("--projection-max-tokens", type=int, help="Explicit projection token limit (1..10000000)")
     configure = project.add_parser("configure", help="Configure optional vocabulary guidance for new investigations")
     configure.add_argument("project"); configure.add_argument("--corpus", default="papers")
-    configure.add_argument("--normalized-reasoning", choices=["on", "off"], required=True)
+    configure.add_argument("--normalized-reasoning", choices=["on", "off"])
+    configure.add_argument("--layout", help="JSON layout overrides; preview by default")
+    configure.add_argument("--preview-file"); configure.add_argument("--apply", help="Apply an exact saved layout preview hash")
     configure.add_argument("--vocabulary", help="Bind a validated structured vocabulary JSON file")
     configure.add_argument("--path", default=".", help="Update the matching workspace binding if present")
     vocabulary = commands.add_parser("vocabulary").add_subparsers(dest="action", required=True)
@@ -609,13 +681,26 @@ def main(argv=None):
         sub = workflow.add_parser(action); sub.add_argument("file")
         if action == "install":
             sub.add_argument("--corpus", required=True); sub.add_argument("--project", required=True)
+    from .release_cli import register_commands
+    register_commands(commands, project)
     args = parser.parse_args(argv)
     if args.command == "doctor" and args.mcp and not args.project:
         parser.error("doctor --mcp requires --project and its corpus scope")
+    config = None
     try:
         if args.command == "setup":
             setup(args); return 0
         config = load_installation(args.config)
+        if args.command in {"chat", "math", "report"}:
+            from .release_cli import chat_command, calculation_command
+            if args.command == "report":
+                from .reporting import report_command
+                result = report_command(args, config)
+            else: result = chat_command(args,config) if args.command == "chat" else calculation_command(args,config)
+            if result is not None:
+                if args.command == "chat" and not args.json and "answer" in result: print(result["answer"])
+                else: emit(result)
+            return 0
         if args.command == "list":
             from .installation import list_corpora
             emit({"corpora": list_corpora(config)})
@@ -638,7 +723,7 @@ def main(argv=None):
                 write_json(args.preview_file, preview)
                 emit({"preview_hash": preview["preview_hash"], "scope": preview["scope"],
                       "files": [{k: v for k, v in item.items() if k != "payload_base64"} for item in preview["changes"]],
-                      "preview_file": args.preview_file})
+                      "preview_file": args.preview_file, "skill_conflicts": preview.get("skill_conflicts",[])})
             return 0
         if args.command == "maintenance":
             from .private_service import database_owner
@@ -671,7 +756,15 @@ def main(argv=None):
                 emit({"projects": list_projects(config, args.corpus)})
             elif args.action == "promote":
                 return project_promote(args, config)
+            elif args.action == "graph":
+                from .release_cli import graph_command
+                emit(graph_command(args,config))
             elif args.action == "configure":
+                if args.layout:
+                    if args.normalized_reasoning is not None: raise ValueError("Configure layout and vocabulary separately")
+                    from .release_cli import layout_command
+                    emit(layout_command(args, config)); return 0
+                if args.normalized_reasoning is None: raise ValueError("Choose --layout or --normalized-reasoning")
                 from .vocabulary_installation import configure_project
                 emit(configure_project(config, identifier(args.corpus), identifier(args.project),
                     enabled=args.normalized_reasoning == "on", vocabulary_file=args.vocabulary, workspace=args.path))
@@ -683,8 +776,8 @@ def main(argv=None):
                 emit({"projection_ready": True, "corpus_id": args.corpus, "project_id": args.project})
             else:
                 binding = project_binding(config, args.corpus, args.project)
-                from .storage import GraphStore
-                store = GraphStore(store_path(config))
+                from .corpus_snapshot import CorpusSnapshot
+                store = CorpusSnapshot(store_path(config),corpus_id=args.corpus,project_id=args.project)
                 try:
                     emit({**binding, "graph_revision": store.graph_revision(args.corpus, args.project).model_dump(mode="json"),
                           "private_sessions": private_sessions(binding),
@@ -766,11 +859,13 @@ def main(argv=None):
         if args.command == "ingest":
             return ingest(args, config)
         if args.command == "export":
-            from .storage import GraphStore
+            from .corpus_snapshot import CorpusSnapshot
             from .graph_service import GraphService
-            store = GraphStore(store_path(config))
+            store = CorpusSnapshot(store_path(config),corpus_id=args.corpus,project_id=args.project)
             try:
-                GraphService(store).export_bundle_directory(args.output, corpus_id=args.corpus, project_id=args.project)
+                from .ontology_services import OntologyService
+                ontology = OntologyService.from_store(store, corpus_id=args.corpus, project_id=args.project)
+                GraphService(store, ontology=ontology).export_bundle_directory(args.output, corpus_id=args.corpus, project_id=args.project)
                 emit({"directory": str(Path(args.output).resolve()), "revision": store.graph_revision(args.corpus, args.project).model_dump(mode="json")})
             finally:
                 store.close()
@@ -779,7 +874,14 @@ def main(argv=None):
             from .custom_workflows import handle
             return handle(args, config)
     except Exception as exc:
-        print(f"nima: {type(exc).__name__}: {exc}", file=sys.stderr)
+        message = str(exc)
+        hint = _langflow_connection_hint(exc, config)
+        if hint:
+            message = message.rstrip()
+            if message and message[-1] not in ".!?":
+                message += "."
+            message += hint
+        print(f"nima: {type(exc).__name__}: {message}", file=sys.stderr)
         return 2
 
 

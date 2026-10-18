@@ -202,9 +202,11 @@ def prepare_update(store,request,context):
         "add_edges":tuple(e.model_copy(update={"ontology_profile":profile.digest}) for e in delta.add_edges)})
     nodes,edges=store.prospective_graph(bound)
     for n in nodes.values():
+        if n.corpus_id!=context.corpus_id or n.project_id not in (None,context.project_id):continue
         p=ontology.resolve(n.ontology_profile)
         if n.node_type not in {t.name.casefold() for t in p.node_types}:raise ConflictError("unknown node type")
     for e in edges.values():
+        if e.corpus_id!=context.corpus_id or e.project_id not in (None,context.project_id):continue
         p=ontology.resolve(e.ontology_profile);r=next((r for r in p.relation_types if r.name.casefold()==e.relation),None)
         if r is None or nodes[e.source_id].node_type not in {x.casefold() for x in r.source_types} or nodes[e.target_id].node_type not in {x.casefold() for x in r.target_types}:raise ConflictError("invalid relation endpoints")
         if any(nodes[ref].ontology_profile!=p.digest for ref in (e.source_id,e.target_id)):raise ConflictError("cross-profile edge")

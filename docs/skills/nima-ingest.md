@@ -18,3 +18,8 @@ Approved corpus sharing preserves this distinction. Full preparation creates sep
 identified regions and upgrade links; existing graph evidence must be reconciled explicitly.
 
 See [knowledge-base ingestion](../KNOWLEDGE_BASE.md) for CLI options.
+
+Full PDF preparation uses the dedicated Langflow vision recognizer.
+To save its exact normalization while ingesting, pass `--ocr-output-dir DIRECTORY`; `--overwrite-ocr` replaces exported files only.
+For OCR without corpus writes, use `nima ocr INPUT.pdf --output OUTPUT.md`.
+Both commands retain Markdown with LaTeX and JSON evidence, including unresolved formula diagnostics.

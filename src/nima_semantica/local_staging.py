@@ -46,6 +46,13 @@ def ingest_through_owner(args,config):
         if not candidates:raise ValueError('Register a project toolbox for this corpus before using its active owner')
         binding=project_binding(config,corpus,candidates[0]['project_id'])
     staging=stage_local(config,args.file,corpus,project)
+    if getattr(args,"ocr_output_dir",None):
+        from .ocr import destinations
+        source=Path(args.file)
+        if source.read_bytes().startswith(b"%PDF-"):
+            digest=hashlib.sha256(source.read_bytes()).hexdigest()
+            destinations(Path(args.ocr_output_dir)/(source.stem+"-"+digest[:12]+".md"),
+                force=getattr(args,"overwrite_ocr",False),source=source)
     from .models import identity
     operation='cli-staged-'+identity(dict(staging_id=staging,index_mode=args.index_mode,mode=args.mode))
     if args.retry:
@@ -55,7 +62,8 @@ def ingest_through_owner(args,config):
         index_scope='project' if project else 'corpus',source_scope='project' if project else 'corpus',sources=[dict(name=Path(args.file).name,staging_id=staging)])
     if args.projection_max_tokens:request['projection_max_tokens']=args.projection_max_tokens
     result=call_owner(binding['mcp_url'],'Prepare and Index Sources',request,timeout=3600)
-    if result.status not in ('complete','partial') or not result.data.get('index_ready'):raise ValueError('Owner ingestion did not produce a ready index: '+str(result.diagnostics))
+    if result.status not in ('complete','partial') or not result.data.get('index_ready'):
+        return result
     from .cli import refresh_project_projection
     projects=[project] if project else [p['project_id'] for p in list_projects(config,corpus)]
     for selected in projects:refresh_project_projection(config,corpus,selected,args.projection_max_tokens)

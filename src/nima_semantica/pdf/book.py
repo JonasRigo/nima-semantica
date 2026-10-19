@@ -34,7 +34,7 @@ def merge_batches(parts,source_hash,runtime):
         mathematics=dict(unresolved_formula_count=unresolved),batch_pages=16,total_pages=len(covered)))
     return dict(text=text,diagnostics=diagnostics,normalization_complete=unresolved==0)
 
-def normalize_book(source,models,output,runtime,*,progress=None):
+def normalize_book(source,models,output,runtime,*,recognize,progress=None):
     import pypdfium2 as pdfium
     from .worker import normalize_single_pdf
     from ._ported import _atomic_formula_artifact
@@ -54,7 +54,7 @@ def normalize_book(source,models,output,runtime,*,progress=None):
                 if not path.exists():
                     with pdfium.PdfDocument.new() as subset:
                         subset.import_pages(pdf,list(range(first-1,last)));subset.save(path)
-                batch=normalize_single_pdf(path,models,root/'batches',progress=progress)
+                batch=normalize_single_pdf(path,models,root/'batches',runtime,recognize=recognize,progress=progress)
                 _atomic_formula_artifact(checkpoint,canonical_json(batch));_atomic_formula_artifact(digest,sha256_file(checkpoint).encode())
             parts.append((first,last,batch))
             if progress:progress(dict(phase='book_batch',first_page=first,last_page=last,total_pages=count,cached=checkpoint.exists()))

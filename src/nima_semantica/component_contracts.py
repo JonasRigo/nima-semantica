@@ -242,6 +242,12 @@ def validate_manifest_execution(
 
 def manifest_for_component(name: str) -> ComponentManifest:
     """Resolve a maintained foundational adapter, rejecting retired tools."""
+    if name == "FormulaTranscription":
+        return ComponentManifest(component_id="formula_transcription", version="1",
+            input_contract="pdf_crop_request", output_contract="pdf_crop_transcription",
+            scope_fields=(), revision_fields=(), capabilities=(ComponentCapability.MODEL_CALL,),
+            authority=ComponentAuthority.TRANSFORMATION, side_effect_class=SideEffectClass.PURE_TRANSFORM,
+            receipt=ReceiptDeclaration(mode=ReceiptMode.NONE))
     if name == "AnswerKnowledge":
         return ComponentManifest(component_id="answer_knowledge",version="1",input_contract="knowledge_answer_request",output_contract="tool_result",
             revision_fields=(),authority=ComponentAuthority.ARTIFACT_WRITE,side_effect_class=SideEffectClass.ARTIFACT_WRITE,

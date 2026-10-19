@@ -35,17 +35,45 @@ def check_cancelled():
 
 def check_context(profile, value, options):
     check_cancelled()
-    if profile.context_window is None:
-        return
     if hasattr(value, 'to_messages'):
         value = value.to_messages()
-    def encode(obj):
-        return obj.model_dump(mode='json') if hasattr(obj, 'model_dump') else str(obj)
-    payload = json.dumps({'messages': value, 'tools': options.get('tools', [])},
-                         ensure_ascii=False, default=encode)
+    image_estimate = 0
+    def bounded(obj):
+        nonlocal image_estimate
+        if hasattr(obj, 'model_dump'):
+            return bounded(obj.model_dump(mode='json'))
+        if isinstance(obj, list):
+            return [bounded(item) for item in obj]
+        if isinstance(obj, dict):
+            if obj.get('type') in {'image', 'image_url'}:
+                import base64
+                from io import BytesIO
+                from PIL import Image
+                encoded = obj.get('base64')
+                url = obj.get('image_url', {}).get('url') if isinstance(obj.get('image_url'), dict) else obj.get('url')
+                if encoded is None and isinstance(url, str) and url.startswith('data:image/'):
+                    encoded = url.partition(',')[2]
+                if not isinstance(encoded, str) or len(encoded) > 11_000_000:
+                    raise ValueError('Model image must be a bounded inline image')
+                data = base64.b64decode(encoded, validate=True)
+                if len(data) > 8_000_000:
+                    raise ValueError('Model image exceeds the byte limit')
+                with Image.open(BytesIO(data)) as image:
+                    width, height = image.size
+                    if width * height > 20_000_000:
+                        raise ValueError('Model image exceeds the pixel limit')
+                # Provider-independent approximation, not base64 text tokenization.
+                image_estimate += 1024 + ((width + 255)//256) * ((height + 255)//256) * 512
+                return {'type':'image', 'width':width, 'height':height, 'image_token_estimate':'approximate'}
+            return {k:bounded(v) for k,v in obj.items()}
+        return obj
+    payload = json.dumps(bounded({'messages': value, 'tools': options.get('tools', [])}),
+                         ensure_ascii=False, default=str)
+    if profile.context_window is None:
+        return
     # Deliberately conservative and tokenizer independent, not an exact provider
     # token count. Include tool schemas, UTF-8 math, message metadata and framing.
-    estimate = len(payload.encode('utf-8')) + 1024
+    estimate = len(payload.encode('utf-8')) + 1024 + image_estimate
     reserve = max([profile.max_tokens, *[v for key in ('max_tokens','max_output_tokens','num_predict')
                   if isinstance(v := options.get(key), int) and v > 0]])
     if estimate + reserve > profile.context_window:

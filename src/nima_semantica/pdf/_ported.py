@@ -19,7 +19,9 @@ from typing import Any
 from .support import PdfError as NimaError, canonical_json, sha256_bytes
 
 _DOCLING_THREAD_STATE = threading.local()
-FORMULA_RECOGNITION_PROFILE = "nima-semantica-codeformula-latex-v1"
+FORMULA_RECOGNITION_PROFILE = "nima-langflow-formula-v1"
+PDF_IMAGES_SCALE = 1.67
+FORMULA_CROP_EXPANSION = 0.18
 
 def _export_formula_text(document):
     """Keep mathematical text nested under native Docling picture nodes."""
@@ -239,31 +241,6 @@ _FRAGMENTED_INTERTEXT_TAIL = re.compile(
 )
 
 
-def _exclude_fragmented_for_all_tail(value: str) -> tuple[str, dict[str, str] | None]:
-    """Remove only an OCR-corrupted prose quantifier from an otherwise valid formula.
-
-    Docling may classify a displayed equation and its adjacent ``for all ...`` prose as one
-    formula crop. CodeFormulaV2 then sometimes returns the equation as LaTeX followed by
-    character-spaced prose. The surrounding Docling text item retains that prose, so it must
-    not be accepted as mathematical notation. Every other quality failure remains fail-closed.
-    """
-    normalized = value.strip()
-    match = _FRAGMENTED_FOR_ALL_TAIL.match(normalized)
-    kind = "excluded_fragmented_for_all_prose_tail"
-    if match is None:
-        match = _FRAGMENTED_INTERTEXT_TAIL.match(normalized)
-        kind = "excluded_fragmented_intertext_prose_tail"
-    if match is None:
-        return normalized, None
-    equation = match.group("equation").strip()
-    if not equation:
-        return normalized, None
-    return equation, {
-        "kind": kind,
-        "raw_latex_hash": sha256_bytes(normalized.encode("utf-8")),
-    }
-
-
 def _requires_tight_formula_retry(quality_issues: list[str]) -> bool:
     """Retry crop-sensitive failures once against the exact layout region."""
     return bool({"fragmented_ocr_tokens", "unbalanced_braces"} & set(quality_issues))
@@ -336,348 +313,134 @@ def _thread_cached_component(name: str, key: Any, factory: Callable[[], Any]) ->
         setattr(_DOCLING_THREAD_STATE, name, cached)
         setattr(_DOCLING_THREAD_STATE, f"{name}_key", key)
     return cached
-def _parse_docling_with_latex(
-    file_path: str | Path, file_type: str | None = None, **options: Any
-) -> dict[str, Any]:
-    """Parse once, then recognize only unresolved formula regions with a pinned model."""
+def _parse_docling_with_latex(file_path: str | Path, file_type=None, **options):
+    """Retain Docling layout and recognize its formula images through Langflow."""
     del file_type
-    from docling.datamodel.base_models import InputFormat, ItemAndImageEnrichmentElement
-    from docling.datamodel.pipeline_options import CodeFormulaVlmOptions, PdfPipelineOptions
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
     from docling.document_converter import DocumentConverter, PdfFormatOption
-    from docling.models.stages.code_formula.code_formula_vlm_model import CodeFormulaVlmModel
     from docling_core.types.doc import DocItemLabel
 
-    formula_model_path = Path(str(options.pop("formula_model_path"))).resolve(strict=True)
-    formula_model_manifest_hash = str(options.pop("formula_model_manifest_hash"))
-    artifact_dir = Path(str(options.pop("formula_artifact_dir"))).resolve()
-    artifact_prefix = str(options.pop("formula_artifact_prefix"))
-    progress = options.pop("progress", None) or (lambda _event: None)
+    layout_path = Path(options.pop("layout_model_path")).resolve(strict=True)
+    layout_hash = options.pop("layout_manifest_hash")
+    recognition_manifest = options.pop("recognition_manifest")
+    recognize = options.pop("recognize")
+    artifact_dir = Path(options.pop("formula_artifact_dir")).resolve()
+    artifact_prefix = options.pop("formula_artifact_prefix")
+    progress = options.pop("progress", None) or (lambda event: None)
     allow_partial = options.pop("allow_partial", False)
-    expected_formulas = options.pop("expected_formulas", [])
-    expected_by_crop = {
-        str(item.get("crop_hash")): item
-        for item in expected_formulas
-        if isinstance(item, dict) and item.get("crop_hash")
-    }
-    prefix_path = Path(artifact_prefix)
-    if prefix_path.is_absolute() or ".." in prefix_path.parts:
+    if options:
+        raise TypeError("Unknown PDF normalization options: " + ", ".join(options))
+    if Path(artifact_prefix).is_absolute() or ".." in Path(artifact_prefix).parts:
         raise NimaError("Invalid formula artifact prefix")
     artifact_dir.mkdir(parents=True, exist_ok=True)
-    code_formula = CodeFormulaVlmOptions.from_preset("codeformulav2")
-    local_spec = code_formula.model_spec.model_copy(
-        update={"revision": "ecedbe111d15c2dc60bfd4a823cbe80127b58af4"}
-    )
-    pipeline = PdfPipelineOptions(
-        artifacts_path=formula_model_path,
-        enable_remote_services=False,
-        allow_external_plugins=False,
-        document_timeout=600,
-        do_formula_enrichment=False,
-        do_code_enrichment=False,
-        generate_page_images=True,
-        images_scale=CodeFormulaVlmModel.images_scale,
-    )
-    converter = _thread_cached_component(
-        "converter",
-        (str(formula_model_path), formula_model_manifest_hash),
-        lambda: DocumentConverter(
-            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline)}
-        ),
-    )
+    pipeline = PdfPipelineOptions(artifacts_path=layout_path, enable_remote_services=False,
+        allow_external_plugins=False, document_timeout=600, do_formula_enrichment=False,
+        do_code_enrichment=False, generate_page_images=True, images_scale=PDF_IMAGES_SCALE)
+    converter = _thread_cached_component("converter", (str(layout_path), layout_hash),
+        lambda: DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline)}))
     result = converter.convert(str(file_path))
     if result.status.value != "success":
         raise NimaError("PDF conversion did not complete successfully")
     document = result.document
     detected = [item for item in document.texts if item.label == DocItemLabel.FORMULA]
-    progress(
-        {
-            "phase": "layout",
-            "detail": f"detected {len(detected)} formula regions",
-            "formula_regions": len(detected),
-        }
-    )
-    pending: list[tuple[Any, Any, bytes, str, Path, Path]] = []
-    recognition: dict[str, tuple[str, str]] = {}
-    recognition_repairs: dict[str, dict[str, Any]] = {}
-    regions: dict[str, tuple[bytes, str]] = {}
-    checkpoint_records: list[dict[str, Any]] = []
-    unresolved_formulas: list[dict[str, Any]] = []
+    progress({"phase":"layout", "formula_regions":len(detected)})
+    recognition = {}; recognition_repairs = {}; regions = {}
+    checkpoint_records = []; unresolved_formulas = []
 
-    def checkpoint_details() -> dict[str, Any]:
-        checkpoint = {
-            "profile": FORMULA_RECOGNITION_PROFILE,
-            "formula_model_manifest_hash": formula_model_manifest_hash,
-            "formulas": checkpoint_records,
-        }
-        return {
-            **checkpoint,
-            "manifest_hash": sha256_bytes(canonical_json(checkpoint)),
-        }
+    def checkpoint_details():
+        value = {"profile":FORMULA_RECOGNITION_PROFILE, "recognition_manifest":recognition_manifest,
+                 "formulas":checkpoint_records}
+        return {**value, "manifest_hash":sha256_bytes(canonical_json(value))}
 
+    def save_crop(item, image):
+        buffer = BytesIO(); image.save(buffer, format="PNG")
+        data = buffer.getvalue(); digest = sha256_bytes(data)
+        path = artifact_dir / (digest + ".png")
+        _atomic_formula_artifact(path, data)
+        locator = item.prov[0]
+        return {"id":item.self_ref, "crop_hash":digest, "crop_path":str(path),
+                "page":locator.page_no, "bbox":locator.bbox.model_dump(mode="json")}, data
+
+    pending = []
     for item in detected:
         if not item.prov:
-            raise NimaError(
-                                "Docling detected a formula without a source region",
-                details={"item": item.self_ref},
-            )
-        locator = item.prov[0]
-        page = document.pages.get(locator.page_no)
-        page_image = page.image.pil_image if page is not None and page.image is not None else None
-        if page is None or page_image is None:
-            raise NimaError(
-                                "Docling did not retain the page image required for formula recognition",
-                details={"item": item.self_ref, "page": locator.page_no},
-            )
-        bbox = locator.bbox.expand_by_scale(
-            CodeFormulaVlmModel.expansion_factor,
-            CodeFormulaVlmModel.expansion_factor,
-        )
-        bbox = bbox.to_top_left_origin(page.size.height).scaled(CodeFormulaVlmModel.images_scale)
-        crop = page_image.crop((bbox.l, bbox.t, bbox.r, bbox.b))
-        buffer = BytesIO()
-        crop.save(buffer, format="PNG")
-        crop_bytes = buffer.getvalue()
-        crop_hash = sha256_bytes(crop_bytes)
-        crop_path = artifact_dir / f"{crop_hash}.png"
-        regions[item.self_ref] = (crop_bytes, crop_hash)
-        _atomic_formula_artifact(crop_path, crop_bytes)
-        # Formula enrichment is disabled during layout. Its native PDF text
-        # (e.g. stacked fractions flattened to "1 2") is not trusted LaTeX,
-        # even when it happens to pass a syntactic quality check.
-        cache_key = sha256_bytes(
-            canonical_json(
-                {
-                    "crop_hash": crop_hash,
-                    "formula_model_manifest_hash": formula_model_manifest_hash,
-                    "recognition_profile": FORMULA_RECOGNITION_PROFILE,
-                }
-            )
-        )
-        cache_path = artifact_dir / f"{cache_key}.json"
-        expected_formula = expected_by_crop.get(crop_hash)
-        if cache_path.exists() and expected_formula is not None:
-            cached = json.loads(cache_path.read_text(encoding="utf-8"))
-            expected = {
-                "crop_hash": crop_hash,
-                "formula_model_manifest_hash": formula_model_manifest_hash,
-                "recognition_key": cache_key,
-                "recognition_profile": FORMULA_RECOGNITION_PROFILE,
-            }
-            if any(cached.get(key) != value for key, value in expected.items()):
-                raise NimaError("Formula recognition cache mismatch")
-            latex = str(cached.get("latex", "")).strip()
-            if (
-                not latex
-                or "formula-not-decoded" in latex.casefold()
-                or cached.get("latex_hash") != sha256_bytes(latex.encode("utf-8"))
-                or cached.get("latex_hash") != expected_formula.get("latex_hash")
-                or latex != expected_formula.get("latex")
-            ):
-                raise NimaError("Formula recognition cache is corrupt")
-            item.text = latex
-            recognition[item.self_ref] = (latex, "pinned-recognizer")
-            checkpoint_records.append(dict(cached))
-            continue
-        pending.append((item, crop, crop_bytes, crop_hash, crop_path, cache_path))
+            raise NimaError("Detected formula has no source region")
+        locator = item.prov[0]; page = document.pages.get(locator.page_no)
+        if page is None or page.image is None:
+            raise NimaError("Detected formula has no retained page image")
+        bbox = locator.bbox.expand_by_scale(FORMULA_CROP_EXPANSION, FORMULA_CROP_EXPANSION)
+        bbox = bbox.to_top_left_origin(page.size.height).scaled(PDF_IMAGES_SCALE)
+        request, data = save_crop(item, page.image.pil_image.crop((bbox.l,bbox.t,bbox.r,bbox.b)))
+        regions[item.self_ref] = (data, request["crop_hash"])
+        key = sha256_bytes(canonical_json({"crop_hash":request["crop_hash"],
+            "recognition_manifest":recognition_manifest, "profile":FORMULA_RECOGNITION_PROFILE}))
+        cache = artifact_dir / (key + ".json")
+        if cache.is_file():
+            record = json.loads(cache.read_bytes()); latex = record.get("latex", "")
+            if (record.get("crop_hash") != request["crop_hash"] or
+                record.get("recognition_manifest") != recognition_manifest or
+                record.get("latex_hash") != sha256_bytes(latex.encode()) or _latex_quality_issues(latex)):
+                raise NimaError("Formula recognition checkpoint integrity mismatch")
+            item.text = latex; recognition[item.self_ref] = (latex, "langflow")
+            checkpoint_records.append(record)
+        else:
+            pending.append((item, request, cache))
 
-    progress(
-        {
-            "phase": "formula_recognition",
-            "detail": f"recognizing {len(pending)} unresolved formula regions",
-            "formula_regions": len(detected),
-            "pending_regions": len(pending),
-            "reused_regions": len(detected) - len(pending),
-        }
-    )
+    def call(requests):
+        outputs = recognize(requests)
+        if not isinstance(outputs, list) or len(outputs) != len(requests):
+            raise NimaError("Recognition lost a crop")
+        by_id = {output["id"]: output for output in outputs}
+        if len(by_id) != len(requests):
+            raise NimaError("Recognition returned duplicate crops")
+        ordered = []
+        for request in requests:
+            output = by_id.get(request["id"])
+            if output is None or output.get("crop_hash") != request["crop_hash"]:
+                raise NimaError("Recognition crop identity mismatch")
+            if output.get("status") not in {"transcribed", "unreadable"}:
+                raise NimaError("Invalid recognition status")
+            ordered.append(output)
+        return ordered
 
-    if pending:
-        recognizer_options = code_formula.model_copy(
-            update={
-                "model_spec": local_spec,
-                "extract_code": False,
-                "extract_formulas": True,
-            }
-        )
-        recognizer_key = (str(formula_model_path), formula_model_manifest_hash)
-        recognizer = _thread_cached_component(
-            "formula_recognizer",
-            recognizer_key,
-            lambda: CodeFormulaVlmModel(
-                enabled=True,
-                enable_remote_services=False,
-                artifacts_path=formula_model_path,
-                options=recognizer_options,
-                accelerator_options=pipeline.accelerator_options,
-            ),
-        )
-        for offset in range(0, len(pending), recognizer.elements_batch_size):
-            batch = pending[offset : offset + recognizer.elements_batch_size]
-            elements = [
-                ItemAndImageEnrichmentElement(item=item, image=crop) for item, crop, *_ in batch
-            ]
-            outputs = list(recognizer(document, elements))
-            if len(outputs) != len(batch):
-                raise NimaError("Formula recognizer lost a region")
-            for output, (item, _, _, crop_hash, _, cache_path) in zip(outputs, batch, strict=True):
-                raw_latex = output.text.strip()
-                crop_hash_for_failure = crop_hash
-                latex, repair = _exclude_fragmented_for_all_tail(raw_latex)
-                quality_issues = _latex_quality_issues(latex)
-                if _requires_tight_formula_retry(quality_issues):
-                    locator = item.prov[0]
-                    page = document.pages[locator.page_no]
-                    page_image = page.image.pil_image
-                    tight_bbox = locator.bbox.to_top_left_origin(page.size.height).scaled(
-                        CodeFormulaVlmModel.images_scale
-                    )
-                    tight_crop = page_image.crop(
-                        (tight_bbox.l, tight_bbox.t, tight_bbox.r, tight_bbox.b)
-                    )
-                    tight_buffer = BytesIO()
-                    tight_crop.save(tight_buffer, format="PNG")
-                    tight_crop_bytes = tight_buffer.getvalue()
-                    tight_crop_hash = sha256_bytes(tight_crop_bytes)
-                    _atomic_formula_artifact(
-                        artifact_dir / f"{tight_crop_hash}.png", tight_crop_bytes
-                    )
-                    tight_outputs = list(
-                        recognizer(
-                            document,
-                            [ItemAndImageEnrichmentElement(item=item, image=tight_crop)],
-                        )
-                    )
-                    if len(tight_outputs) != 1:
-                        raise NimaError(
-                                                        "Formula recognizer lost a tight-crop retry region",
-                        )
-                    tight_raw_latex = tight_outputs[0].text.strip()
-                    tight_latex, initial_tight_repair = _exclude_fragmented_for_all_tail(
-                        tight_raw_latex
-                    )
-                    tight_repair: dict[str, Any] | None = initial_tight_repair
-                    tight_quality_issues = _latex_quality_issues(tight_latex)
-                    band_crop_hash: str | None = None
-                    band_raw_latex: str | None = None
-                    band_crop = tight_crop
-                    band_crop_hashes: list[str] = []
-                    for _band_retry in range(2):
-                        if not _requires_tight_formula_retry(tight_quality_issues):
-                            break
-                        band_crop = _dominant_horizontal_ink_crop(band_crop)
-                        if band_crop is not None:
-                            band_buffer = BytesIO()
-                            band_crop.save(band_buffer, format="PNG")
-                            band_crop_bytes = band_buffer.getvalue()
-                            band_crop_hash = sha256_bytes(band_crop_bytes)
-                            band_crop_hashes.append(band_crop_hash)
-                            _atomic_formula_artifact(
-                                artifact_dir / f"{band_crop_hash}.png", band_crop_bytes
-                            )
-                            band_outputs = list(
-                                recognizer(
-                                    document,
-                                    [ItemAndImageEnrichmentElement(item=item, image=band_crop)],
-                                )
-                            )
-                            if len(band_outputs) != 1:
-                                raise NimaError(
-                                                                        "Formula recognizer lost a dominant-band retry region",
-                                )
-                            band_raw_latex = band_outputs[0].text.strip()
-                            band_latex, band_repair = _exclude_fragmented_for_all_tail(
-                                band_raw_latex
-                            )
-                            band_quality_issues = _latex_quality_issues(band_latex)
-                            tight_raw_latex = band_raw_latex
-                            tight_latex = band_latex
-                            tight_quality_issues = band_quality_issues
-                            if not band_quality_issues:
-                                tight_repair = {
-                                    "kind": "retried_dominant_horizontal_ink_band",
-                                    "tight_crop_hash": tight_crop_hash,
-                                    "recognition_crop_hash": band_crop_hash,
-                                    "crop_chain_hashes": band_crop_hashes,
-                                }
-                                if band_repair is not None:
-                                    tight_repair["band_crop_repair_kind"] = band_repair["kind"]
-                        else:
-                            break
-                    if not tight_quality_issues:
-                        latex = tight_latex
-                        quality_issues = []
-                        recognition_crop_hash = tight_crop_hash
-                        repair_kind = "retried_unexpanded_formula_crop"
-                        if (
-                            tight_repair is not None
-                            and tight_repair["kind"] == "retried_dominant_horizontal_ink_band"
-                        ):
-                            recognition_crop_hash = tight_repair["recognition_crop_hash"]
-                            repair_kind = tight_repair["kind"]
-                        repair = {
-                            "kind": repair_kind,
-                            "raw_latex_hash": sha256_bytes(raw_latex.encode("utf-8")),
-                            "expanded_crop_hash": crop_hash,
-                            "tight_crop_hash": tight_crop_hash,
-                            "recognition_crop_hash": recognition_crop_hash,
-                        }
-                        if tight_repair is not None:
-                            repair["tight_crop_repair_kind"] = tight_repair["kind"]
-                    else:
-                        raw_latex = band_raw_latex or tight_raw_latex
-                        quality_issues = tight_quality_issues
-                        crop_hash_for_failure = band_crop_hash or tight_crop_hash
-                if quality_issues:
-                    if allow_partial:
-                        failure = _unresolved_formula(item, raw_latex, quality_issues, crop_hash_for_failure)
-                        _atomic_formula_artifact(artifact_dir / (sha256_bytes(canonical_json(failure)) + ".json"),
-                            canonical_json(failure))
-                        unresolved_formulas.append(failure)
-                        item.text = failure["placeholder"]
-                        output.text = item.text
-                        recognition[item.self_ref] = (item.text, "unresolved")
-                        continue
-                    raise NimaError(
-                                                "Formula recognizer returned invalid LaTeX",
-                        details={
-                            "item": output.self_ref,
-                            "quality_issues": quality_issues,
-                            "recognizer_output_hash": sha256_bytes(raw_latex.encode("utf-8")),
-                            "recognizer_output": raw_latex,
-                            "recognition_crop_hash": crop_hash_for_failure,
-                            "formula_checkpoint": checkpoint_details(),
-                        },
-                    )
-                record = {
-                    "crop_hash": crop_hash,
-                    "formula_model_manifest_hash": formula_model_manifest_hash,
-                    "recognition_key": cache_path.stem,
-                    "recognition_profile": FORMULA_RECOGNITION_PROFILE,
-                    "latex": latex,
-                    "raw_recognizer_output": raw_latex,
-                    "latex_hash": sha256_bytes(latex.encode("utf-8")),
-                }
-                if repair is not None:
-                    record["recognition_repair"] = repair
-                _atomic_formula_artifact(cache_path, canonical_json(record))
-                checkpoint_records.append(record)
-                item.text = latex
-                output.text = latex
-                recognition[item.self_ref] = (latex, "pinned-recognizer")
-                if repair is not None:
-                    recognition_repairs[item.self_ref] = repair
-            progress(
-                {
-                    "phase": "formula_recognition",
-                    "detail": (
-                        f"processed {min(offset + len(batch), len(pending))}/{len(pending)} "
-                        "formula regions"
-                    ),
-                    "processed_regions": min(offset + len(batch), len(pending)),
-                    "recognized_regions": min(offset + len(batch), len(pending)) - len(unresolved_formulas),
-                    "pending_regions": len(pending),
-                    "unresolved_regions": len(unresolved_formulas),
-                }
-            )
+    for offset in range(0, len(pending), 16):
+        batch = pending[offset:offset+16]
+        outputs = call([request for _,request,_ in batch])
+        for (item, request, cache), output in zip(batch, outputs, strict=True):
+            raw = output.get("latex", "").strip()
+            issues = _latex_quality_issues(raw) if output["status"] == "transcribed" else ["unreadable"]
+            chosen = request
+            if issues and (_requires_tight_formula_retry(issues) or issues == ["unreadable"]):
+                locator=item.prov[0];page=document.pages[locator.page_no]
+                box=locator.bbox.to_top_left_origin(page.size.height).scaled(PDF_IMAGES_SCALE)
+                image=page.image.pil_image.crop((box.l,box.t,box.r,box.b))
+                for attempt in range(3):
+                    if attempt:
+                        image=_dominant_horizontal_ink_crop(image)
+                        if image is None:break
+                    retry,_=save_crop(item,image)
+                    retried=call([retry])[0]
+                    raw=retried.get("latex", "").strip(); chosen=retry; output=retried
+                    issues=_latex_quality_issues(raw) if retried["status"]=="transcribed" else ["unreadable"]
+                    if not issues:
+                        recognition_repairs[item.self_ref]={"kind":"retried_formula_crop", "recognition_crop_hash":retry["crop_hash"]}
+                        break
+            if issues:
+                if not allow_partial:
+                    raise NimaError("Formula transcription is unresolved", details={"formula_checkpoint":checkpoint_details()})
+                failure=_unresolved_formula(item,raw,issues,chosen["crop_hash"])
+                _atomic_formula_artifact(artifact_dir/(sha256_bytes(canonical_json(failure))+".json"),canonical_json(failure))
+                unresolved_formulas.append(failure); item.text=failure["placeholder"]
+                recognition[item.self_ref]=(item.text,"unresolved")
+                continue
+            record={"crop_hash":request["crop_hash"],"recognition_manifest":recognition_manifest,
+                "recognition_profile":FORMULA_RECOGNITION_PROFILE,"latex":raw,
+                "latex_hash":sha256_bytes(raw.encode()),"recognition":{k:v for k,v in output.items() if k not in {"id","cached"}}}
+            _atomic_formula_artifact(cache,canonical_json(record));checkpoint_records.append(record)
+            item.text=raw;recognition[item.self_ref]=(raw,"langflow")
+        progress({"phase":"formula_recognition","processed_regions":min(offset+len(batch),len(pending)),
+                  "pending_regions":len(pending),"unresolved_regions":len(unresolved_formulas)})
 
     ambiguous_negations = []
     negation_repairs = _remove_redundant_or_repair_orphan_negations(
@@ -688,7 +451,7 @@ def _parse_docling_with_latex(
             continue
         locator = item.prov[0]
         page = document.pages[locator.page_no]
-        bbox = locator.bbox.to_top_left_origin(page.size.height).scaled(CodeFormulaVlmModel.images_scale)
+        bbox = locator.bbox.to_top_left_origin(page.size.height).scaled(PDF_IMAGES_SCALE)
         # Detached strokes can have zero-width PDF boxes; retain visible context.
         crop = page.image.pil_image.crop((bbox.l - 4, bbox.t - 4, bbox.r + 4, bbox.b + 4))
         buffer = BytesIO()
@@ -794,7 +557,7 @@ def _parse_docling_with_latex(
             "unresolved_formula_count": len(unresolved_formulas),
             "unresolved_formulas": unresolved_formulas,
             "recognizer_target_count": sum(
-                method == "pinned-recognizer" for _, method in recognition.values()
+                method == "langflow" for _, method in recognition.values()
             ),
             "recognition_scope": "detected-unresolved-regions",
             "recognition_profile": FORMULA_RECOGNITION_PROFILE,

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nima-semantica"
-version = "0.3.0"
+version = "0.3.1"
 authors = [{name = "Jonas Rigo"}]
 description = "Local, auditable mathematical research on Semantica"
 requires-python = ">=3.11,<3.14"
@@ -37,7 +37,7 @@ nima-private-service = "nima_semantica.private_service:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"nima_semantica.pdf" = ["model_manifest.json"]
+"nima_semantica.pdf" = ["layout_manifest.json"]
 "nima_semantica.profiles" = ["*.json"]
 
 [tool.pytest.ini_options]

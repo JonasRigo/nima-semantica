@@ -1,5 +1,18 @@
 # Files and chat with the knowledge base
 
+## Save PDF OCR without ingestion
+
+```sh
+nima ocr /path/to/paper.pdf --output /path/to/transcription.md
+```
+
+This command saves Markdown with LaTeX equations and a matching `transcription.ocr.json` evidence sidecar.
+The destination is a file path; missing parent directories are created.
+Use `--force` to replace existing exports.
+OCR uses the configured PDF service and its dedicated Langflow vision workflow, without creating a corpus, project or embedding index.
+Progress goes to stderr and the result summary goes to stdout as JSON.
+Exit codes are 0 for complete normalization, 1 for saved partial normalization with unresolved regions, and 2 for an error.
+
 ## Ingest a file
 
 ```sh
@@ -13,7 +26,7 @@ or policy-approved HTTP(S) URLs, including arXiv HTML. Batches accept up to 16 i
 directories are not accepted. Papers run sequentially; batch output reports failures
 per input and returns a nonzero exit code if any requested index is not ready.
 The current preparation limit is 20 MB per file.
-PDFs require the configured advanced PDF normalizer, which preserves page provenance and formula diagnostics.
+Full PDF preparation requires the configured PDF normalizer and its dedicated Langflow vision workflow, preserving page provenance and formula diagnostics.
 The command returns source identifiers, receipts and actual indexing status.
 Repeated identical ingestion reuses its recorded result; failed or partial normalization remains visible.
 
@@ -32,6 +45,7 @@ with exact source offsets; this is not a model-specific token-limit guarantee.
 
 ```sh
 nima ingest papers paper.pdf --mode full --index-mode vector
+nima ingest papers paper.pdf --mode full --ocr-output-dir /path/to/transcriptions
 nima ingest papers paper-a.pdf paper-b.pdf --mode fast
 nima ingest papers https://arxiv.org/html/2501.12345v2 --mode fast --format html
 ```
@@ -55,6 +69,15 @@ citations retain `fast_provisional` quality and warnings. Lexical/vector indexin
 and graph extraction are allowed. `include_provisional: false` on Retrieve Research
 Context excludes provisional regions and explicitly provisional graph objects.
 Embedding configuration alone does not enable vector indexing.
+
+`--ocr-output-dir DIRECTORY` also saves each full PDF's exact ingested normalization as `<source-stem>-<source-hash-prefix>.md` and a matching `.ocr.json` sidecar.
+The hash prefix contains the first 12 hexadecimal characters of the archived PDF's SHA-256 digest.
+Exports reuse retained artifacts, including ingestion through an active corpus owner; they do not repeat recognition.
+Use `--overwrite-ocr` to replace exports without replacing corpus evidence or changing `--retry` semantics.
+OCR export requires full preparation; non-PDF members of a mixed batch have no OCR export.
+Normalization and indexing status are reported separately from export paths and errors.
+If indexing fails after preparation, available OCR is still exported; if export fails after successful indexing, ingestion remains retained and the command returns nonzero.
+Changing the recognition workflow or model creates a separately identified full-PDF preparation; previously retained evidence is not silently rewritten.
 
 Promotion to shared corpus scope requires explicit approval and retains evidence
 quality and scientific status. Sources already shared in the corpus can support

@@ -4,8 +4,8 @@ Use NIMA to carry an investigation across papers, calculations and coding-agent 
 You choose the questions and decide what belongs in the research record.
 We provide persistent knowledge, inspectable tools and adaptable skills to support that work.
 
-See the [v0.3.0 release notes](RELEASE_NOTES_v0.3.0.md) for the current source version.
-The [v0.2.1 qualification scope](PLATFORM_SUPPORT_v0.2.1.md) records the previous release and does not qualify this revision.
+See the [v0.3.1 release notes](RELEASE_NOTES_v0.3.1.md) for the current source version.
+The [v0.3.1 qualification status](PLATFORM_SUPPORT_v0.3.1.md) separates local candidate checks, pending platform checks and the open PDF model-fidelity gate.
 
 ## Get started
 

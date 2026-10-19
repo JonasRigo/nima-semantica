@@ -165,6 +165,8 @@ def test_provision_rejects_emulated_engine_before_writes(tmp_path, monkeypatch):
 
 
 def test_macos_provision_isolation_failure_resume_and_conflict(tmp_path, monkeypatch):
+    import nima_semantica.pdf.workflow as pdf_workflow
+    monkeypatch.setattr(pdf_workflow,"install_recognition",lambda config: {"flow_id":"fixture"})
     import nima_semantica.cli as cli
     monkeypatch.setattr(setup_macos.platform, "machine", lambda: "arm64")
     monkeypatch.setattr(setup_macos.shutil, "which", lambda name: "/usr/bin/docker")

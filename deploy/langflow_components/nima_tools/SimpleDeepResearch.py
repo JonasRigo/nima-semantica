@@ -57,9 +57,18 @@ class SimpleDeepResearch(BaseComponent):
                 raise ValueError("model omitted usage metadata")
             content = response.content if isinstance(response.content, str) else json.dumps(response.content)
             return completion_envelope(content, manifest, response.usage_metadata, response.response_metadata)
+        pdf_client = None
+        def pdf_profile():
+            nonlocal pdf_client
+            if pdf_client is None:
+                pdf_client = PdfNormalizerClient(self.pdf_url,self.pdf_token_file)
+                pdf_client.expected_profile = pdf_client.profile()["profile_hash"]
+            return {"profile_hash":pdf_client.expected_profile}
         def normalize_pdf(data):
-            result = PdfNormalizerClient(self.pdf_url, self.pdf_token_file).normalize(data)
+            pdf_profile()
+            result = pdf_client.normalize(data)
             return result["text"], result["diagnostics"]
+        normalize_pdf.profile = pdf_profile
         with configured_store(required=False) as store:
             return simple_deep_research(store, request, context,
                 model=invoke if language_model is not None else None,

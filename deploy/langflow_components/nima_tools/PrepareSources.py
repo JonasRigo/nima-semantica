@@ -35,9 +35,18 @@ class PrepareSources(BaseComponent):
             projection_limits=__import__('json').loads(self.projection_limits_json), local_staging_root=getattr(self,"local_staging_root","") or None, max_pdf_evidence_bytes=getattr(self,"max_pdf_evidence_bytes",20000000))
         # Client construction/secret access happens inside the receipted attempt,
         # only if authorized PDF input actually requires the worker.
+        pdf_client = None
+        def pdf_profile():
+            nonlocal pdf_client
+            if pdf_client is None:
+                pdf_client = PdfNormalizerClient(self.pdf_url,self.pdf_token_file)
+                pdf_client.expected_profile = pdf_client.profile()["profile_hash"]
+            return {"profile_hash":pdf_client.expected_profile}
         def pdf_normalizer(data):
-            result = PdfNormalizerClient(self.pdf_url, self.pdf_token_file).normalize(data)
+            pdf_profile()
+            result = pdf_client.normalize(data)
             return result["text"], result["diagnostics"]
+        pdf_normalizer.profile = pdf_profile
         if request.mode == "preview":
             return prepare_sources(None, request, context).model_dump(mode="json")
         with configured_store(required=False) as store:

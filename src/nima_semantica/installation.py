@@ -61,6 +61,11 @@ class ModelProfile(Config):
         return self
 
 
+class PdfRecognitionSettings(Config):
+    model: ModelProfile
+    concurrency: int = Field(default=4, ge=1, le=32)
+
+
 class EmbeddingProfile(Config):
     provider: str = "ollama"
     model: str
@@ -90,6 +95,7 @@ class Installation(Config):
     pdf_url: str = ""
     pdf_container_url: str = ""
     pdf_token_file: str = ""
+    pdf_recognition: PdfRecognitionSettings | None = None
     symbolic_url: str = ""
     symbolic_container_url: str = ""
     symbolic_token_file: str = ""

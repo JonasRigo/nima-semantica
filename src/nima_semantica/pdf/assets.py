@@ -7,7 +7,7 @@ from .support import PdfError, canonical_json, sha256_bytes, sha256_file
 
 
 def model_manifest():
-    return json.loads(resources.files(__package__).joinpath("model_manifest.json").read_text())
+    return json.loads(resources.files(__package__).joinpath("layout_manifest.json").read_text())
 
 
 def verify_assets(root, manifest=None, *, check_versions=True):
@@ -25,10 +25,15 @@ def verify_assets(root, manifest=None, *, check_versions=True):
             versions[name] = metadata.version(name)
             if versions[name] not in SpecifierSet(manifest["compatible_" + name]):
                 raise PdfError("incompatible PDF runtime", details={"package": name, "version": versions[name]})
-    code_hashes = {name: sha256_file(Path(__file__).with_name(name)) for name in ("_ported.py", "worker.py", "support.py", "book.py")}
+    code_hashes = {name: sha256_file(Path(__file__).with_name(name)) for name in ("_ported.py", "worker.py", "support.py", "book.py", "recognition.py")}
     result = {"manifest_hash": sha256_bytes(canonical_json(manifest)), "versions": versions, "code_hashes": code_hashes}
     result["profile_hash"] = sha256_bytes(canonical_json(result))
     return result
+
+
+def normalization_identity(models, recognition):
+    value = {"layout": verify_assets(models), "recognition": recognition}
+    return {**value, "profile_hash": sha256_bytes(canonical_json(value))}
 
 
 def main():
@@ -38,11 +43,17 @@ def main():
     parser.add_argument("root", type=Path)
     args = parser.parse_args()
     if args.action == "prepare":
-        from docling.utils.model_downloader import download_models
+        from huggingface_hub import hf_hub_download
+        from docling.models.stages.ocr.rapid_ocr_model import RapidOcrModel
         args.root.mkdir(parents=True, exist_ok=True)
-        download_models(output_dir=args.root.resolve(), with_layout=True, with_tableformer=True,
-            with_tableformer_v2=False, with_code_formula=True, with_picture_classifier=False,
-            with_rapidocr=True, rapidocr_models=["onnxruntime:chinese"])
+        manifest = model_manifest()
+        for spec in [*manifest["layout_models"], manifest["table_model"]]:
+            prefix = spec["model"].replace("/", "--") + "/"
+            for artifact in manifest["approved_artifacts"]:
+                if artifact["path"].startswith(prefix):
+                    hf_hub_download(repo_id=spec["model"], revision=spec["revision"],
+                        filename=artifact["path"][len(prefix):], local_dir=args.root / prefix.rstrip("/"))
+        RapidOcrModel.download_models(backend="onnxruntime", lang="chinese", local_dir=args.root / "RapidOcr")
     print(json.dumps(verify_assets(args.root)))
 
 

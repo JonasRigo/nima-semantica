@@ -76,10 +76,8 @@ class DocumentIngestionService:
         if normalized_id != descriptor.artifact_id:
             existing_normalized = self.artifacts.registry.resolve(normalized_id,
                 corpus_id=descriptor.corpus_id, project_id=descriptor.project_id, exact_scope=True)
-            self.artifacts.publish(
-                normalized_bytes, normalized_envelope,
-                registry_revision=existing_normalized.registry_revision if existing_normalized else registry_revision,
-            )
+            if existing_normalized is None:
+                self.artifacts.publish(normalized_bytes, normalized_envelope, registry_revision=registry_revision)
 
         document = Record(
             kind="Document", corpus_id=descriptor.corpus_id, project_id=descriptor.project_id,

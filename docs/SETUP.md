@@ -34,7 +34,8 @@ Other shells receive the launcher and instructions for adding its directory to P
 
 The same wizard configures independent LLM and embedding providers. LLM choices are OpenRouter, OpenAI, native Anthropic, native Gemini, native Ollama, or an arbitrary OpenAI-compatible endpoint (for example a local LM Studio or vLLM server). Model identifiers are operator-selected, not restricted to a cloud model list. Custom endpoint URLs, credential variable names, token limits and provider generation parameters are supported. A credential value is never written into installation JSON; `--credential -` explicitly selects a no-key compatible endpoint. Native Ollama does not require a cloud credential.
 
-Embeddings are a separate choice: lexical-only (`none`), Ollama, OpenAI, or a compatible embedding endpoint. Ollama setup records the installed model digest and observed dimension. Compatible/OpenAI embeddings require an explicit revision and dimension. LLM and embedding servers may be different, including one local and one remote. No hosted LLM call is needed for corpus ingestion, indexing or deterministic retrieval.
+Embeddings are a separate choice: lexical-only (`none`), Ollama, OpenAI, or a compatible embedding endpoint. Ollama setup records the installed model digest and observed dimension. Compatible/OpenAI embeddings require an explicit revision and dimension. LLM and embedding servers may be different, including one local and one remote. Indexing and deterministic retrieval require no hosted language-model call.
+Full PDF preparation transcribes formula crops with the independently configured Langflow vision model, which may use a local or hosted provider.
 
 An entirely local setup, after installing the chosen models in Ollama:
 
@@ -139,3 +140,21 @@ Lean verification is enabled when its worker is configured.
 External LeanSearch is optional: set `allow_lean_search` to `true` to permit sending theorem queries to that service.
 
 See [standard knowledge, workspace layouts, Studio, calculation documents and reporting](KNOWLEDGE_AND_REPORTING.md) for the v0.3.0 features.
+
+## Dedicated PDF vision model
+
+Full PDF recognition uses an installation-wide private Langflow canvas with an independent model profile.
+Select the profile interactively with `nima setup --pdf`, or supply a ModelProfile JSON file with `nima setup --pdf --pdf-model-profile /path/to/vision-profile.json`.
+Use `--provision` as well when installing the managed services.
+A noninteractive PDF setup requires the profile file or `pdf_recognition` settings in installation JSON.
+The profile supports the same providers, endpoints, credential references and generation settings as the main model, but must support image input.
+No PDF model identifier is built into the application.
+Both vision profiles tested during v0.3.1 preparation produced mathematical transcription errors; no model has passed the fidelity gate for the live installation.
+Choose and review a profile against representative saved crops before adopting it.
+The `pdf_recognition` object contains `model` (the ModelProfile) and `concurrency` (default 4, range 1–32).
+Model credentials stay in Langflow; the PDF service brokers crop requests while the parser subprocess retains network isolation.
+The private recognition canvas exposes the model connection and transcription prompt.
+Changes to that canvas produce a new recognition identity; setup refuses to overwrite an operator-edited canvas until its changes are explicitly reconciled.
+Readiness checks inspect configuration and connectivity without making a model call.
+Use `nima ocr paper.pdf --output result.md` to save OCR without corpus ingestion, or `nima ingest papers paper.pdf --ocr-output-dir ./transcriptions` to save the exact normalization used for ingestion.
+See the [v0.3.1 upgrade notes](RELEASE_NOTES_v0.3.1.md#upgrade-from-v030) when updating an existing PDF installation.

@@ -83,6 +83,21 @@ def setup(args):
                     if override:
                         config.overrides[name] = config.llm.model_copy(update={"model": override})
     inventory = model_inventory()
+    if getattr(args,"pdf_model_profile",None):
+        from .installation import PdfRecognitionSettings
+        config.pdf_recognition=PdfRecognitionSettings(model=ModelProfile.model_validate_json(Path(args.pdf_model_profile).read_bytes()))
+    if args.pdf and config.pdf_recognition is None:
+        if args.non_interactive:
+            raise ValueError("PDF recognition requires --pdf-model-profile FILE or pdf_recognition in installation JSON")
+        from .installation import PdfRecognitionSettings
+        from .model_setup import model_profile
+        import copy
+        selected=copy.copy(args)
+        for field in ("provider","model","base_url","credential","model_parameters","context_window","model_timeout"):
+            setattr(selected,field,None)
+        selected.max_tokens=8192
+        print("Select the dedicated PDF vision model.",file=sys.stderr)
+        config.pdf_recognition=PdfRecognitionSettings(model=model_profile(selected))
     unknown = set(config.overrides) - set(inventory) - {f"{name}:{role}" for name, roles in inventory.items() for role in roles}
     import re
     unknown = {name for name in unknown if not re.fullmatch(r"[a-z][a-z0-9_-]+\.[a-z][a-z0-9_-]+(?::[^ ]+)?", name)}
@@ -114,6 +129,9 @@ def setup(args):
     if args.provision:
         from .setup_services import provision
         config = provision(config, path, pdf=args.pdf, lean=args.lean)
+    elif args.pdf:
+        from .pdf.workflow import install_recognition
+        install_recognition(config)
     effective = {name: {role: config.overrides.get(f"{name}:{role}", config.overrides.get(name, config.llm)).model_dump() for role in roles}
                  for name, roles in inventory.items()}
     emit({"configuration": path, "models": effective, "embedding": config.embedding, "cli_path": cli_path,
@@ -350,6 +368,8 @@ def _project_init(args, config):
 
 
 def ingest(args, config):
+    if getattr(args,"ocr_output_dir",None) and args.mode != "full":
+        raise ValueError("--ocr-output-dir requires --mode full")
     import copy
     files = args.file if isinstance(args.file, list) else [args.file]
     if len(files) > 16:
@@ -371,7 +391,8 @@ def ingest(args, config):
                 raise
             results.append({"input": filename, "error": str(exc), "status": "failed"})
     emit(results[0]["result"] if len(files) == 1 else {"papers": results})
-    return 0 if all(item.get("result", {}).get("data", {}).get("index_ready") for item in results) else 1
+    return 0 if all(item.get("result", {}).get("data", {}).get("index_ready") and not
+        item.get("result", {}).get("data", {}).get("ocr_export_errors") for item in results) else 1
 
 
 def project_promote(args, config):
@@ -448,16 +469,14 @@ def _ingest_one(args, config):
         allow_project_writes=bool(args.project), allow_pdf=bool(config.pdf_url) or preparation_mode == "fast", allow_embeddings=args.index_mode == "vector",
         max_pdf_evidence_bytes=config.max_pdf_evidence_bytes,
         projection_limits=projection_limits(config, getattr(args, "projection_max_tokens", None)).model_dump())
-    def pdf_normalizer(content):
-        from .orchestration.langflow.pdf_client import PdfNormalizerClient
-        result = PdfNormalizerClient(config.pdf_url, config.pdf_token_file).normalize(content)
-        return result["text"], result["diagnostics"]
+    from .ocr import configured_normalizer, export_ingested
+    pdf_normalizer=configured_normalizer(config) if config.pdf_url else None
     try:
         store = GraphStore(store_path(config))
     except __import__("nima_semantica.models",fromlist=["ConflictError"]).ConflictError as error:
         if str(error)!="another service owns this corpus" or remote: raise
         from .local_staging import ingest_through_owner
-        return ingest_through_owner(args,config)
+        return export_ingested(args,config,ingest_through_owner(args,config))
     try:
         register_corpus(store, corpus)
         if remote:
@@ -477,6 +496,10 @@ def _ingest_one(args, config):
             or Path(acquired_name).suffix.lower() in (".html", ".htm") else "other")
         if input_format != "auto" and detected != input_format:
             raise ValueError("input format differs from the declared --format; no implicit conversion")
+        if detected == "pdf" and getattr(args,"ocr_output_dir",None):
+            from .ocr import destinations
+            output=Path(args.ocr_output_dir)/(Path(acquired_name).stem+"-"+digest[:12]+".md")
+            destinations(output,force=args.overwrite_ocr,source=path if not remote else None)
         name = acquired_name
         if detected in ("pdf", "html") and Path(name).suffix.lower() not in ("." + detected, ".htm" if detected == "html" else ".pdf"):
             name = "paper-" + digest[:24] + "." + detected
@@ -515,7 +538,7 @@ def _ingest_one(args, config):
         projects = [args.project] if args.project else [p.name for p in (Path(config.data_root) / "projects" / corpus).glob("*") if (p / "project.json").is_file()]
         for project in projects:
             refresh_project_projection(config, corpus, project, getattr(args, "projection_max_tokens", None))
-    return result
+    return export_ingested(args,config,result)
 
 
 def doctor(config, args=None):
@@ -595,6 +618,7 @@ def main(argv=None):
     install.add_argument("--embedding-revision"); install.add_argument("--embedding-dimension", type=int)
     install.add_argument("--provision", action="store_true", help="Install/start the local stack, including dependency and model downloads")
     install.add_argument("--pdf", action="store_true"); install.add_argument("--lean", action="store_true")
+    install.add_argument("--pdf-model-profile", help="JSON ModelProfile for the independent PDF vision model")
     install.add_argument("--minimal", action="store_true", help="Explicitly omit managed Blender and reporting dependencies")
     diagnostic = commands.add_parser("doctor")
     diagnostic.add_argument("--mcp", action="store_true")
@@ -696,6 +720,12 @@ def main(argv=None):
     source.add_argument("--index-mode", choices=["lexical", "vector"], default="lexical")
     source.add_argument("--projection-max-tokens", type=int, help="Explicit projection token limit (1..10000000)")
     source.add_argument("--retry", action="store_true", help="Start a new receipted attempt instead of replaying a saved result; preserves existing evidence")
+    source.add_argument("--ocr-output-dir", help="Export the exact full-PDF normalization and evidence into this directory")
+    source.add_argument("--overwrite-ocr", action="store_true", help="Replace OCR export files only; corpus evidence remains immutable")
+    ocr = commands.add_parser("ocr", help="Save PDF OCR as Markdown with LaTeX and an evidence sidecar; no corpus writes")
+    ocr.add_argument("file")
+    ocr.add_argument("--output","-o",required=True,help="Destination Markdown file")
+    ocr.add_argument("--force",action="store_true",help="Replace existing OCR export files")
     export = commands.add_parser("export").add_subparsers(dest="format", required=True).add_parser("okf")
     export.add_argument("--corpus", required=True); export.add_argument("--project"); export.add_argument("--output", required=True)
     workflow = commands.add_parser("workflow").add_subparsers(dest="action", required=True)
@@ -713,6 +743,11 @@ def main(argv=None):
         if args.command == "setup":
             setup(args); return 0
         config = load_installation(args.config)
+        if args.command == "ocr":
+            from .ocr import ocr_command
+            result=ocr_command(args,config)
+            emit(result)
+            return 0 if result["status"]=="complete" else 1
         if args.command in {"chat", "math", "report"}:
             from .release_cli import chat_command, calculation_command
             if args.command == "report":

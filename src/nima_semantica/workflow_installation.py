@@ -215,6 +215,8 @@ def ensure_credentials(client, installation):
     response = client.get("/api/v1/variables/"); response.raise_for_status()
     existing = {v["name"] for v in response.json() if v.get("has_value", True)}
     names = {p.credential for p in [installation.llm, *installation.overrides.values()] if p.provider != "ollama" and p.credential}
+    if getattr(installation,"pdf_recognition",None) and installation.pdf_recognition.model.credential:
+        names.add(installation.pdf_recognition.model.credential)
     if installation.embedding and installation.embedding.provider != "ollama" and installation.embedding.credential:
         names.add(installation.embedding.credential)
     for name in sorted(names - existing):

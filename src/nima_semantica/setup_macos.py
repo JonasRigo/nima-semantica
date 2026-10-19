@@ -104,6 +104,8 @@ def langflow_agent(config, python):
     root = Path(config.data_root)
     label = "org.nima.langflow." + hashlib.sha256(str(root).encode()).hexdigest()[:12]
     allowed = {urlsplit(p.base_url).hostname for p in [config.llm, *config.overrides.values()]}
+    if config.pdf_recognition:
+        allowed.add(urlsplit(config.pdf_recognition.model.base_url).hostname)
     if config.embedding:
         allowed.add(urlsplit(config.embedding.base_url).hostname)
     allowed.discard(None)
@@ -316,6 +318,9 @@ def provision_macos(config, config_path, *, pdf=False, lean=False):
     run("langflow-components", [python, "-c",
         "import lfx_openai.components.openai.openai; import lfx_openai.components.openai.openai_chat_model"], always=True)
     start_langflow(config, python, progress, progress_path)
+    if pdf:
+        from .pdf.workflow import install_recognition
+        install_recognition(config)
     from .cli import doctor
     if doctor(config):
         raise ValueError("Managed macOS services failed readiness checks; inspect installation logs and rerun setup")

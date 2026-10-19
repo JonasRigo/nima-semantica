@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from nima_semantica.pdf._ported import (
     _latex_quality_issues, _requires_tight_formula_retry,
-    _dominant_horizontal_ink_crop, _exclude_fragmented_for_all_tail,
+    _dominant_horizontal_ink_crop,
 )
 
 def test_formula_quality_gate_rejects_ambiguous_or_fragmented_latex() -> None:
@@ -45,26 +45,3 @@ def test_dominant_horizontal_ink_crop_preserves_balanced_multiline_regions() -> 
     draw.rectangle((20, 55, 220, 70), fill="black")
 
     assert _dominant_horizontal_ink_crop(image) is None
-
-
-def test_fragmented_recognizer_quantifier_is_excluded_but_other_ocr_is_rejected() -> None:
-    raw = (
-        r"\hat { W } > 0 \quad \Longleftrightarrow \quad \Re ( \rho ) = 1 / 2 "
-        r"\quad f o r \ a l l \ n o n t r i v i a l \ R i e m a { n } \ z e r o s \rho ."
-    )
-    latex, repair = _exclude_fragmented_for_all_tail(raw)
-    assert latex == r"\hat { W } > 0 \quad \Longleftrightarrow \quad \Re ( \rho ) = 1 / 2"
-    assert repair is not None
-    assert repair["kind"] == "excluded_fragmented_for_all_prose_tail"
-    assert _latex_quality_issues(latex) == []
-    untouched, no_repair = _exclude_fragmented_for_all_tail("a b c d e f")
-    assert untouched == "a b c d e f"
-    assert no_repair is None
-
-
-def test_fragmented_recognizer_intertext_tail_is_excluded() -> None:
-    raw = r"x = y \\ \\ \intertext { t h e b o u n d a r y t e r m v a n i s h e s }"
-    latex, repair = _exclude_fragmented_for_all_tail(raw)
-    assert latex == "x = y"
-    assert repair is not None
-    assert repair["kind"] == "excluded_fragmented_intertext_prose_tail"

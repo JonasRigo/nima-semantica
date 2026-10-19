@@ -310,6 +310,14 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
         except (Exception,):
             return failure("sources.invalid_preview")
 
+    pdf_profile = None
+    if request.preparation_mode == "full" and any(s.name.lower().endswith(".pdf") for s in request.sources):
+        profile_reader = getattr(pdf_normalizer,"profile",None)
+        if profile_reader is not None:
+            pdf_profile = profile_reader()
+            request = request.model_copy(update={"operation_id":identity({"requested_operation":request.operation_id,
+                "normalization_profile":pdf_profile["profile_hash"]})})
+
     def work():
         registry = CorpusRegistry(store)
         source_project = context.project_id if context.source_scope == "project" else None
@@ -342,6 +350,14 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
             if quality:
                 source_identity.update(quality)
             metadata = dict(quality)
+            if source.name.lower().endswith(".pdf") and request.preparation_mode == "full":
+                manifests=[d for d in diagnostics if d.get("kind")=="parser_manifest"]
+                runtime=manifests[-1].get("runtime",{}) if manifests else {}
+                if runtime.get("profile_hash"):
+                    if pdf_profile and runtime["profile_hash"] != pdf_profile["profile_hash"]:
+                        raise NimaError("PDF recognition identity changed during preparation")
+                    source_identity["normalization_profile"]=runtime["profile_hash"]
+                    metadata["normalization_profile"]=runtime["profile_hash"]
             if quality:
                 metadata["extraction_method"] = diagnostics[0]["method"]
                 metadata["warning"] = diagnostics[0]["warning"]
@@ -356,7 +372,12 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
             # A single immutable source identity owns normalization and region locators.
             descriptor = SourceDescriptor(source_id=source_id, corpus_id=context.corpus_id, project_id=source_project, artifact_id=original,
                 source_revision=original, name=source.name, media_type=MEDIA[PurePath(source.name).suffix.lower()], metadata=metadata)
-            resource_ids = tuple(dict.fromkeys((original, normalized, *artifacts)))
+            evidence = evidence_id = None
+            if source.name.lower().endswith(".pdf") and request.preparation_mode == "full":
+                evidence=json.dumps({"text":text,"diagnostics":diagnostics,
+                    "normalization_complete":unresolved==0,"source_sha256":original},sort_keys=True,ensure_ascii=False).encode()
+                evidence_id=hashlib.sha256(evidence).hexdigest()
+            resource_ids = tuple(dict.fromkeys((original, normalized, *artifacts, *((evidence_id,) if evidence_id else ()))))
             existing = [registry.resolve(i, corpus_id=context.corpus_id, project_id=source_project, exact_scope=True) for i in resource_ids]
             revisions = {entry.registry_revision for entry in existing if entry is not None}
             if revisions and all(e is not None for e in existing):
@@ -372,6 +393,8 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
                     sequence=parent.sequence + 1 if parent else 0, parent_revision=parent.revision_id if parent else None,
                     changed_resource_ids=resource_ids))
             for digest, content in artifacts.items():
+                if registry.resolve(digest,corpus_id=context.corpus_id,project_id=source_project,exact_scope=True):
+                    continue
                 ArtifactService(store).publish(content, ArtifactEnvelope(artifact_id=digest, content_hash=digest,
                     artifact_kind="pdf_evidence", media_type="application/octet-stream", corpus_id=context.corpus_id, project_id=source_project,
                     content={"source_id": source_id}), registry_revision=revision_id)
@@ -403,6 +426,13 @@ def prepare_sources(store, request: PrepareSourcesRequest, context: SourceToolCo
                 "normalized_artifact_id": normalized, "region_count": len(result.region_ids),
                 "diagnostic_count": len(diagnostics), "unresolved_region_count": unresolved,
                 "normalization_complete": unresolved == 0, "registry_revision": revision_id})
+            if source.name.lower().endswith(".pdf") and request.preparation_mode == "full":
+                if not registry.resolve(evidence_id,corpus_id=context.corpus_id,project_id=source_project,exact_scope=True):
+                    ArtifactService(store).publish(evidence,ArtifactEnvelope(artifact_id=evidence_id,
+                        content_hash=evidence_id,artifact_kind="normalization_evidence",media_type="application/json",
+                        corpus_id=context.corpus_id,project_id=source_project),registry_revision=revision_id)
+                prepared[-1]["normalization_result_artifact_id"]=evidence_id
+                prepared[-1]["recognition_profile_id"]=metadata.get("normalization_profile")
             prepared[-1]["preparation_quality"] = "fast_provisional" if quality else "full"
         return ToolResult(operation="Prepare and Index Sources", status="complete", receipt_ids=tuple(service_receipts),
             data={"mode": request.mode, "stage": "source_preparation", "operation_id": request.operation_id,

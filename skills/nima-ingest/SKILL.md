@@ -22,6 +22,12 @@ nima ingest CORPUS PAPER_OR_URL ... --mode full --index-mode vector
 nima ingest CORPUS PAPER_OR_URL ... --mode fast --index-mode lexical
 ```
 
+Full PDF preparation uses the installation's dedicated Langflow vision profile.
+When requested, save the exact ingested normalization with `--ocr-output-dir DIRECTORY`; use `--overwrite-ocr` only to replace existing export files.
+Each PDF export contains Markdown with LaTeX and an `.ocr.json` evidence sidecar, including unresolved formula diagnostics.
+For transcription without corpus ingestion, use `nima ocr INPUT.pdf --output OUTPUT.md`; `--force` permits replacing its output files.
+Keep output paths local to the CLI rather than passing them to models or remote corpus owners.
+
 Omit `--project` for shared corpus papers. Use `--project PROJECT` only for private project
 material; do not broaden visibility to make promotion easier. Inputs are individual files or
 policy-approved URLs, not directory trees. Prefer a supplied versioned arXiv HTML URL when

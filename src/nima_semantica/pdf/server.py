@@ -1,4 +1,4 @@
-"""Authenticated local PDF worker service, independent of NIMA-AGI and Langflow."""
+"""Authenticated local PDF worker service, with network-isolated layout and trusted Langflow recognition."""
 import argparse
 import asyncio
 import json
@@ -9,7 +9,8 @@ import sys
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from .assets import verify_assets
+from .assets import verify_assets, normalization_identity
+from .langflow_recognition import LangflowRecognition
 from .support import sha256_bytes, sha256_file
 
 
@@ -23,9 +24,46 @@ def create_app(models, data, token):
         if not secrets.compare_digest(request.headers.get("authorization", ""), "Bearer " + token):
             raise HTTPException(401, "authentication required")
 
+    def backend():
+        return LangflowRecognition.from_file(data / "recognition.json")
+
     @app.get("/health")
     def health():
-        return {"status": "ready", "service": "nima-semantica-pdf"}
+        try:
+            backend()
+            return {"status":"ready", "service":"nima-semantica-pdf", "recognition":"langflow"}
+        except Exception:
+            return {"status":"not_ready", "service":"nima-semantica-pdf",
+                    "diagnostic":"Configure the dedicated PDF vision workflow and check Langflow connectivity"}
+
+    @app.get("/manifest")
+    def manifest(request: Request):
+        auth(request)
+        try:
+            selected=backend()
+            return normalization_identity(models,selected.manifest)
+        except Exception:
+            raise HTTPException(503,"PDF recognition unavailable; run nima setup --pdf and check Langflow") from None
+
+    async def run_worker(argv, selected, directory, log_path):
+        with log_path.open("wb") as log:
+            process=await asyncio.create_subprocess_exec(*argv,stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,stderr=log,limit=1_000_000)
+            try:
+                while line:=await process.stdout.readline():
+                    log.write(line);log.flush()
+                    try:event=json.loads(line)
+                    except (ValueError,UnicodeDecodeError):continue
+                    if event.get("kind")=="recognize":
+                        results=await asyncio.to_thread(selected.batch,event["requests"],directory)
+                        process.stdin.write((json.dumps({"results":results})+"\n").encode())
+                        await process.stdin.drain()
+                return await process.wait()
+            finally:
+                if process.returncode is None:
+                    process.kill()
+                    await process.wait()
+
 
     @app.post("/normalize")
     async def normalize(request: Request):
@@ -47,7 +85,14 @@ def create_app(models, data, token):
             if not source.exists():
                 from ._ported import _atomic_formula_artifact
                 _atomic_formula_artifact(source, bytes(content))
-            identity = await asyncio.to_thread(verify_assets, models)
+            try:
+                selected = await asyncio.to_thread(backend)
+                identity = await asyncio.to_thread(normalization_identity, models, selected.manifest)
+            except Exception:
+                raise HTTPException(503,"PDF recognition unavailable; configure its Langflow vision workflow") from None
+            expected=request.headers.get("x-nima-normalization-profile")
+            if expected and expected != identity["profile_hash"]:
+                raise HTTPException(409,"PDF recognition profile changed; retry preparation with the new profile")
             directory = data / "parsed" / source_hash / identity["profile_hash"]
             result_path = directory / "result.json"
             hash_path = directory / "result.sha256"
@@ -59,17 +104,21 @@ def create_app(models, data, token):
                 if recorded["runtime"] != identity or recorded["source_sha256"] != source_hash:
                     raise HTTPException(409, "normalized cache identity mismatch")
                 return cached
+            directory.mkdir(parents=True,exist_ok=True)
+            from nima_semantica.installation import write_json
+            runtime_path=directory/"runtime.json"
+            write_json(runtime_path,identity)
             argv = ["bwrap", "--unshare-net", "--die-with-parent", "--ro-bind", "/", "/", "--dev", "/dev",
                 "--bind", str(data), str(data), "--tmpfs", "/tmp",
-                sys.executable, "-m", "nima_semantica.pdf.worker", str(source), "--models", str(models), "--output", str(data / "parsed")]
+                sys.executable, "-m", "nima_semantica.pdf.worker", str(source), "--models", str(models), "--output", str(data / "parsed"), "--runtime", str(runtime_path)]
             try:
-                completed = await asyncio.to_thread(subprocess.run, argv, capture_output=True, timeout=1800, check=False)
-            except subprocess.TimeoutExpired as exc:
-                (data / (source_hash + ".timeout.log")).write_bytes((exc.stdout or b"") + (exc.stderr or b""))
-                raise HTTPException(504, "PDF normalization timed out; partial evidence retained") from None
-            (data / (source_hash + ".log")).write_bytes(completed.stdout + completed.stderr)
-            if completed.returncode or not result_path.is_file():
-                raise HTTPException(422, "PDF normalization failed quality checks; diagnostic artifacts retained")
+                returncode = await asyncio.wait_for(run_worker(argv,selected,directory,data/(source_hash+".log")),1800)
+            except asyncio.TimeoutError:
+                raise HTTPException(504,"PDF normalization timed out; checkpoints retained") from None
+            except Exception:
+                raise HTTPException(502,"Langflow formula recognition failed; check the vision model and credentials; checkpoints retained") from None
+            if returncode or not result_path.is_file():
+                raise HTTPException(422,"PDF normalization failed quality checks; diagnostic artifacts retained")
             hash_path.write_text(sha256_file(result_path))
             return json.loads(result_path.read_bytes())
 

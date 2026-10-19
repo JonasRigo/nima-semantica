@@ -147,6 +147,7 @@ def test_pdf_connection_is_operator_owned_and_invoked_once(configured, monkeypat
     from nima_semantica.orchestration.langflow.pdf_client import PdfNormalizerClient
     calls = []
     monkeypatch.setattr(PdfNormalizerClient, "__init__", lambda *args: None)
+    monkeypatch.setattr(PdfNormalizerClient, "profile", lambda self: {"profile_hash":"1"*64})
     def normalize(self, data):
         calls.append(data)
         return {"text": "PDF fixture $x=x$.", "diagnostics": [{"provenance": [{"page": 1}]}]}

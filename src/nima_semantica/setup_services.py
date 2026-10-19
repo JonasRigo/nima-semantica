@@ -153,6 +153,8 @@ def provision(config, config_path, *, pdf=False, lean=False):
     import yaml
     from urllib.parse import urlsplit
     allowed_hosts = {urlsplit(profile.base_url).hostname for profile in [config.llm, *config.overrides.values()]}
+    if config.pdf_recognition:
+        allowed_hosts.add(urlsplit(config.pdf_recognition.model.container_url or config.pdf_recognition.model.base_url).hostname)
     if config.embedding:
         allowed_hosts.add(urlsplit(config.embedding.container_url or config.embedding.base_url).hostname)
     allowed_hosts.discard(None)
@@ -170,5 +172,8 @@ def provision(config, config_path, *, pdf=False, lean=False):
         "volumes": [f"{root}:{root}", f"{root / 'langflow'}:/var/lib/langflow", f"{assets() / 'deploy/langflow_components'}:/nima-components:ro"]}}}
     compose_path = work / "compose.yaml"; compose_path.write_text(yaml.safe_dump(compose))
     run("langflow-start", ["docker", "compose", "-p", "nima-release", "-f", str(compose_path), "up", "-d"], always=True)
+    if pdf:
+        from .pdf.workflow import install_recognition
+        install_recognition(config)
     write_json(config_path, config.model_dump())
     return config

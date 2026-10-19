@@ -34,7 +34,7 @@ Install the release wheel, then run the setup wizard:
 
 ```sh
 python -m venv .venv
-.venv/bin/pip install 'nima_semantica-0.3.0-py3-none-any.whl[mcp]'
+.venv/bin/pip install 'nima_semantica-0.3.1-py3-none-any.whl[mcp]'
 .venv/bin/nima setup --provision --pdf --lean
 .venv/bin/nima project init my-research --corpus papers --path /path/to/project
 ```
@@ -43,10 +43,13 @@ On Linux, install `torch==2.13.0+cpu` from `https://download.pytorch.org/whl/cpu
 
 The [user guide](docs/README.md) covers prerequisites, model configuration, Codex/Claude Code/OpenCode connections and continuing an existing project.
 A shared tool model and optional overrides configure every model-using workflow; the harness controls its own model.
+Full PDF preparation uses a separate image-capable Langflow model profile, selected during PDF setup.
 The same wizard supports native Anthropic, Gemini and Ollama plus OpenAI-compatible endpoints. LLM and embedding choices are independent; an all-local Ollama or compatible-server setup needs no paid cloud credentials.
 
 ```sh
 nima ingest papers /path/to/paper.pdf
+nima ocr /path/to/paper.pdf --output /path/to/transcription.md
+nima ingest papers /path/to/paper.pdf --ocr-output-dir /path/to/transcriptions
 nima ingest papers /path/to/notes.md --project my-research
 nima project status my-research --corpus papers
 nima export okf --corpus papers --project my-research --output ./okf-snapshot
@@ -86,7 +89,7 @@ python -m pytest -q
 ```
 
 NIMA is under active development; contributions, including custom Langflow workflows, are welcome.
-Use [CITATION.cff](CITATION.cff) for author and release metadata. The [v0.1.0 archive](https://doi.org/10.5281/zenodo.22998905) remains available; no versioned DOI is asserted for the v0.3.0 source update.
+Use [CITATION.cff](CITATION.cff) for author and release metadata. The [v0.1.0 archive](https://doi.org/10.5281/zenodo.22998905) remains available; no versioned DOI is asserted for v0.3.1.
 See the [reliability guide](docs/RELIABILITY.md) for shared private MCP owners, receipt references, execution budgets and recoverable configuration changes.
 See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for project and third-party terms.
 
@@ -94,3 +97,4 @@ Optional [normalized reasoning](docs/NORMALIZED_REASONING.md) uses project defin
 It is off by default and remains non-blocking when vocabulary is unavailable.
 
 See [standard knowledge, workspace layouts, Studio, calculation documents and reporting](docs/KNOWLEDGE_AND_REPORTING.md) for the v0.3.0 features.
+See the [v0.3.1 release notes](docs/RELEASE_NOTES_v0.3.1.md) for PDF profile migration, OCR exports and transcription limitations.

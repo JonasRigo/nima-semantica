@@ -1,14 +1,14 @@
-"""Offline PDF normalization; caches are derived artifacts, never claim authority."""
+"""Isolated PDF layout and brokered formula normalization; caches are derived artifacts, never claim authority."""
 import base64
 import json
 import os
 from pathlib import Path
 
-from .assets import verify_assets
+from .assets import normalization_identity
 from .support import PdfError, canonical_json, sha256_bytes, sha256_file
 
 
-def normalize_single_pdf(source, models, output, *, progress=None):
+def normalize_single_pdf(source, models, output, runtime, *, recognize, progress=None):
     # These must be in force before importing the model framework.
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -16,15 +16,17 @@ def normalize_single_pdf(source, models, output, *, progress=None):
     os.environ["ORT_DISABLE_TELEMETRY"] = "1"
     os.environ["OMP_NUM_THREADS"] = "4"
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    identity = verify_assets(models)
+    identity = normalization_identity(models, runtime["recognition"])
+    if identity != runtime:
+        raise PdfError("PDF runtime changed during normalization")
     from ._ported import _parse_docling_with_latex, _atomic_formula_artifact
     source, output = Path(source).resolve(strict=True), Path(output).resolve()
     source_hash = sha256_file(source)
     output.mkdir(parents=True, exist_ok=True)
     document_dir = output / source_hash / identity["profile_hash"]
     document_dir.mkdir(parents=True, exist_ok=True)
-    result = _parse_docling_with_latex(source, formula_model_path=str(Path(models).resolve()),
-        formula_model_manifest_hash=identity["manifest_hash"], formula_artifact_dir=str(document_dir / "artifacts"),
+    result = _parse_docling_with_latex(source, layout_model_path=str(Path(models).resolve()),
+        layout_manifest_hash=identity["layout"]["manifest_hash"], recognition_manifest=identity["recognition"], recognize=recognize, formula_artifact_dir=str(document_dir / "artifacts"),
         formula_artifact_prefix="artifacts", progress=progress, allow_partial=True)
     text = result["full_text"]
     diagnostics = []
@@ -57,9 +59,9 @@ def normalize_single_pdf(source, models, output, *, progress=None):
     return response
 
 
-def normalize_pdf(source, models, output, *, progress=None):
+def normalize_pdf(source, models, output, runtime, *, recognize, progress=None):
     from .book import normalize_book
-    return normalize_book(source, models, output, verify_assets(models), progress=progress)
+    return normalize_book(source, models, output, runtime, recognize=recognize, progress=progress)
 
 
 def main():
@@ -68,9 +70,18 @@ def main():
     parser.add_argument("source", type=Path)
     parser.add_argument("--models", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--runtime", type=Path, required=True)
     args = parser.parse_args()
+    runtime = json.loads(args.runtime.read_bytes())
+    def recognize(requests):
+        import sys
+        print(json.dumps({"kind":"recognize", "requests":requests}), flush=True)
+        response = json.loads(sys.stdin.readline())
+        if "error" in response:
+            raise PdfError(response["error"])
+        return response["results"]
     try:
-        result = normalize_pdf(args.source, args.models, args.output, progress=lambda event: print(json.dumps(event), flush=True))
+        result = normalize_pdf(args.source, args.models, args.output, runtime, recognize=recognize, progress=lambda event: print(json.dumps(event), flush=True))
         print(json.dumps({"status": "success" if result["normalization_complete"] else "partial", "characters": len(result["text"]),
             "formula_count": sum(d["kind"] == "formula" for d in result["diagnostics"])}), flush=True)
     except Exception as exc:

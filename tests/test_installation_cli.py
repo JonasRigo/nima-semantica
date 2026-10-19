@@ -176,6 +176,7 @@ def test_cli_pdf_uses_configured_advanced_normalizer(tmp_path, monkeypatch):
         calls.append(content)
         return {"text": "Exact normalized PDF evidence about integers.", "diagnostics": [{"kind": "parser_manifest", "provenance": [{"page": 1}]}]}
     monkeypatch.setattr(PdfNormalizerClient, "normalize", normalize)
+    monkeypatch.setattr(PdfNormalizerClient, "profile", lambda client: {"profile_hash":"1"*64})
     path = tmp_path / "config.json"
     config = Installation(data_root=str(tmp_path / "data"), llm=ModelProfile(model="fixture"), pdf_url="http://pdf-worker:8791", pdf_token_file="private-token")
     write_json(path, config.model_dump())

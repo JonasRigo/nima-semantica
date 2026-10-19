@@ -65,9 +65,18 @@ class ConductPassDeepResearch(BaseComponent):
                 raise ValueError("model omitted usage metadata")
             content = response.content if isinstance(response.content, str) else json.dumps(response.content)
             return completion_envelope(content, manifest, response.usage_metadata, response.response_metadata)
+        pdf_client = None
+        def pdf_profile():
+            nonlocal pdf_client
+            if pdf_client is None:
+                pdf_client = PdfNormalizerClient(self.pdf_url,self.pdf_token_file)
+                pdf_client.expected_profile = pdf_client.profile()["profile_hash"]
+            return {"profile_hash":pdf_client.expected_profile}
         def normalize_pdf(data):
-            result = PdfNormalizerClient(self.pdf_url, self.pdf_token_file).normalize(data)
+            pdf_profile()
+            result = pdf_client.normalize(data)
             return result["text"], result["diagnostics"]
+        normalize_pdf.profile = pdf_profile
         def check_pdf_worker():
             return PdfNormalizerClient(self.pdf_url, self.pdf_token_file).health()
         with configured_store(required=False) as store:

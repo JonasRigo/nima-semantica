@@ -23,6 +23,7 @@ def crop():
 
 @pytest.mark.asyncio
 async def test_image_block_and_unreadable_response():
+    pytest.importorskip('langchain_core.messages')
     calls=[]
     class Model:
         async def ainvoke(self,messages):
@@ -35,7 +36,7 @@ async def test_image_block_and_unreadable_response():
 
 
 def test_context_uses_image_dimensions_and_rejects_oversized_payload():
-    from langchain_core.messages import HumanMessage
+    HumanMessage=pytest.importorskip('langchain_core.messages').HumanMessage
     request=crop()
     profile=ModelProfile(provider='ollama',model='fixture',max_tokens=128,context_window=4096)
     check_context(profile,[HumanMessage(content=[{'type':'image','base64':request['png_base64'],'mime_type':'image/png'}])],{})

@@ -1,7 +1,9 @@
 # v0.3.1 candidate qualification
 
 Status: local Linux operational checks passed for the v0.3.1 candidate.
-The hosted Ubuntu/macOS matrix has not run for this candidate, and no production PDF model has passed the transcription fidelity gate.
+Hosted Ubuntu/macOS qualification remains pending, and no production PDF model has passed the transcription fidelity gate.
+The first hosted run exposed two vision-adapter tests that required optional LangChain dependencies in the core installation; their skip guards are corrected.
+The focused recognition suite passes all six checks with LangChain, or four checks with two explicit skips when that dependency is unavailable.
 The v0.3.0 hosted results retain their historical scope and do not qualify the v0.3.1 patch.
 
 The target platforms remain Ubuntu/Linux and native macOS Apple silicon with Python 3.11–3.13.
@@ -18,7 +20,7 @@ Local development regression results use Python 3.13.2 and LFX 1.12.2 with reuse
 | Exact ingestion export and replay | Standalone OCR and ingestion exported identical document bytes; replay reused saved recognition |
 | PDF transcription fidelity | Open: both tested vision profiles returned mathematical errors; no production model is qualified |
 | Native macOS provisioning | Simulated setup contracts covered locally; fresh native provisioning and this revision's hosted jobs remain pending |
-| Hosted platform matrix | Pending a later authorized push; no v0.3.1 hosted result is asserted |
+| Hosted platform matrix | A replacement run for the optional-dependency guard correction is required; no complete v0.3.1 hosted pass is asserted |
 
 Optional Lean, provider and isolated-worker checks are counted according to their actual availability and explicit opt-in settings.
 Local skips cover missing native Zsh, optional provider extensions and explicitly configured worker/image integrations.

@@ -54,10 +54,12 @@ nima ingest papers /path/to/paper.pdf
 nima ocr /path/to/paper.pdf --output /path/to/transcription.md
 nima ingest papers /path/to/paper.pdf --ocr-output-dir /path/to/transcriptions
 nima ingest papers /path/to/notes.md --project my-research
+nima chat --corpus papers --project my-research
 nima project status my-research --corpus papers
 nima export okf --corpus papers --project my-research --output ./okf-snapshot
 ```
 
+See [Chat with corpus literature and project notes](docs/KNOWLEDGE_BASE.md#chat-with-corpus-literature-and-project-notes) for terminal chat examples and options.
 Ask the harness to **chat with the knowledge base**, conduct a literature review, calculate a quantity, draft a proof or investigate a claim.
 Skills guide tool use without imposing a fixed research pipeline.
 See [workflow contribution](docs/CONTRIBUTING_WORKFLOWS.md) to add your own Langflow workflow.

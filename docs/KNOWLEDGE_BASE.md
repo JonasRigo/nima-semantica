@@ -93,12 +93,72 @@ an exact ontology and a selected extraction question.
 
 ## Chat with corpus literature and project notes
 
+Use `nima chat` in a terminal or ask your coding-agent harness to chat with the knowledge base.
+Select the corpus and, when needed, the project containing the evidence you want to search.
+
+### Terminal chat
+
+After [setup](SETUP.md) and ingestion, ask a single question with `--question`:
+
+```sh
+nima chat --corpus papers --project my-research --knowledge sources --question 'What approximation controls the calculation?'
+```
+
+Replace `papers` and `my-research` with your existing corpus and project names.
+Omit `--question` to start an interactive session:
+
+```sh
+nima chat --corpus papers --project my-research
+```
+
+Type questions at the `nima>` prompt and use `/quit` or `/exit` to leave.
+Conversation history is bounded and lasts only for the current terminal session.
+
+| Option | Meaning |
+| --- | --- |
+| `--corpus NAME` | Required corpus to search. |
+| `--project NAME` | Include the selected project's private sources and knowledge. |
+| `--knowledge sources`, `graph`, or `both` | Search source passages, recorded graph knowledge, or both; default: `both`. |
+| `--scope corpus`, `project`, or `both` | Select visibility; default: `both` with a project, otherwise `corpus`. Project-only scope requires `--project`. |
+| `--mode lexical`, `vector`, or `hybrid` | Select retrieval mode. By default, configured embeddings select hybrid retrieval for source questions; otherwise retrieval is lexical. Vector and hybrid retrieval require configured embeddings and a ready vector index for source search. |
+| `--question TEXT` | Ask one question and exit; omit for interactive chat. |
+| `--json` | Return structured output, including answer citations, retrieval details and available model usage. |
+| `--retrieve-only` | Return retrieved evidence without an answer-model call. |
+| `--context-tokens N` | Override the evidence budget. |
+| `--answer-tokens N` | Override the answer's output-token limit. |
+
+For example, ask about recorded project knowledge or shared corpus literature:
+
+```sh
+nima chat --corpus papers --project my-research --knowledge graph --question 'Which assumptions remain unsupported?' --json
+nima chat --corpus papers --knowledge sources --scope corpus --question 'What is a regulator?'
+```
+
+Direct graph search works without a matching source passage and expands only a bounded neighborhood.
+Each answer citation resolves to a source region or graph reference in the current evidence packet.
+Use `--json` to inspect those references, or `--retrieve-only` to inspect the evidence without generating an answer.
+Run `nima chat --help` for the command's options.
+
+Terminal chat uses the configured installation model and makes one answer-model call per question.
+Direct terminal model calls require the `chat` extra and any credential named in the model profile; from a source checkout, install the extra with `.venv/bin/python -m pip install '.[mcp,chat]'`.
+When the configured credential is absent from the terminal environment, answering uses the maintained **Answer Knowledge** owner workflow and its operator model connection.
+This requires a configured owner connection and a running Langflow service; no stored credential is read back into the shell.
+
+Default budgets are a conservative 4,000-token evidence upper bound, a 1,000-token history upper bound, and a 1,024-token answer limit.
+The conservative estimator counts UTF-8 bytes, which overestimates ordinary model token counts.
+Evidence and history budgets are separate and do not cover the complete prompt framing or provider accounting.
+The installation's `chat` configuration controls these defaults; the owner enforces its configured ceilings.
+Actual provider usage is returned when available.
+
+### Chat through a coding-agent harness
+
 Ask the harness to use **Chat with Knowledge Base** (`nima-corpus-chat`).
 Specify whether you want corpus literature, project notes, project knowledge or a combination.
 For example: “Using this project's notes and corpus papers, explain the assumptions behind the current calculation and cite the exact passages.”
 
 The skill uses Inspect Corpus for inventory/readiness, Retrieve Research Context for passages and Read Evidence for exact regions or saved artifacts.
 It uses graph analysis and dependency tracing when the question concerns recorded relationships.
+Harness chat uses the same retrieval boundary as terminal chat, with the harness's own answer model.
 Ordinary KB chat does not start a broad research campaign or modify the knowledge graphs.
 If evidence is missing, the answer identifies the searched scope and missing material.
 

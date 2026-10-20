@@ -18,6 +18,7 @@ The [v0.3.1 qualification status](PLATFORM_SUPPORT_v0.3.1.md) separates local ca
 
 | Task | Guide |
 | --- | --- |
+| Ask questions with `nima chat` or your coding-agent harness | [Chat with the knowledge base](KNOWLEDGE_BASE.md#chat-with-corpus-literature-and-project-notes) |
 | Investigate, calculate, review or develop a proof | [Research workflows](RESEARCH_WORKFLOWS.md) |
 | Understand a tool and its effects | [Tool catalogue](TOOLS.md) |
 | Continue private calculations and proofs | [Private graph sessions](PRIVATE_GRAPHS.md) |

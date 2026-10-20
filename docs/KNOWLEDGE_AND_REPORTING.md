@@ -43,9 +43,6 @@ nima project configure experiment --corpus papers --path . --layout layout.json 
 
 ```bash
 nima ingest papers source.pdf --index-mode vector
-nima chat --corpus papers --project experiment --knowledge sources --question 'What approximation controls the calculation?' --json
-nima chat --corpus papers --project experiment --knowledge graph --question 'Which assumptions remain unsupported?' --json
-nima chat --corpus papers --knowledge sources --scope corpus --question 'What is a regulator?'
 ```
 
 Add `--project experiment` for project-private sources; omit it for corpus sources shared with connected projects.
@@ -56,21 +53,7 @@ Physical PDF page locations are retained, without assuming an offset to printed 
 Unresolved formula recognition stays explicitly provisional and is never presented as a verified equation.
 An index may be ready while mathematical normalization remains partial; inspect both fields.
 
-`--knowledge sources|graph|both` selects evidence type; `--scope corpus|project|both` selects visibility.
-Direct graph search works without a matching source passage and expands only a bounded neighborhood.
-`--retrieve-only` returns the native packet without an answer-model call.
-Harness corpus-chat uses the same retrieval boundary and its own model; terminal chat makes one configured answer call.
-When the configured model credential is absent from the terminal environment, terminal answering uses the maintained **Answer Knowledge** owner workflow and its operator model connection.
-It never reads a stored credential back into the shell.
-A configured owner connection is required in this case.
-
-Defaults are a conservative 4,000-token evidence upper bound, a 1,000-token history upper bound, and a 1,024-token answer limit.
-The conservative estimator counts UTF-8 bytes, which overestimates ordinary model token counts.
-The bounds cover evidence/history separately, not the complete prompt framing or provider accounting.
-Actual provider usage is returned when available.
-`chat` in installation configuration controls these defaults; the owner enforces its configured ceilings.
-Start an interactive terminal session by omitting `--question`; use `/quit` to leave.
-Every answer citation resolves to a source region or graph reference in the current packet.
+See [Chat with corpus literature and project notes](KNOWLEDGE_BASE.md#chat-with-corpus-literature-and-project-notes) for `nima chat` examples, interactive sessions, source/graph selection, visibility, retrieval-only output, model configuration and budgets.
 
 ## The complete project in upstream OKF Studio
 

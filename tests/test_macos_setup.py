@@ -1,5 +1,6 @@
 """Platform routing and deployment contracts, independent of the host OS."""
 import json
+import os
 from pathlib import Path
 import subprocess
 
@@ -44,8 +45,15 @@ def test_compose_separates_controller_and_untrusted_workers(tmp_path):
         socket = any(v["source"] == "/var/run/docker.sock" for v in service["volumes"])
         assert socket is (name == "symbolic")
         assert all(v["bind"]["create_host_path"] is False for v in service["volumes"])
-    assert services["lean"]["volumes"] == [setup_macos._bind(config.lean_token_file, readonly=True)]
+    lean = services["lean"]
+    assert lean["command"][lean["command"].index("--jobs-database") + 1] == "/var/lib/nima-lean/jobs.sqlite3"
+    assert lean["volumes"] == [setup_macos._bind(config.lean_token_file, readonly=True),
+        {"type": "bind", "source": str(Path(config.data_root) / "lean/jobs"),
+         "target": "/var/lib/nima-lean", "read_only": False, "bind": {"create_host_path": False}}]
     for name in ("lean", "pdf"):
+        assert services[name]["read_only"] is True
+        assert services[name]["user"] == f"{os.getuid()}:{os.getgid()}"
+        assert "no-new-privileges:true" in services[name]["security_opt"]
         assert services[name]["cap_drop"] == ["ALL"] and "cap_add" not in services[name]
         assert any(option.startswith("seccomp=") for option in services[name]["security_opt"])
         assert all(v["source"] not in {config.data_root, str(Path(config.data_root) / "corpus")} for v in services[name]["volumes"])
@@ -165,6 +173,9 @@ def test_provision_rejects_emulated_engine_before_writes(tmp_path, monkeypatch):
 
 
 def test_macos_provision_isolation_failure_resume_and_conflict(tmp_path, monkeypatch):
+    import hashlib
+    import sqlite3
+    import yaml
     import nima_semantica.pdf.workflow as pdf_workflow
     monkeypatch.setattr(pdf_workflow,"install_recognition",lambda config: {"flow_id":"fixture"})
     import nima_semantica.cli as cli
@@ -175,8 +186,12 @@ def test_macos_provision_isolation_failure_resume_and_conflict(tmp_path, monkeyp
         "SwapLimit": True, "PidsLimit": True}))
     calls = []
     fail = [True]
+    root = tmp_path / "data space ü"
+    jobs = root / "lean/jobs/jobs.sqlite3"
     def run(command, **kwargs):
         calls.append(command)
+        if command[:2] == ["docker", "compose"] and ("run" in command or "up" in command):
+            assert jobs.parent.is_dir()
         if "bwrap" in command and fail[0]:
             fail[0] = False
             raise subprocess.CalledProcessError(1, command)
@@ -184,23 +199,65 @@ def test_macos_provision_isolation_failure_resume_and_conflict(tmp_path, monkeyp
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(cli, "doctor", lambda config: 0)
     monkeypatch.setattr(setup_macos, "start_langflow", lambda *args: None)
-    config = Installation(data_root=str(tmp_path / "data space ü"), llm=ModelProfile(model="fixture"))
+    config = Installation(data_root=str(root), llm=ModelProfile(model="fixture"))
     destination = tmp_path / "installation.json"
     with pytest.raises(subprocess.CalledProcessError):
         setup_macos.provision_macos(config, destination, pdf=True, lean=True)
     assert not destination.exists()
     assert not any("up" in command for command in calls)
+    with sqlite3.connect(jobs) as db:
+        db.execute("CREATE TABLE retained_job (id TEXT PRIMARY KEY)")
+        db.execute("INSERT INTO retained_job VALUES ('existing-operation')")
+    saved_jobs = jobs.read_bytes()
     installed = setup_macos.provision_macos(config, destination, pdf=True, lean=True)
     assert installed.pdf_container_url == "http://127.0.0.1:8791"
     assert installed.pdf_url == "http://127.0.0.1:8791"
     assert config.pdf_url == ""  # Caller state is not partially mutated.
     before = len([c for c in calls if c[:2] == ["docker", "build"] and "nima-sympy:1.14.0-pilot" not in c])
     setup_macos.provision_macos(installed, destination)
+    assert jobs.read_bytes() == saved_jobs
     assert len([c for c in calls if c[:2] == ["docker", "build"] and "nima-sympy:1.14.0-pilot" not in c]) == before
     compose = Path(config.data_root) / "installation/compose-macos.yaml"
+    progress_path = root / "installation/macos-stages.json"
+    assert not list(compose.parent.glob("compose-backup-*"))
+    # Reproduce an installer-owned definition written before the jobs mount fix.
+    legacy = yaml.safe_load(compose.read_text())
+    lean = legacy["services"]["lean"]
+    index = lean["command"].index("--jobs-database")
+    del lean["command"][index:index + 2]
+    lean["volumes"] = [v for v in lean["volumes"] if v["target"] != "/var/lib/nima-lean"]
+    compose.write_text(yaml.safe_dump(legacy, sort_keys=True))
+    progress = json.loads(progress_path.read_text())
+    progress["compose-sha256"] = hashlib.sha256(compose.read_bytes()).hexdigest()
+    setup_macos.write_json(progress_path, progress)
+    old_compose, old_progress = compose.read_bytes(), progress_path.read_bytes()
+    setup_macos.provision_macos(installed, destination)
+    backup, = compose.parent.glob("compose-backup-*")
+    assert (backup / compose.name).read_bytes() == old_compose
+    assert (backup / progress_path.name).read_bytes() == old_progress
+    assert json.loads(progress_path.read_text())["compose-sha256"] == hashlib.sha256(compose.read_bytes()).hexdigest()
+    assert "--jobs-database" in yaml.safe_load(compose.read_text())["services"]["lean"]["command"]
+    assert jobs.read_bytes() == saved_jobs
+    setup_macos.provision_macos(installed, destination)
+    assert list(compose.parent.glob("compose-backup-*")) == [backup]
+    assert jobs.read_bytes() == saved_jobs
+    managed_compose = compose.read_bytes()
     compose.write_text(compose.read_text() + "# operator edit\n")
+    edited_compose, saved_progress = compose.read_bytes(), progress_path.read_bytes()
     with pytest.raises(ValueError, match="reconcile"):
         setup_macos.provision_macos(installed, destination)
+    assert compose.read_bytes() == edited_compose
+    assert progress_path.read_bytes() == saved_progress
+    assert list(compose.parent.glob("compose-backup-*")) == [backup]
+    # Even a matching checksum does not authorize overwriting a symlink target.
+    compose.write_bytes(managed_compose)
+    target = tmp_path / "operator-compose.yaml"
+    compose.rename(target)
+    compose.symlink_to(target)
+    with pytest.raises(ValueError, match="reconcile"):
+        setup_macos.provision_macos(installed, destination)
+    assert target.read_bytes() == managed_compose
+    assert progress_path.read_bytes() == saved_progress
 
 
 def test_outer_seccomp_keeps_default_deny_and_adds_only_namespace_calls():

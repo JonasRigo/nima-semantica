@@ -139,6 +139,11 @@ The optional `pdf_container_url`, `symbolic_container_url`, and `lean_container_
 
 macOS worker definitions and stage logs live in `installation/compose-macos.yaml` and `installation/` under the configured data directory. Langflow's generated `org.nima.langflow.<installation-id>.plist` lives in `~/Library/LaunchAgents` and starts at login; its stdout/stderr logs live under `installation/`. Setup leaves other Langflow installations untouched. Rerunning setup resumes completed builds, checks model assets again and restarts native Langflow. It preserves enabled PDF/Lean services and rejects operator-edited Compose or LaunchAgent definitions. Workers restart when Docker restarts. Only the trusted symbolic controller has Docker socket access; generated-code containers do not receive it. PDF and Lean retain Bubblewrap isolation inside non-root containers.
 
+The managed macOS Lean worker stores durable jobs in `lean/jobs/jobs.sqlite3` under the data directory, mounted read-write at `/var/lib/nima-lean`; its root filesystem and token mount remain read-only.
+After updating NIMA, rerun `nima setup --provision --lean` to regenerate an existing managed Compose definition and restart the worker.
+Setup verifies the existing `compose-sha256` before replacing the definition and saves the previous Compose file and stage checkpoint together in an `installation/compose-backup-*` directory when the definition changes.
+It preserves the jobs database on repeated setup runs and refuses to overwrite operator-edited definitions; reconcile any edits before rerunning setup.
+
 Native macOS provisional PDF reading also requires the managed `nima-fast-pdf` image; it uses a bounded Linux process because Darwin cannot enforce the reader's address-space limit. Missing Docker or a missing image produces an error, never an unbounded host fallback.
 
 Back up the data directory with services stopped, or use a consistent database backup procedure.

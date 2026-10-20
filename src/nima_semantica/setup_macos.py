@@ -16,6 +16,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from urllib.parse import urlsplit, urlunsplit
 
@@ -83,8 +84,10 @@ def compose_document(config, *, pdf, lean):
         services["lean"] = {**isolated, "image": f"nima-lean:{__version__}",
             "ports": ["127.0.0.1:7873:7873"],
             "command": ["python", "/opt/nima-app/deploy/serve_lean_worker.py", "--host", "0.0.0.0",
-                        "--config", "/opt/lean-project.json", "--token-file", config.lean_token_file],
-            "volumes": [_bind(config.lean_token_file, readonly=True)]}
+                        "--config", "/opt/lean-project.json", "--token-file", config.lean_token_file,
+                        "--jobs-database", "/var/lib/nima-lean/jobs.sqlite3"],
+            "volumes": [_bind(config.lean_token_file, readonly=True),
+                        _bind(root / "lean/jobs", "/var/lib/nima-lean")]}
     if pdf:
         services["pdf"] = {**isolated, "image": f"nima-pdf:{__version__}",
             "ports": ["127.0.0.1:8791:8791"], "environment": {"HOME": "/tmp", "HF_HUB_OFFLINE": "1"},
@@ -284,12 +287,18 @@ def provision_macos(config, config_path, *, pdf=False, lean=False):
     config.langflow_url = "http://127.0.0.1:7860"
     for path in (root / "langflow", root / "corpus", root / "pdf-models"):
         path.mkdir(parents=True, exist_ok=True)
+    if lean:
+        (root / "lean/jobs").mkdir(parents=True, exist_ok=True)
     compose = compose_document(config, pdf=pdf, lean=lean)
     path = work / "compose-macos.yaml"
     rendered = yaml.safe_dump(compose, sort_keys=True)
     old_hash = progress.get("compose-sha256")
-    if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() != old_hash:
+    if path.is_symlink() or (path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() != old_hash):
         raise ValueError("Existing macOS Compose definition changed; reconcile it before provisioning")
+    if path.exists() and path.read_bytes() != rendered.encode():
+        backup = Path(tempfile.mkdtemp(prefix="compose-backup-", dir=work))
+        shutil.copy2(path, backup / path.name)
+        shutil.copy2(progress_path, backup / progress_path.name)
     path.write_text(rendered)
     progress["compose-sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
     write_json(progress_path, progress)

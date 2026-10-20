@@ -11,7 +11,7 @@ Install these operating-system prerequisites before running the wizard.
 
 On macOS, install and start Docker Desktop with a Linux ARM64 engine and Docker Compose. Run a native ARM64 Python interpreter, not Rosetta. PDF and Lean execute in Linux containers; host Elan, Bubblewrap, `prlimit`, and systemd are not required. Docker must enforce memory, swap and process limits and permit the tested worker namespace isolation. Setup runs an isolation preflight and refuses to continue when it fails. Allocate sufficient Docker memory for the selected models and concurrent services; the PDF and Lean workers each have an 8 GB maximum.
 
-Use a dedicated Python environment and install the release wheel with its `mcp` extra, or install a source checkout with `pip install -e '.[mcp]'`.
+Use a dedicated Python environment and install NIMA with its `mcp` extra.
 Building from source also requires Git so packaging can check the public inventory against the ignore rules.
 For the Linux CPU stack, install `torch==2.13.0+cpu` from `https://download.pytorch.org/whl/cpu` first, as shown in the [quick start](../README.md#start-here), to avoid the default CUDA dependency download.
 Linux managed Langflow and PDF provisioning select CPU builds explicitly. Native macOS Langflow uses native macOS wheels.
@@ -20,6 +20,23 @@ The Langflow application, base package and LFX runtime are pinned together at 1.
 For OKF Studio visualization, Linux x86_64 users can install the upstream package; graphical NIMA setup can install its pinned Debian package.
 macOS users must build OKF Studio from source and configure the resulting executable with `studio_executable` or `NIMA_OKF_STUDIO`.
 Follow the [platform-specific OKF Studio installation and macOS build instructions](KNOWLEDGE_AND_REPORTING.md#the-complete-project-in-upstream-okf-studio).
+
+## Install the package
+
+For a source checkout, run these commands in the directory containing `pyproject.toml`:
+
+```sh
+python -m venv .venv
+.venv/bin/python -m pip install '.[mcp]'
+```
+
+This builds and installs NIMA from the checked-out source; no prebuilt `.whl` file is needed.
+For development, use `.venv/bin/python -m pip install -e '.[mcp]'` instead.
+
+For a wheel installation, first download the desired `.whl` file from [GitHub Releases](https://github.com/JonasRigo/nima-semantica/releases).
+Replace `'.[mcp]'` in the command above with the downloaded file's full path followed by `[mcp]`, keeping the argument quoted.
+If pip reports `No such file or directory` for a wheel, check that path or use the source installation command above.
+The pip upgrade notice is unrelated to a missing wheel.
 
 ## Wizard
 

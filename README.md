@@ -30,16 +30,19 @@ All three can survive the end of a chat session.
 Use Ubuntu/Linux or macOS on Apple silicon with Python 3.11–3.13 in a dedicated environment.
 The macOS deployment runs Langflow natively in a dedicated Python environment, with Docker Desktop execution workers. No Langflow Desktop account is required.
 See the [platform verification status](docs/PLATFORM_SUPPORT.md) for release qualification and tested configurations.
-Install the release wheel, then run the setup wizard:
+From a source checkout, run these commands in the `nima-semantica` directory containing `pyproject.toml`:
 
 ```sh
 python -m venv .venv
-.venv/bin/pip install 'nima_semantica-0.3.1-py3-none-any.whl[mcp]'
+.venv/bin/python -m pip install '.[mcp]'
 .venv/bin/nima setup --provision --pdf --lean
 .venv/bin/nima project init my-research --corpus papers --path /path/to/project
 ```
 
-On Linux, install `torch==2.13.0+cpu` from `https://download.pytorch.org/whl/cpu` before the wheel to select the CPU build. On macOS, use the native PyPI build selected by pip.
+On Linux, install `torch==2.13.0+cpu` from `https://download.pytorch.org/whl/cpu` before installing NIMA to select the CPU build. On macOS, use the native PyPI build selected by pip.
+
+To install a wheel instead, first download the desired `.whl` file from [GitHub Releases](https://github.com/JonasRigo/nima-semantica/releases), then replace `'.[mcp]'` above with its full path followed by `[mcp]`, keeping the argument quoted.
+A source checkout does not include built wheel files; a missing-wheel error means the named file must be downloaded or the source installation command used.
 
 The [user guide](docs/README.md) covers prerequisites, model configuration, Codex/Claude Code/OpenCode connections and continuing an existing project.
 A shared tool model and optional overrides configure every model-using workflow; the harness controls its own model.

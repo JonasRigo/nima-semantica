@@ -29,7 +29,7 @@ def test_local_defaults_and_conflicting_context():
 
 def test_context_includes_schema_unicode_and_output_reserve():
     check_context(profile(), [{'role':'user','content':'short'}], {})
-    for value, options in [('α'*3000, {}), ('short', {'tools':[{'description':'x'*4000}]}),
+    for value, options in [('α'*6000, {}), ('short', {'tools':[{'description':'schema item '*2000}]}),
                             ('short', {'max_tokens':4000})]:
         with pytest.raises(ModelContextExceeded) as error:
             check_context(profile(), value, options)
@@ -45,7 +45,8 @@ def test_sdk_guard_preserves_results_and_fails_before_network():
             return {'result':'original'}
     model=guarded_model_class(SDK,profile())()
     assert model.invoke('short') == {'result':'original'}
-    with pytest.raises(ModelContextExceeded):model.invoke('x'*4000)
+    assert model._nima_profile == profile()
+    with pytest.raises(ModelContextExceeded):model.invoke(' '.join(str(i) for i in range(5000)))
     assert calls == ['short']
 
 

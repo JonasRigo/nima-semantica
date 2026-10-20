@@ -1893,7 +1893,7 @@
           "type": "string"
         },
         "context_tokens": {
-          "default": 4000,
+          "default": 12000,
           "maximum": 100000,
           "minimum": 1024,
           "title": "Context Tokens",
@@ -2201,6 +2201,13 @@
           "default": null,
           "title": "Max Context Tokens"
         },
+        "max_transport_bytes": {
+          "default": 1000000,
+          "maximum": 2000000,
+          "minimum": 4096,
+          "title": "Max Transport Bytes",
+          "type": "integer"
+        },
         "operation_id": {
           "anyOf": [
             {
@@ -2431,6 +2438,16 @@
           "bounds": {
             "minimum": 1024,
             "maximum": 100000
+          }
+        },
+        {
+          "schema_path": [
+            "properties",
+            "max_transport_bytes"
+          ],
+          "bounds": {
+            "minimum": 4096,
+            "maximum": 2000000
           }
         },
         {

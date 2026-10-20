@@ -1,13 +1,14 @@
 """Bounded retrieval and one answer call using the operator's model connection."""
-import json,uuid
+import json
 from types import SimpleNamespace
 from lfx.io import StrInput,BoolInput,HandleInput
 from nima_semantica.component_contracts import manifest_for_component
-from nima_semantica.knowledge_chat import KnowledgeAnswerRequest,ChatDefaults,answer_chat
+from nima_semantica.knowledge_chat import KnowledgeAnswerRequest,ChatDefaults,answer_chat,retrieve_chat_from_store
+from nima_semantica.chat_evidence import chat_profile,chat_options
+from nima_semantica.models import canonical
 from nima_semantica.installation import ModelProfile
 from nima_semantica.tool_contracts import ToolResult
 from nima_semantica.providers import ModelManifest
-from nima_semantica.research_retrieval import ResearchRetrievalRequest,ResearchRetrievalContext,retrieve_research_context
 from nima_semantica.orchestration.langflow.adapter_support import configured_store,EmbeddingProvider,native
 from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent
 
@@ -27,24 +28,30 @@ class AnswerKnowledge(BaseComponent):
         HandleInput(name='embeddings',display_name='Query embedding model',input_types=['Embeddings'],required=False),
         HandleInput(name='model',display_name='Answer model',input_types=['LanguageModel'],required=False)]
     def run_sync(self):
+        defaults=ChatDefaults.model_validate_json(self.chat_defaults_json)
         raw=native(self.mcp_request)
         if isinstance(raw,str):
-            if len(raw)>100000:raise ValueError('Question exceeds transport limit')
+            if len(raw.encode('utf-8'))>defaults.max_transport_bytes:raise ValueError('Question exceeds transport byte limit')
             raw=json.loads(raw)
+        elif len(canonical(raw))>defaults.max_transport_bytes:
+            raise ValueError('Question exceeds transport byte limit')
         request=KnowledgeAnswerRequest.model_validate(raw)
-        defaults=ChatDefaults.model_validate_json(self.chat_defaults_json)
-        if request.context_tokens>defaults.context_tokens or request.answer_tokens>defaults.answer_tokens:raise ValueError('Question exceeds operator chat limits')
+        budget=request.context_tokens if 'context_tokens' in request.model_fields_set else None
+        reserve=request.answer_tokens if 'answer_tokens' in request.model_fields_set else None
+        budget,reserve,_=chat_options(defaults,budget,reserve)
         if not self.allow_model_calls or getattr(self,'model',None) is None:raise ValueError('Answer model calls disabled')
         provider=manifest=None
-        if request.mode!='lexical':
+        if request.mode!='lexical' and request.knowledge!='graph':
             if not self.allow_embeddings or not self.allow_attempt_writes:raise ValueError('Query embeddings disabled')
             manifest=ModelManifest.model_validate_json(self.manifest_json)
             provider=EmbeddingProvider(self.embeddings,manifest.model_dump(mode='json'))
-        query=ResearchRetrievalRequest(query=request.query,knowledge=request.knowledge,visibility=request.visibility,mode=request.mode,
-            max_context_tokens=request.context_tokens,limit=4,max_results=6,max_hops=2,max_nodes=24,max_edges=48,max_chars=16000,
-            operation_id='chat-'+uuid.uuid4().hex if request.mode!='lexical' else None)
-        context=ResearchRetrievalContext(corpus_id=self.corpus_id,project_id=self.project_id,allow_embeddings=self.allow_embeddings,allow_attempt_writes=self.allow_attempt_writes)
-        with configured_store(required=False) as store:found=retrieve_research_context(store,query,context,provider=provider,manifest=manifest)
-        config=SimpleNamespace(chat=defaults,llm=ModelProfile(provider='ollama',model='operator-connection'))
-        data=answer_chat(config,request.query,found,history=request.history,answer_tokens=request.answer_tokens,model=self.model.bind(max_tokens=request.answer_tokens))
+        fallback=SimpleNamespace(llm=ModelProfile(provider='compatible',model='operator-connection',base_url='http://operator.invalid/v1',credential=''))
+        config=SimpleNamespace(chat=defaults,llm=chat_profile(fallback,self.model))
+        selected=self.model.bind(max_tokens=reserve)
+        with configured_store(required=False) as store:
+            found=retrieve_chat_from_store(config,request.query,store,corpus_id=self.corpus_id,project_id=self.project_id,
+                knowledge=request.knowledge,visibility=request.visibility,mode=request.mode,provider=provider,manifest=manifest,
+                history=request.history,context_tokens=budget,answer_tokens=reserve,allow_embeddings=self.allow_embeddings,
+                allow_attempt_writes=self.allow_attempt_writes,model=selected)
+        data=answer_chat(config,request.query,found,history=request.history,context_tokens=budget,answer_tokens=reserve,model=selected)
         return ToolResult(operation='Answer Knowledge',status='complete',data=data,receipt_ids=found.receipt_ids).model_dump(mode='json')

@@ -70,9 +70,9 @@ def chat_command(args,config):
             answer=answer_through_owner(config,question,corpus_id=args.corpus,project_id=args.project,knowledge=args.knowledge,visibility=args.scope,context_tokens=args.context_tokens,answer_tokens=args.answer_tokens,mode=args.mode,history=history)
             history.append(dict(question=question,answer=answer['answer']))
             return answer
-        result=retrieve_chat(config,question,corpus_id=args.corpus,project_id=args.project,knowledge=args.knowledge,visibility=args.scope,context_tokens=args.context_tokens,mode=args.mode)
+        result=retrieve_chat(config,question,corpus_id=args.corpus,project_id=args.project,knowledge=args.knowledge,visibility=args.scope,context_tokens=args.context_tokens,mode=args.mode,history=history,answer_tokens=args.answer_tokens)
         if args.retrieve_only:return result.model_dump(mode='json')
-        answer=answer_chat(config,question,result,history=history,answer_tokens=args.answer_tokens)
+        answer=answer_chat(config,question,result,history=history,context_tokens=args.context_tokens,answer_tokens=args.answer_tokens)
         history.append(dict(question=question,answer=answer['answer']))
         return answer
     if args.question:return turn(args.question)
@@ -93,7 +93,8 @@ def register_commands(commands,project):
     chat.add_argument('--corpus',required=True);chat.add_argument('--project');chat.add_argument('--scope',choices=['corpus','project','both'])
     chat.add_argument('--knowledge',choices=['sources','graph','both'],default='both');chat.add_argument('--mode',choices=['lexical','vector','hybrid'])
     chat.add_argument('--question');chat.add_argument('--json',action='store_true');chat.add_argument('--retrieve-only',action='store_true')
-    chat.add_argument('--context-tokens',type=int);chat.add_argument('--answer-tokens',type=int)
+    chat.add_argument('--context-tokens',type=int,help='Evidence token budget, up to the installation chat ceiling')
+    chat.add_argument('--answer-tokens',type=int,help='Reserved answer tokens, up to the installation chat ceiling')
     math=commands.add_parser('math').add_subparsers(dest='action',required=True)
     report=math.add_parser('report',help='Write a complete private calculation derivation and provenance audit')
     report.add_argument('session');report.add_argument('--path',default='.');report.add_argument('--output')

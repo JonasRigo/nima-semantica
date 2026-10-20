@@ -125,7 +125,7 @@ def test_direct_graph_search_without_matching_source(store):
     GraphProjectionService(store).rebuild(GraphProjectionRequest(corpus_id='papers',project_id='test'))
     found=projected_context(store,ResearchRetrievalRequest(query='quasiparticle uniqueness',knowledge='graph',max_context_tokens=4000),ResearchRetrievalContext(corpus_id='papers',project_id='test'))
     assert found.data['graph_nodes'] and found.data['graph_nodes'][0]['ref']['local_id']=='special'
-    assert not found.data['regions'] and len(canonical(found.data))<=4000
+    assert not found.data['regions'] and found.data['traversal']['estimated_evidence_tokens']<=4000
 
 def test_reporting_template_compiles_all_roles(tmp_path):
     from nima_semantica.reporting import create_report

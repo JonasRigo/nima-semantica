@@ -37,6 +37,7 @@ class ResearchRetrievalRequest(StrictModel):
     knowledge: Literal["sources", "graph", "both"] | None = None
     visibility: Literal["corpus", "project", "both"] = "both"
     max_context_tokens: StrictInt | None = Field(default=None, ge=1024, le=100000)
+    max_transport_bytes: StrictInt = Field(default=1000000, ge=4096, le=2000000)
     operation_id: GraphIdentifier | None = None
     run_id: GraphIdentifier | None = None
 
@@ -103,21 +104,32 @@ def _visible(project_id, visibility):
     return visibility == "both" or ((project_id is None) == (visibility == "corpus"))
 
 
-def _budget_packet(packet, budget):
-    if budget is None: return packet
-    # UTF-8 byte count is a conservative tokenizer-independent upper bound.
-    packet["traversal"]["token_budget"] = budget
-    packet["traversal"]["token_count_method"] = "conservative_utf8_bytes"
-    def size(): return len(canonical(packet))
-    while size() > budget:
-        if packet["paths"]: packet["paths"].pop()
-        elif packet["seeds"]: packet["seeds"].pop()
+def _budget_packet(packet, budget, max_transport_bytes=1000000):
+    from .chat_evidence import packet_diagnostics, prompt_cards, transport_size
+    from .token_budget import TokenCounter
+    counter = TokenCounter()
+    packet["traversal"].update(token_budget=budget, transport_byte_limit=max_transport_bytes)
+    omissions = defaultdict(int)
+    while True:
+        packet["traversal"]["omitted_by_reason"] = dict(omissions)
+        packet_diagnostics(packet,counter)
+        over_tokens = budget is not None and counter.value(prompt_cards(packet)) > budget
+        over_bytes = transport_size(packet) > max_transport_bytes
+        if not over_tokens and not over_bytes: break
+        reason = "evidence_token_budget" if over_tokens else "transport_byte_limit"
+        if over_bytes and packet["paths"]: packet["paths"].pop()
+        elif over_bytes and packet["seeds"]: packet["seeds"].pop()
         elif packet["graph_nodes"]:
             removed = packet["graph_nodes"].pop()
             packet["selected_graph_refs"] = [ref for ref in packet["selected_graph_refs"] if ref != removed["ref"]]
-        elif packet["regions"]: packet["regions"].pop()
+            omissions[reason] += 1
+        elif packet["regions"]:
+            packet["regions"].pop(); omissions[reason] += 1
         else: raise ValueError("Context budget cannot contain retrieval metadata")
         packet["truncated"] = True
+    packet["traversal"]["omitted_by_reason"] = dict(omissions)
+    packet_diagnostics(packet,counter)
+    transport_size(packet)
     return packet
 
 
@@ -350,6 +362,7 @@ def projected_context(store, request, context, *, provider=None, manifest=None):
                 break
         hop_limited = any(edge["target"] not in visited for key in frontier for edge in links[key])
         passages, chars, omitted_chars = [], 0, 0
+        ranks = {key:rank for rank,key in enumerate(ranked)}
         for key in (selected if request.knowledge != "graph" else []):
             region = regions[key]
             if chars + len(region.text) > request.max_chars:
@@ -359,7 +372,7 @@ def projected_context(store, request, context, *, provider=None, manifest=None):
             reference = EvidenceReference(**_scope(context), region_id=key, artifact_id=region.artifact_id,
                 content_hash=region.artifact_id, source_revision=region.source_revision,
                 locator=evidence_locator(region)).model_copy(update={"project_id": region.project_id})
-            passages.append({"region_id": key, "source_id": region.source_id, "text": region.text,
+            passages.append({"region_id": key, "source_id": region.source_id, "text": region.text, "retrieval_rank":ranks.get(key),
                 "evidence": reference.model_dump(mode="json"), "preparation_quality": preparation_quality(region),
                 **({"math_transcription":region.metadata["math_transcription"]} if "math_transcription" in region.metadata else {})})
             chars += len(region.text)
@@ -396,7 +409,7 @@ def projected_context(store, request, context, *, provider=None, manifest=None):
                 "omitted_graph_nodes_for_character_limit": omitted_graph,
                 "candidate_regions": len(ranked), "visible_regions": len(regions),
                 "partial_vector_coverage": partial_vectors})
-        packet_data = _budget_packet(packet.model_dump(mode="json"), request.max_context_tokens)
+        packet_data = _budget_packet(packet.model_dump(mode="json"), request.max_context_tokens,request.max_transport_bytes)
         truncated = truncated or packet_data["truncated"]
         return ToolResult(operation="Retrieve Research Context", status="partial" if truncated else "complete",
             data=packet_data, note=NOTE,
@@ -426,7 +439,7 @@ def retrieve_research_context(store, request, context, *, provider=None, manifes
     receipts = ExecutionReceiptService(store)
     identifier = identity({"stage": "research_retrieval", "operation_id": request.operation_id, **_scope(context)})
     request_identity = request.model_dump(mode="json")
-    for key,default in (("knowledge",None),("visibility","both"),("max_context_tokens",None)):
+    for key,default in (("knowledge",None),("visibility","both"),("max_context_tokens",None),("max_transport_bytes",1000000)):
         if request_identity[key] == default: request_identity.pop(key)
     fingerprint = identity({"request": request_identity, "context": context, "model": manifest})
     try:

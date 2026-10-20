@@ -4549,7 +4549,7 @@
             "type": "integer"
           },
           "context_tokens": {
-            "default": 4000,
+            "default": 12000,
             "maximum": 100000,
             "minimum": 1024,
             "title": "Context Tokens",
@@ -4844,6 +4844,13 @@
             "title": "Max Results",
             "type": "integer"
           },
+          "max_transport_bytes": {
+            "default": 1000000,
+            "maximum": 2000000,
+            "minimum": 4096,
+            "title": "Max Transport Bytes",
+            "type": "integer"
+          },
           "mode": {
             "default": "lexical",
             "enum": [
@@ -5114,6 +5121,16 @@
               "max_context_tokens",
               "anyOf",
               0
+            ]
+          },
+          {
+            "bounds": {
+              "maximum": 2000000,
+              "minimum": 4096
+            },
+            "schema_path": [
+              "properties",
+              "max_transport_bytes"
             ]
           },
           {

@@ -1,17 +1,17 @@
 """Provider-neutral context preflight and cooperative cancellation for model IO."""
 import asyncio
 from contextvars import ContextVar
-import json
 from threading import Event
+from typing import ClassVar
 
 _cancelled = ContextVar('nima_model_cancelled', default=None)
 
 
 class ModelContextExceeded(ValueError):
-    def __init__(self, estimate, reserve, window):
+    def __init__(self, estimate, reserve, window, *, estimator='conservative_utf8_bytes_plus_framing'):
         self.diagnostic = {'code': 'model.context_budget_exceeded',
             'estimated_input_tokens': estimate, 'reserved_output_tokens': reserve,
-            'context_window': window, 'estimator': 'conservative_utf8_bytes_plus_framing',
+            'context_window': window, 'estimator': estimator,
             'message': 'Select fewer source regions or reduce retrieved context/history; alternatively configure a larger supported context window or a smaller output limit. No input was truncated and no model call was made.'}
         super().__init__(self.diagnostic['message'])
 
@@ -67,22 +67,25 @@ def check_context(profile, value, options):
                 return {'type':'image', 'width':width, 'height':height, 'image_token_estimate':'approximate'}
             return {k:bounded(v) for k,v in obj.items()}
         return obj
-    payload = json.dumps(bounded({'messages': value, 'tools': options.get('tools', [])}),
-                         ensure_ascii=False, default=str)
+    payload = bounded({'messages': value, 'tools': options.get('tools', [])})
     if profile.context_window is None:
         return
-    # Deliberately conservative and tokenizer independent, not an exact provider
-    # token count. Include tool schemas, UTF-8 math, message metadata and framing.
-    estimate = len(payload.encode('utf-8')) + 1024 + image_estimate
-    reserve = max([profile.max_tokens, *[v for key in ('max_tokens','max_output_tokens','num_predict')
-                  if isinstance(v := options.get(key), int) and v > 0]])
+    from .token_budget import TokenCounter
+    counter = TokenCounter(profile.model)
+    messages=payload['messages']
+    estimate = (counter.messages(messages) if isinstance(messages,list) else counter.value(messages)) + 1024 + image_estimate
+    if payload['tools']:estimate += counter.value(payload['tools'])
+    overrides = [v for key in ('max_tokens','max_output_tokens','num_predict')
+                  if isinstance(v := options.get(key), int) and v > 0]
+    reserve = max(overrides) if overrides else profile.max_tokens
     if estimate + reserve > profile.context_window:
-        raise ModelContextExceeded(estimate, reserve, profile.context_window)
+        raise ModelContextExceeded(estimate, reserve, profile.context_window,estimator=counter.name+'_plus_framing')
 
 
 def guarded_model_class(base, profile):
     """Keep each SDK's native model/tool implementation; add no protocol gateway."""
     class GuardedModel(base):
+        _nima_profile: ClassVar = profile
         def invoke(self, input, config=None, **kwargs):
             check_context(profile, input, kwargs)
             try:

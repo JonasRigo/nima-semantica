@@ -129,8 +129,8 @@ Conversation history is bounded and lasts only for the current terminal session.
 | `--question TEXT` | Ask one question and exit; omit for interactive chat. |
 | `--json` | Return structured output, including answer citations, retrieval details and available model usage. |
 | `--retrieve-only` | Return retrieved evidence without an answer-model call. |
-| `--context-tokens N` | Override the evidence budget. |
-| `--answer-tokens N` | Override the answer's output-token limit. |
+| `--context-tokens N` | Request an evidence token budget up to the installation's chat ceiling. |
+| `--answer-tokens N` | Request an answer output limit up to the installation's chat ceiling. |
 
 For example, ask about recorded project knowledge or shared corpus literature:
 
@@ -149,11 +149,70 @@ Direct terminal model calls require the `chat` extra and any credential named in
 When the configured credential is absent from the terminal environment, answering uses the maintained **Answer Knowledge** owner workflow and its operator model connection.
 This requires a configured owner connection and a running Langflow service; no stored credential is read back into the shell.
 
-Default budgets are a conservative 4,000-token evidence upper bound, a 1,000-token history upper bound, and a 1,024-token answer limit.
-The conservative estimator counts UTF-8 bytes, which overestimates ordinary model token counts.
-Evidence and history budgets are separate and do not cover the complete prompt framing or provider accounting.
-The installation's `chat` configuration controls these defaults; the owner enforces its configured ceilings.
+New installations default to 12,000 estimated evidence tokens, 1,000 history tokens and a 1,024-token answer limit.
+Retrieval first collects up to 48 candidate regions from 12 seeds, with an 80,000-character candidate limit.
+Selection favors topic-bearing text, discounts repeated page headers and includes up to two adjacent continuations from the same source and scope.
+It retains at most 16 whole passages; an oversized passage is omitted rather than clipped, and shorter useful passages can still fit.
+These candidate limits, the evidence token budget and the 512,000-byte transport limit are independent.
+Full citation references remain in retrieval output and answer citations; the model receives exact passage text with compact citation labels, locations and preparation-quality information.
+
+Counting uses an initialized or locally cached, integrity-checked `tiktoken` vocabulary when available.
+A model-specific vocabulary is identified as such; an unknown model can use the cached `cl100k_base` vocabulary as an explicitly labeled proxy estimate.
+Without a local vocabulary, the fallback estimates one token per two UTF-8 bytes, which is conservative for typical English prose but is not a guaranteed bound for every model or language.
+Retrieval never downloads a tokenizer or calls a model merely to count tokens.
+The complete prompt estimate includes the system instructions, question, bounded history, evidence, paths and message framing.
+The reserved answer and a 1,024-token safety allowance must also fit the smaller of the configured model context and the installation's chat context ceiling.
+When the model context is unknown, the default 32,768-token chat ceiling is an operator limit, not a claim about that model's actual capacity; configure the model's `context_window` when known.
 Actual provider usage is returned when available.
+
+Use `--retrieve-only --json` to inspect `data.regions` and `data.traversal` before generating an answer.
+Diagnostics report actual returned passages and source characters after packing, estimated evidence/prompt/history tokens, the estimator, reserved answer and safety allowances, serialized transport bytes and omissions by reason.
+Answer output includes the same packing diagnostics under `retrieval.traversal`.
+A single displayed citation means the answer used that citation; it does not enumerate every passage supplied to the model.
+
+### Configure and update chat selection
+
+Terminal chat and the saved **Answer Knowledge** workflow share the same retrieval and packing code.
+The installation's `chat` object controls their default budgets and ceilings, including optional settings such as:
+
+```json
+{
+  "context_tokens": 12000,
+  "history_tokens": 1000,
+  "answer_tokens": 1024,
+  "model_context_tokens": 32768,
+  "context_safety_tokens": 1024,
+  "max_transport_bytes": 512000,
+  "tokenizer_model": "",
+  "retrieval": {
+    "candidate_seeds": 12,
+    "candidate_regions": 48,
+    "candidate_characters": 80000,
+    "max_passages": 16,
+    "adjacent_regions": 2,
+    "max_hops": 2,
+    "max_nodes": 128,
+    "max_edges": 512
+  }
+}
+```
+
+Existing explicit settings, including a legacy `context_tokens: 4000`, are preserved.
+New optional fields receive their defaults when the configuration is loaded.
+Change the installation file explicitly to raise a retained ceiling; both terminal and owner-backed requests enforce it.
+The `tokenizer_model` field can select a known tokenizer model when the provider's model name is an alias; its vocabulary must already be available locally.
+
+After installing the updated package, update the runtime serving Langflow as well; for a managed installation, use `nima setup --provision`.
+Then republish each existing project's managed workflows with its usual workspace path, for example:
+
+```sh
+nima project init my-research --corpus papers --path /path/to/workspace --non-interactive
+```
+
+Republishing installs the updated **Answer Knowledge** component and its current `chat_defaults_json` settings.
+Older published canvases retain their previous component code and settings until republished; `nima project refresh` alone does not replace them.
+Operator-edited canvases remain protected by the publication ownership checks and require reconciliation before replacement.
+Previously ingested sources do not need to be ingested again for this selection change.
 
 ### Chat through a coding-agent harness
 

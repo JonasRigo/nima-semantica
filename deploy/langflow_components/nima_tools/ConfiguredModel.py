@@ -17,4 +17,9 @@ class ConfiguredModel(Component):
     outputs = [Output(name="model_output", display_name="Language Model", method="build_model")]
 
     def build_model(self) -> LanguageModel:
-        return native_chat_model(ModelProfile.model_validate_json(self.profile_json), self.api_key)
+        profile = ModelProfile.model_validate_json(self.profile_json)
+        value = self.api_key
+        if profile.provider != "ollama" and profile.credential:
+            from nima_semantica.credential_setup import secret_value
+            value = secret_value(value, profile.credential)
+        return native_chat_model(profile, value)

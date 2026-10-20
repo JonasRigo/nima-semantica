@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import sys
 import tempfile
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .models import AcquisitionPolicy
@@ -76,6 +77,11 @@ class EmbeddingProfile(Config):
     credential: str = "NIMA_EMBEDDING_API_KEY"
 
 
+class CredentialSource(Config):
+    source: Literal["langflow", "environment", "file", "prompt"]
+    reference: str = ""
+
+
 from .project_layout import ProjectLayout
 from .knowledge_chat import ChatDefaults
 
@@ -86,6 +92,7 @@ class Installation(Config):
     llm: ModelProfile
     embedding: EmbeddingProfile | None = None
     overrides: dict[str, ModelProfile] = Field(default_factory=dict)
+    credential_sources: dict[str, CredentialSource] = Field(default_factory=dict)
     discovery: PaperDiscoveryPolicy = Field(default_factory=lambda: PaperDiscoveryPolicy(discovery_providers=("arxiv", "openalex", "crossref"), max_discoveries=8))
     acquisition: AcquisitionPolicy = Field(default_factory=lambda: AcquisitionPolicy(enabled=True, domains=("arxiv.org", "export.arxiv.org"), max_response_bytes=20_000_000))
     allow_fast_read: bool = True

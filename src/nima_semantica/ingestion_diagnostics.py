@@ -44,13 +44,16 @@ class EmbeddingStageError(Exception):
 
 def preparation_diagnostic(exc):
     """Allow-list deterministic preparation errors; never return input/provider text."""
+    from .workflow_readiness import WorkflowReadinessError
+    if isinstance(exc, WorkflowReadinessError):
+        return dict(exc.diagnostic)
     messages = {
         "fast reading found insufficient text; full preparation may be required": (
             "sources.fast_text_insufficient",
             "Fast preparation requires at least 200 extracted characters. Use full preparation for short text, or a full PDF/OCR parser if the PDF has no usable text layer."),
         "fast-read text exceeds output limits": (
             "sources.fast_text_limit",
-            "Fast preparation exceeded its 4 MB text or 150 page-separator limit. Split the source into smaller inputs."),
+            "Fast preparation exceeded its 4 MB extracted-text limit. Split the source into smaller inputs."),
         "fast PDF text extraction failed": (
             "sources.fast_pdf_failed", "Fast PDF extraction failed. Check the text layer and configured isolated reader, or try full preparation."),
         "fast PDF text extraction unavailable": (

@@ -21,9 +21,6 @@ def install_recognition(config):
     previous = json.loads(path.read_bytes()) if path.is_file() else None
     flow = json.loads((assets()/"examples/pdf_recognition.json").read_text())
     target = next(n for n in flow["data"]["nodes"] if n["data"]["type"] == "FormulaTranscription")
-    wire_model(flow, target, "model", settings.model, "pdf_recognition")
-    validate_flow(flow)
-    digest = sha256_bytes(canonical_json(flow["data"]))
     with api(config) as client:
         for attempt in range(30):
             try:
@@ -35,6 +32,9 @@ def install_recognition(config):
                 raise ValueError("Langflow is not ready for PDF workflow installation; start it and rerun nima setup --pdf")
             time.sleep(1)
         ensure_credentials(client, config)
+        wire_model(flow, target, "model", settings.model, "pdf_recognition")
+        validate_flow(flow)
+        digest = sha256_bytes(canonical_json(flow["data"]))
         payload = {**flow,"is_component":False,"access_type":"PRIVATE","mcp_enabled":False,
                    "a2a_enabled":False,"webhook":False}
         if previous:
@@ -53,7 +53,9 @@ def install_recognition(config):
         flow_id = response.json()["id"]
         binding = {"schema_version":1,"langflow_url":config.langflow_url,"flow_id":flow_id,
                    "installed_digest":digest,"concurrency":settings.concurrency,
-                   "model":settings.model.model_dump(),"api_key_file":"","pending_verification":True}
+                   "model":settings.model.model_dump(),"api_key_file":"","pending_verification":True,
+                   "langflow_api_key_env":config.langflow_api_key_env,
+                   "readiness":{"ready":False,"status":"runtime_not_checked"}}
         import sys
         if sys.platform=="darwin" and urlsplit(binding["langflow_url"]).hostname in {"127.0.0.1","localhost"}:
             binding["langflow_url"]=binding["langflow_url"].replace("127.0.0.1","host.docker.internal").replace("localhost","host.docker.internal")

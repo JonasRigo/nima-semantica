@@ -45,7 +45,10 @@ def test_context_uses_image_dimensions_and_rejects_oversized_payload():
 
 
 def backend(tmp_path,monkeypatch,mutate=None):
-    data={'nodes':[],'edges':[]};calls=[]
+    profile=ModelProfile(model='vision',request_timeout_seconds=30)
+    data={'nodes':[{'data':{'type':'ConfiguredModel','node':{'template':{
+        'profile_json':{'value':profile.model_dump_json()},
+        'api_key':{'value':profile.credential,'load_from_db':True}}}}}],'edges':[]};calls=[]
     def handle(request):
         if request.method=='GET':return httpx.Response(200,json={'data':data})
         value=json.loads(json.loads(request.content)['input_value'])
@@ -57,7 +60,7 @@ def backend(tmp_path,monkeypatch,mutate=None):
     original=httpx.Client
     monkeypatch.setattr(httpx,'Client',lambda **kw:original(transport=httpx.MockTransport(handle),**kw))
     selected=LangflowRecognition({'langflow_url':'http://langflow.test','flow_id':'flow',
-        'concurrency':4,'model':{'model':'vision','request_timeout_seconds':30}},tmp_path/'cache')
+        'concurrency':4,'model':profile.model_dump()},tmp_path/'cache')
     return selected,calls,data
 
 

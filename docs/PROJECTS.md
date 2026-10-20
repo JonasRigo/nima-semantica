@@ -68,6 +68,13 @@ This registers or reconnects the corpus, creates project-bound toolbox configura
 The default harness selection is Codex, Claude Code and OpenCode; select a subset with `--harness codex,opencode`.
 The command preserves unrelated client settings and refuses conflicting NIMA settings or edited installed skills.
 `--offline` initializes local state and private graph configuration without publishing a Langflow toolbox.
+Online initialization displays each model's installation credential dependency and tests saved model workflows, including the independent PDF recognition model when configured.
+Credentials are shared across projects using the installation; changing a saved key affects every profile referring to its name.
+The wizard offers Keep, Replace or Choose another credential for existing entries.
+Use `--non-interactive` to use configured sources without prompts; an unusable credential leaves initialization incomplete.
+Output reports `credential_dependencies` and `credentials_verified` separately from toolbox verification.
+Offline initialization reports dependencies without claiming credential readiness.
+See [credential sources and verification](SETUP.md#model-overrides-and-credentials) for key-file and environment-variable setup.
 
 The workspace receives `.nima/project.json` and `NIMA_PROJECT.md`.
 Codex configuration lives in `.codex/config.toml`; Claude Code uses `.mcp.json`; OpenCode uses `opencode.json`.

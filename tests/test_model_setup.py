@@ -130,6 +130,22 @@ def test_native_provider_cannot_override_credential_routing():
         native_chat_model(profile)
 
 
+@pytest.mark.parametrize("value", ["", "  "])
+def test_empty_saved_credential_does_not_fall_back_to_environment(monkeypatch, value):
+    monkeypatch.setenv("NIMA_MODEL_API_KEY", "valid-environment-fixture")
+    with pytest.raises(ValueError, match="credential is missing"):
+        native_chat_model(ModelProfile(model="fixture"), value)
+
+
+def test_empty_saved_embedding_credential_does_not_fall_back_to_environment(monkeypatch):
+    from nima_semantica.setup_services import embedding_provider
+    monkeypatch.setenv("NIMA_EMBEDDING_API_KEY", "valid-environment-fixture")
+    config = SimpleNamespace(embedding=EmbeddingProfile(provider="compatible", model="fixture", revision="pin", dimension=2))
+    provider, _ = embedding_provider(config, credential_value="")
+    with pytest.raises(ValueError, match="credential"):
+        provider.embed_query("configured", "credential check")
+
+
 def test_republication_preserves_server_assigned_name(tmp_path, monkeypatch):
     import hashlib
     from nima_semantica import workflow_installation as workflow

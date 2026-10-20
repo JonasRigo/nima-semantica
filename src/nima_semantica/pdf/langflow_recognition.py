@@ -11,6 +11,14 @@ from .recognition import CropRequest, image_bytes
 from .support import PdfError, canonical_json, sha256_bytes, sha256_file
 
 
+def runtime_error(response, binding):
+    from nima_semantica.installation import ModelProfile
+    from nima_semantica.workflow_readiness import response_error
+    profile = ModelProfile.model_validate(binding["model"])
+    error = response_error(response, "PDF recognition", profile)
+    return PdfError(str(error), details=error.diagnostic)
+
+
 class LangflowRecognition:
     def __init__(self, binding, cache):
         self.binding = binding
@@ -27,7 +35,17 @@ class LangflowRecognition:
         with httpx.Client(timeout=15,trust_env=False,follow_redirects=False) as client:
             response = client.get(self.url+"/api/v1/flows/"+binding["flow_id"],headers=self.headers)
             if not response.is_success:
+                if response.status_code in {401,403}:
+                    raise PdfError("Cannot authenticate to Langflow for PDF recognition; check its API credential", details={
+                        "code":"workflow.langflow_authentication_failed","role":"PDF recognition",
+                        "model":binding["model"]["model"],"credential":binding.get("langflow_api_key_env","NIMA_LANGFLOW_API_KEY")})
                 raise PdfError("PDF recognition canvas unavailable; check Langflow authentication and run nima setup --pdf")
+            from nima_semantica.installation import ModelProfile
+            from nima_semantica.workflow_readiness import check_bindings, WorkflowReadinessError
+            try:
+                check_bindings(response.json()["data"],"PDF recognition",ModelProfile.model_validate(binding["model"]))
+            except WorkflowReadinessError as error:
+                raise PdfError(str(error),details=error.diagnostic) from None
             self.digest = sha256_bytes(canonical_json(response.json()["data"]))
         self.manifest = {"backend":"langflow","flow_id":binding["flow_id"],"workflow_digest":self.digest,
                          "implementation_sha256":sha256_file(Path(__file__).with_name("recognition.py")),
@@ -65,7 +83,7 @@ class LangflowRecognition:
                 if response.status_code not in {429,503} or attempt==2:break
                 time.sleep(2**attempt)
             if not response.is_success:
-                raise PdfError(f"Langflow PDF recognition failed (HTTP {response.status_code}); check the vision model and credential")
+                raise runtime_error(response,self.binding)
             try:
                 outputs=response.json()["outputs"]
                 rows=[row for group in outputs for row in group["outputs"] if row.get("component_id")=="ChatOutput-ocr"]
@@ -73,6 +91,9 @@ class LangflowRecognition:
                 if len(rows)!=1:raise ValueError("ambiguous output")
                 value=json.loads(rows[0]["results"]["message"]["text"])
             except (KeyError,TypeError,ValueError) as error:
+                classified = runtime_error(response,self.binding)
+                if classified.details["code"] == "workflow.authentication_failed":
+                    raise classified from None
                 raise PdfError("Invalid Langflow recognition response") from error
         if (value.get("id"),value.get("crop_hash")) != (request.id,request.crop_hash) or value.get("status") not in {"transcribed","unreadable"} or not isinstance(value.get("latex"),str):
             raise PdfError("Recognition result does not match its crop")

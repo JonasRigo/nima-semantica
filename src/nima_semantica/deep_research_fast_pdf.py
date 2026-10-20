@@ -47,8 +47,6 @@ def main():
         raise ValueError("invalid or oversized PDF input")
     from pypdf import PdfReader
     reader = PdfReader(BytesIO(data), strict=False)
-    if len(reader.pages) > 150:
-        raise ValueError("fast PDF page limit exceeded")
     text = "\f".join(page.extract_text() or "" for page in reader.pages)
     output = text.encode("utf-8")
     if len(output) > 4_000_000:

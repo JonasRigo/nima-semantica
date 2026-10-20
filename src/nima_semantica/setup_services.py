@@ -39,9 +39,11 @@ def embedding_provider(config, *, credential_value=None):
         def embed(self, ignored, texts):
             headers = {}
             if profile.provider != "ollama" and profile.credential:
-                token = credential_value or os.environ.get(profile.credential)
+                from .credential_setup import runtime_credential, secret_value
+                token = credential_value if credential_value is not None else runtime_credential(config, profile.credential)
                 if not token:
                     raise ValueError("Embedding credential environment variable is missing")
+                token = secret_value(token, profile.credential)
                 headers["Authorization"] = "Bearer " + token
             with httpx.Client(base_url=profile.base_url.rstrip("/"), headers=headers, timeout=120) as client:
                 if profile.provider == "ollama":

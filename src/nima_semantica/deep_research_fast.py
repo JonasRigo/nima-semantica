@@ -43,7 +43,7 @@ def fast_text(data: bytes, name: str) -> tuple[str, str]:
             from .deep_research_fast_pdf import extract_macos
             text = extract_macos(data).decode("utf-8", errors="replace")
             method = "pypdf-text-v1"
-            if len(text.encode("utf-8")) > 4_000_000 or text.count("\f") > 150:
+            if len(text.encode("utf-8")) > 4_000_000:
                 raise ValueError("fast-read text exceeds output limits")
             if len(text.strip()) < 200:
                 raise ValueError("fast reading found insufficient text; full preparation may be required")
@@ -75,7 +75,7 @@ def fast_text(data: bytes, name: str) -> tuple[str, str]:
         text = data.decode("utf-8", errors="strict")
         method = "utf8-text-v1"
     text = re.sub(r"[ \t]+", " ", text).strip()
-    if len(text.encode("utf-8")) > 4_000_000 or text.count("\f") > 150:
+    if len(text.encode("utf-8")) > 4_000_000:
         raise ValueError("fast-read text exceeds output limits")
     if len(text) < 200:
         raise ValueError("fast reading found insufficient text; full preparation may be required")

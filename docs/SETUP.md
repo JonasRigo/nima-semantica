@@ -97,7 +97,7 @@ Rerun setup to resume completed stages; it preserves existing configuration back
 ## Model overrides and credentials
 
 The `llm` profile is the shared default. `overrides` selects a tool ID or an exact role printed by setup.
-Each profile specifies provider, model, endpoint, credential-variable name, output-token limit and provider parameters.
+Each profile specifies provider, model, endpoint, shared Langflow credential name, output-token limit and provider parameters.
 The embedding profile separately pins model, revision and dimensions.
 Changing an embedding identity requires an explicitly rebuilt index.
 
@@ -120,13 +120,33 @@ nima setup --from-config installation.json --non-interactive
 ```
 
 Keep credential values out of this file.
-During project installation, existing Langflow Credential variables are reused; missing values come from the named environment variable or a hidden terminal prompt.
+The credential name identifies a saved Langflow Credential; it is neither the key value nor a key-file path.
+The wizard displays the selected credential for the main model, overrides, independent PDF recognition model and embeddings, and offers four sources: an existing Langflow credential, an environment variable, a key file or hidden key entry.
+Selecting a file reads its contents.
+Credentials are shared through the installation, so replacing one affects every model and project using that name.
+Existing entries offer Keep, Replace and Choose another credential; unusable entries require an explicit replacement or another credential.
+Missing value metadata requires verification through a saved workflow before readiness can pass.
+Ollama and explicitly unauthenticated compatible endpoints require no cloud key.
+
+Scripted setup can select a source without placing the key in command history:
+
+```sh
+nima setup --verify-workflows --non-interactive --credential-file NIMA_MODEL_API_KEY=/path/to/provider.key
+nima setup --verify-workflows --non-interactive --credential-env NIMA_MODEL_API_KEY=OPENROUTER_API_KEY
+```
+
+These source flags create missing credentials; replacing an existing entry also requires `--replace-credential NIMA_MODEL_API_KEY`.
+Configuration stores source references, never the key contents.
+Setup preserves a backup before changing installation configuration.
+After updating an existing managed PDF installation, run `nima setup --provision --pdf` to update the Langflow runtime and PDF broker as well as the private recognition canvas.
+`--verify-workflows` checks existing services and does not rebuild them.
 Deterministic tools need no LLM. Mathematics and proof graph skills use the model selected in the coding-agent harness.
 
 ## Verify and maintain
 
 ```sh
 nima doctor
+nima doctor --workflows
 nima project init my-research --corpus papers --path /path/to/project
 ```
 
@@ -177,6 +197,13 @@ The `pdf_recognition` object contains `model` (the ModelProfile) and `concurrenc
 Model credentials stay in Langflow; the PDF service brokers crop requests while the parser subprocess retains network isolation.
 The private recognition canvas exposes the model connection and transcription prompt.
 Changes to that canvas produce a new recognition identity; setup refuses to overwrite an operator-edited canvas until its changes are explicitly reconciled.
-Readiness checks inspect configuration and connectivity without making a model call.
+Provisioning, `nima setup --pdf`, `nima setup --verify-workflows` and online project initialization test configured credentials through saved Langflow workflows.
+The PDF check calls the actual private recognition canvas with a small formula image; other models and embeddings use private installation check canvases with the same configured components.
+These checks make small model requests and can incur provider charges.
+Successful authentication does not certify transcription accuracy or research-tool behavior.
+`nima doctor` reports service health separately; `nima doctor --workflows` also performs fresh workflow requests.
+Configuration-only setup reports `setup_complete: false` until workflow checks pass.
+Failed authentication leaves setup incomplete and reports the affected model and credential name without exposing provider response bodies.
+The latest result is saved in `DATA_ROOT/installation/workflow-readiness.json`.
 Use `nima ocr paper.pdf --output result.md` to save OCR without corpus ingestion, or `nima ingest papers paper.pdf --ocr-output-dir ./transcriptions` to save the exact normalization used for ingestion.
 See the [v0.3.1 upgrade notes](RELEASE_NOTES_v0.3.1.md#upgrade-from-v030) when updating an existing PDF installation.

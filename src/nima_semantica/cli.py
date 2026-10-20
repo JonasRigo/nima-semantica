@@ -63,6 +63,28 @@ def register_corpus(store, corpus):
 
 
 def setup(args):
+    from .credential_setup import credential_session
+    with credential_session(interactive=not args.non_interactive,
+                            replacements=getattr(args, "replace_credential", ()) or ()):
+        return _setup(args)
+
+
+def save_configuration(path, config):
+    path = Path(path).expanduser()
+    if path.is_symlink():
+        raise ValueError("refusing a symlink configuration destination")
+    value = json.dumps(config.model_dump(), indent=2, ensure_ascii=False) + "\n"
+    if path.exists():
+        previous = path.read_bytes()
+        if previous == value.encode():
+            return
+        backup = path.with_name(path.name + "." + hashlib.sha256(previous).hexdigest()[:12] + ".bak")
+        if not backup.exists():
+            shutil.copy2(path, backup)
+    write_json(path, config.model_dump())
+
+
+def _setup(args):
     from .workflow_installation import model_inventory
     path = Path(args.config or configuration_path()).expanduser().resolve()
     if args.from_config:
@@ -83,6 +105,14 @@ def setup(args):
                     if override:
                         config.overrides[name] = config.llm.model_copy(update={"model": override})
     inventory = model_inventory()
+    from .credential_setup import credential_name, credential_inventory
+    from .installation import CredentialSource
+    for option, kind in (("credential_file", "file"), ("credential_env", "environment")):
+        for item in getattr(args, option, ()) or ():
+            name, separator, reference = item.partition("=")
+            if not separator or not reference:
+                raise ValueError("Credential source must be NAME=PATH or NAME=ENVIRONMENT_VARIABLE")
+            config.credential_sources[credential_name(name)] = CredentialSource(source=kind, reference=reference)
     if getattr(args,"pdf_model_profile",None):
         from .installation import PdfRecognitionSettings
         config.pdf_recognition=PdfRecognitionSettings(model=ModelProfile.model_validate_json(Path(args.pdf_model_profile).read_bytes()))
@@ -107,11 +137,7 @@ def setup(args):
     store_path(config).mkdir(parents=True, exist_ok=True)
     from .storage import GraphStore
     store = GraphStore(store_path(config)); store.close()
-    if path.exists() and path.read_text() != json.dumps(config.model_dump(), indent=2) + "\n":
-        backup = path.with_name(path.name + "." + hashlib.sha256(path.read_bytes()).hexdigest()[:12] + ".bak")
-        if not backup.exists():
-            shutil.copy2(path, backup)
-    write_json(path, config.model_dump())
+    save_configuration(path, config)
     cli_path = {"status": "skipped"}
     if not args.no_modify_path:
         from .cli_path import install_cli_path
@@ -120,6 +146,9 @@ def setup(args):
         if cli_path.get("activation_command"):
             print(cli_path["activation_command"], file=sys.stderr)
     if args.minimal: config.reporting_enabled = False
+    if args.provision or args.pdf or getattr(args, "verify_workflows", False):
+        from .workflow_readiness import invalidate_readiness
+        invalidate_readiness(config)
     if args.provision and config.reporting_enabled:
         from .reporting import provision_reporting
         provision_reporting(config)
@@ -132,9 +161,22 @@ def setup(args):
     elif args.pdf:
         from .pdf.workflow import install_recognition
         install_recognition(config)
+    readiness = {"ready": False, "status": "configuration_only", "verification_command": "nima setup --verify-workflows"}
+    if args.provision or args.pdf or getattr(args, "verify_workflows", False):
+        if getattr(args, "verify_workflows", False) and config.pdf_recognition and not args.provision and not args.pdf:
+            from .pdf.workflow import install_recognition
+            install_recognition(config)
+        from .workflow_readiness import verify_installation
+        try:
+            readiness = verify_installation(config)
+        finally:
+            save_configuration(path, config)
+    save_configuration(path, config)
     effective = {name: {role: config.overrides.get(f"{name}:{role}", config.overrides.get(name, config.llm)).model_dump() for role in roles}
                  for name, roles in inventory.items()}
-    emit({"configuration": path, "models": effective, "embedding": config.embedding, "cli_path": cli_path,
+    emit({"configuration": path, "models": effective, "pdf_model": config.pdf_recognition,
+          "embedding": config.embedding, "cli_path": cli_path, "credentials": credential_inventory(config),
+          "workflow_readiness": readiness, "setup_complete": readiness["ready"],
           "next": "nima project init PROJECT_ID --corpus CORPUS_ID"})
 
 
@@ -314,7 +356,8 @@ def private_sessions(binding):
 
 def project_init(args, config):
     from .deletion import installation_lifecycle
-    with installation_lifecycle(config):
+    from .credential_setup import credential_session
+    with installation_lifecycle(config), credential_session(interactive=not getattr(args, "non_interactive", False)):
         return _project_init(args, config)
 
 
@@ -349,8 +392,18 @@ def _project_init(args, config):
     refresh_project_projection(config, corpus, project, getattr(args, "projection_max_tokens", None))
     if not args.offline:
         from .workflow_installation import publish_flows
-        published = publish_flows(config, corpus, project, directory)
-        binding["mcp_url"] = published["mcp_url"]
+        from .workflow_readiness import invalidate_readiness
+        invalidate_readiness(config)
+        binding["credential_readiness"] = {}
+        write_json(manifest, binding)
+        try:
+            published = publish_flows(config, corpus, project, directory)
+            binding["mcp_url"] = published["mcp_url"]
+            from .workflow_readiness import verify_installation
+            readiness = verify_installation(config)
+            binding["credential_readiness"] = readiness["checks"]
+        finally:
+            save_configuration(args.config or configuration_path(), config)
     write_json(manifest, binding)
     from .project_layout import resolve_layout, scaffold
     local_manifest = Path(args.path) / ".nima/project.json"
@@ -363,7 +416,10 @@ def _project_init(args, config):
     if binding.get("layout"):
         write_json(manifest, binding)
         scaffold(args.path, binding)
+    from .credential_setup import credential_inventory
     emit({"project": binding, "installed_files": changed, "toolbox_configured": bool(binding.get("mcp_url")),
+          "credential_dependencies": credential_inventory(config),
+          "credentials_verified": bool(binding.get("credential_readiness")) and not args.offline,
           "toolbox_verified": False, "verification_command": "nima doctor --project " + binding["project_id"] + " --corpus " + binding["corpus_id"] + " --mcp"})
 
 
@@ -593,8 +649,19 @@ def doctor(config, args=None):
         output["mcp_diagnostics"] = scoped_mcp_diagnostics(binding, root=args.path,
             installation_path=args.config or configuration_path())
         checks["project_mcp"] = output["mcp_diagnostics"]["ready"]
+    output["service_health"] = dict(checks)
+    output["workflow_readiness"] = {"ready": False, "status": "not_checked", "verification_command": "nima doctor --workflows"}
+    if args is not None and getattr(args, "workflows", False):
+        from .workflow_readiness import verify_installation
+        from .credential_setup import credential_session
+        try:
+            with credential_session(interactive=False):
+                output["workflow_readiness"] = verify_installation(config)
+        except Exception as error:
+            output["workflow_readiness"] = {"ready": False, "error": getattr(error, "diagnostic", {"code": "workflow.check_failed", "message": "Credential or saved-workflow verification failed"})}
+    output["setup_complete"] = all(checks.values()) and output["workflow_readiness"]["ready"]
     emit(output)
-    return 0 if all(checks.values()) else 1
+    return 0 if all(checks.values()) and (not (args is not None and getattr(args, "workflows", False)) or output["workflow_readiness"]["ready"]) else 1
 
 
 def main(argv=None):
@@ -607,7 +674,11 @@ def main(argv=None):
     from .installation import MODEL_ENDPOINTS
     install.add_argument("--model"); install.add_argument("--provider", choices=list(MODEL_ENDPOINTS))
     install.add_argument("--base-url"); install.add_argument("--data-root")
-    install.add_argument("--credential", help="Credential environment variable name; '-' means no authentication")
+    install.add_argument("--credential", help="Shared Langflow credential name, not a key value or file path; '-' means no authentication")
+    install.add_argument("--credential-file", action="append", metavar="NAME=PATH", help="Read a named credential's key from this file")
+    install.add_argument("--credential-env", action="append", metavar="NAME=VARIABLE", help="Read a named credential's key from this environment variable")
+    install.add_argument("--replace-credential", action="append", metavar="NAME", help="Explicitly replace an existing shared credential using the selected source")
+    install.add_argument("--verify-workflows", action="store_true", help="Resolve credentials and make small saved-workflow model requests before reporting readiness")
     install.add_argument("--max-tokens", type=int, default=8192)
     install.add_argument('--context-window', type=int, help='Model context tokens, including input and reserved output; Ollama default: 32768')
     install.add_argument('--model-timeout', type=float, help='Provider request timeout in seconds (default: 180)')
@@ -621,6 +692,7 @@ def main(argv=None):
     install.add_argument("--pdf-model-profile", help="JSON ModelProfile for the independent PDF vision model")
     install.add_argument("--minimal", action="store_true", help="Explicitly omit managed Blender and reporting dependencies")
     diagnostic = commands.add_parser("doctor")
+    diagnostic.add_argument("--workflows", action="store_true", help="Test saved model workflows, including one formula image for PDF recognition")
     diagnostic.add_argument("--mcp", action="store_true")
     diagnostic.add_argument("--project")
     diagnostic.add_argument("--corpus", default="papers")
@@ -686,6 +758,7 @@ def main(argv=None):
             sub.add_argument("--path", default="."); sub.add_argument("--harness", default="codex,claude,opencode")
             sub.add_argument("--layout", help="JSON folder-role overrides for this workspace")
             sub.add_argument("--offline", action="store_true", help="Initialize storage and graph MCPs without publishing the Langflow toolbox")
+            sub.add_argument("--non-interactive", action="store_true", help="Use configured credential sources without prompting")
         if action in {"init", "refresh"}:
             sub.add_argument("--projection-max-tokens", type=int, help="Explicit projection token limit (1..10000000)")
     configure = project.add_parser("configure", help="Configure optional vocabulary guidance for new investigations")

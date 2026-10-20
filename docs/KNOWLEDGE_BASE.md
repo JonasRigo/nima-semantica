@@ -70,6 +70,11 @@ and graph extraction are allowed. `include_provisional: false` on Retrieve Resea
 Context excludes provisional regions and explicitly provisional graph objects.
 Embedding configuration alone does not enable vector indexing.
 
+Fast preparation has no page-count limit.
+The 4 MB extracted-text limit and the PDF reader's existing input-size, memory, CPU and timeout limits still apply.
+On managed macOS installations, rerun `nima setup --provision` after updating NIMA to rebuild the isolated fast-PDF reader.
+After updating NIMA, use `--retry` for a source whose earlier fast preparation failed at the page limit; the earlier failure receipt is retained.
+
 `--ocr-output-dir DIRECTORY` also saves each full PDF's exact ingested normalization as `<source-stem>-<source-hash-prefix>.md` and a matching `.ocr.json` sidecar.
 The hash prefix contains the first 12 hexadecimal characters of the archived PDF's SHA-256 digest.
 Exports reuse retained artifacts, including ingestion through an active corpus owner; they do not repeat recognition.

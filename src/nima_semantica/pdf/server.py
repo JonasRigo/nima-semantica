@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException, Request
 from .assets import verify_assets, normalization_identity
 from .langflow_recognition import LangflowRecognition
 from .support import sha256_bytes, sha256_file
+from .support import PdfError
 
 
 def create_app(models, data, token):
@@ -30,8 +31,10 @@ def create_app(models, data, token):
     @app.get("/health")
     def health():
         try:
-            backend()
-            return {"status":"ready", "service":"nima-semantica-pdf", "recognition":"langflow"}
+            selected=backend()
+            binding=getattr(selected,"binding",{})
+            return {"status":"ready", "service":"nima-semantica-pdf", "recognition":"langflow",
+                    "workflow_readiness":binding.get("readiness",{"ready":False,"status":"not_checked"})}
         except Exception:
             return {"status":"not_ready", "service":"nima-semantica-pdf",
                     "diagnostic":"Configure the dedicated PDF vision workflow and check Langflow connectivity"}
@@ -42,6 +45,8 @@ def create_app(models, data, token):
         try:
             selected=backend()
             return normalization_identity(models,selected.manifest)
+        except PdfError as error:
+            raise HTTPException(503,error.details or "PDF recognition unavailable; run nima setup --verify-workflows") from None
         except Exception:
             raise HTTPException(503,"PDF recognition unavailable; run nima setup --pdf and check Langflow") from None
 
@@ -88,6 +93,8 @@ def create_app(models, data, token):
             try:
                 selected = await asyncio.to_thread(backend)
                 identity = await asyncio.to_thread(normalization_identity, models, selected.manifest)
+            except PdfError as error:
+                raise HTTPException(503,error.details or "PDF recognition unavailable; configure its Langflow vision workflow") from None
             except Exception:
                 raise HTTPException(503,"PDF recognition unavailable; configure its Langflow vision workflow") from None
             expected=request.headers.get("x-nima-normalization-profile")
@@ -115,6 +122,8 @@ def create_app(models, data, token):
                 returncode = await asyncio.wait_for(run_worker(argv,selected,directory,data/(source_hash+".log")),1800)
             except asyncio.TimeoutError:
                 raise HTTPException(504,"PDF normalization timed out; checkpoints retained") from None
+            except PdfError as error:
+                raise HTTPException(502,error.details or "Langflow formula recognition failed; checkpoints retained") from None
             except Exception:
                 raise HTTPException(502,"Langflow formula recognition failed; check the vision model and credentials; checkpoints retained") from None
             if returncode or not result_path.is_file():

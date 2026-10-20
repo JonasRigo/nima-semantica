@@ -16,11 +16,14 @@ def model_profile(args, *, provider=None, model=None):
     credential = args.credential
     if credential is None:
         default = "" if provider == "ollama" else "NIMA_MODEL_API_KEY"
-        credential = (input(f"LLM credential environment variable ({default or 'none'}; '-' for no key): ").strip() or default) if interactive else default
+        credential = (input(f"LLM shared Langflow credential NAME ({default or 'none'}; not a key value or file path; '-' for no key): ").strip() or default) if interactive else default
     if credential == "-":
         credential = ""
     if provider in {"openrouter", "openai", "anthropic", "gemini"} and not credential:
-        raise ValueError("Hosted native providers require a named credential environment variable")
+        raise ValueError("Hosted native providers require a named installation credential")
+    if credential:
+        from .credential_setup import credential_name
+        credential_name(credential)
     parameters = json.loads(args.model_parameters or "{}")
     context_window = getattr(args, 'context_window', None)
     timeout = getattr(args, 'model_timeout', None)
@@ -61,7 +64,7 @@ def embedding_profile(args):
         raise ValueError("Remote embeddings require explicit revision and dimension")
     credential = args.embedding_credential
     if credential is None:
-        credential = (input("Embedding credential environment variable (NIMA_EMBEDDING_API_KEY; '-' for no key): ").strip() or "NIMA_EMBEDDING_API_KEY") if interactive else "NIMA_EMBEDDING_API_KEY"
+        credential = (input("Embedding shared Langflow credential NAME (NIMA_EMBEDDING_API_KEY; not a key or file path; '-' for no key): ").strip() or "NIMA_EMBEDDING_API_KEY") if interactive else "NIMA_EMBEDDING_API_KEY"
     return EmbeddingProfile(provider=provider, model=model, base_url=base_url,
         revision=revision, dimension=dimension, credential="" if credential == "-" else credential)
 
@@ -70,9 +73,13 @@ def native_chat_model(profile, credential_value=None):
     """Construct the chosen native protocol; never route local traffic to cloud."""
     import os
     from .model_runtime import guarded_model_class
-    token = credential_value or (os.environ.get(profile.credential) if profile.credential else None)
+    token = credential_value if credential_value is not None else (os.environ.get(profile.credential) if profile.credential else None)
     if hasattr(token, "get_secret_value"):
         token = token.get_secret_value()
+    if isinstance(token, str):
+        token = token.strip()
+    if profile.provider in {"openrouter", "openai", "anthropic", "gemini"} and not profile.credential:
+        raise ValueError("Hosted model requires a named credential; setup is incomplete")
     if profile.provider != "ollama" and profile.credential and not token:
         raise ValueError("Configured model credential is missing")
     endpoint = profile.container_url or profile.base_url

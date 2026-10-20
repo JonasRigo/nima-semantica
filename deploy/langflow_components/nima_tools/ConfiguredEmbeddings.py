@@ -19,7 +19,11 @@ class ConfiguredEmbeddings(Component):
 
     def build_embeddings(self) -> Embeddings:
         profile = EmbeddingProfile.model_validate_json(self.profile_json)
-        provider, manifest = embedding_provider(SimpleNamespace(embedding=profile), credential_value=self.api_key)
+        value = self.api_key
+        if profile.provider != "ollama" and profile.credential:
+            from nima_semantica.credential_setup import secret_value
+            value = secret_value(value, profile.credential)
+        provider, manifest = embedding_provider(SimpleNamespace(embedding=profile), credential_value=value)
         class Adapter(Embeddings):
             def embed_documents(self, texts):
                 return provider.embed("configured", texts)[0]

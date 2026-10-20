@@ -210,23 +210,8 @@ def api(installation):
 
 
 def ensure_credentials(client, installation):
-    import getpass
-    import sys
-    response = client.get("/api/v1/variables/"); response.raise_for_status()
-    existing = {v["name"] for v in response.json() if v.get("has_value", True)}
-    names = {p.credential for p in [installation.llm, *installation.overrides.values()] if p.provider != "ollama" and p.credential}
-    if getattr(installation,"pdf_recognition",None) and installation.pdf_recognition.model.credential:
-        names.add(installation.pdf_recognition.model.credential)
-    if installation.embedding and installation.embedding.provider != "ollama" and installation.embedding.credential:
-        names.add(installation.embedding.credential)
-    for name in sorted(names - existing):
-        value = os.environ.get(name)
-        if not value and sys.stdin.isatty():
-            value = getpass.getpass(f"Credential for {name} (stored privately in Langflow): ")
-        if not value:
-            raise ValueError(f"Set {name} in the environment or create that Credential in Langflow")
-        response = client.post("/api/v1/variables/", json={"name": name, "value": value, "type": "Credential", "default_fields": []})
-        response.raise_for_status()
+    from .credential_setup import ensure_credentials as resolve
+    return resolve(client, installation)
 
 
 def _published_flow_readback(client, identifier):

@@ -88,6 +88,37 @@ See the [skill guide](docs/skills/README.md) for examples and the [tool catalogu
 
 ## Development and citation
 
+Review and commit an exact prepared project delta with the trusted operator CLI:
+
+```sh
+nima project commit my-project --corpus papers --path . --delta candidate.delta.json
+nima project commit my-project --corpus papers --path . --delta candidate.delta.json \
+  --approve-delta-hash HASH_FROM_REVIEW --approved-by YOUR_OPERATOR_ID \
+  --rationale 'Reviewed this exact scoped delta' --open
+```
+
+The first command validates without writing. Approval binds the canonical delta
+hash, project, corpus and base revision. The second command saves a private
+operation journal before calling the native commit, then refreshes the Studio
+export. With a running corpus owner, approval is supplied through authenticated
+Langflow invocation tweaks; the saved workflow is never edited. Its configured
+write permissions and limits still apply. Without a running owner, the operator
+command acquires the exclusive local writer lease.
+
+If delivery is interrupted, use the returned `--resume OPERATION_ID` with the
+same project and workspace. Resume retains the original approval and timestamp;
+it does not rebase or approve another delta. Repeating an already committed
+delta returns its original receipt without creating a revision. A partial
+projection or failed Studio export is reported separately from the committed
+graph. Repair a projection with `nima project refresh PROJECT --corpus CORPUS`,
+or repeat `nima project graph PROJECT --corpus CORPUS --path . --open --no-private`
+to refresh Studio. `knowledge_graph` reports actual scoped nodes and edges;
+Studio's `concepts` and `links` also include source and navigation objects.
+
+This CLI is a trusted operator interface. Public MCP requests continue to reject
+approval and permission fields; scientific acceptance and corpus promotion are
+separate actions.
+
 ```sh
 python -m pip install -e '.[test,mcp]'
 python -m pytest -q

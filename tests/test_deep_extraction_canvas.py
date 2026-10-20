@@ -111,7 +111,8 @@ def test_wired_model_canvas(configured, monkeypatch):
             response_metadata={"finish_reason":"tool_calls"}))])
     monkeypatch.setattr(ChatOpenAI,"_generate",generate)
     flow,_=configure_flow(json.loads(CANVAS.read_text()),"deep_extraction",
-        Installation(data_root=str(configured),llm=ModelProfile(model="fixture",credential="")),"papers","research")
+        Installation(data_root=str(configured),llm=ModelProfile(provider="compatible",
+            base_url="http://127.0.0.1:1/v1",model="fixture",credential="")),"papers","research")
     graph=Graph.from_payload(flow["data"])
     async def run():
         await graph.arun(inputs=[{"input_value":json.dumps(request(r).model_dump(mode="json"))}],outputs=["ChatOutput-extraction"])

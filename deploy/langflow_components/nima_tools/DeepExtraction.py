@@ -54,7 +54,14 @@ class DeepExtraction(BaseComponent):
             return deep_extraction(store,request,context,model=invoke if language_model is not None else None).model_dump(mode="json")
 
     async def preview_message(self) -> Message:
-        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)
+        value=(await self.result_data()).data
+        from lfx.observability import get_execution_protocol
+        if get_execution_protocol()=="mcp" and value.get("status") in ("failed","unavailable"):
+            # Langflow otherwise publishes this failed ToolResult as successful text.
+            # Durable results are already recorded; expose no raw model output here.
+            raise RuntimeError(json.dumps({key:value.get(key) for key in
+                ("operation","status","diagnostics","receipt_ids","artifacts")},ensure_ascii=False))
+        text=json.dumps(value,ensure_ascii=False,indent=2)
         for char in ("`","<",">","&"):text=text.replace(char,"\\u"+format(ord(char),"04x"))
         return Message(text="```json\n"+text+"\n```")
 

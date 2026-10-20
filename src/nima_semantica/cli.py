@@ -196,8 +196,6 @@ def install_harness(root, config_path, binding, harnesses):
     from .config_reconciliation import harness_servers
     for name, server in harness_servers(binding, config_path).items():
         servers[name] = {**server, **({"env": {**common, **server.get("env", {})}} if "command" in server else {})}
-    if binding.get("mcp_url"):
-        servers["nima"] = {"url": binding["mcp_url"]}
     planned = {}
     if "codex" in harnesses:
         import tomllib
@@ -894,6 +892,11 @@ def main(argv=None):
             elif args.action == "graph":
                 from .release_cli import graph_command
                 emit(graph_command(args,config))
+            elif args.action == "commit":
+                from .project_commit_cli import commit_command
+                result = commit_command(args, config)
+                emit(result)
+                return 0 if result['state'] in {'prepared', 'committed', 'already_committed'} and result.get('studio_status') != 'failed' else 1
             elif args.action == "configure":
                 if args.layout:
                     if args.normalized_reasoning is not None: raise ValueError("Configure layout and vocabulary separately")

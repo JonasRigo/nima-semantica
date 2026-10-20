@@ -461,7 +461,10 @@ def deep_extraction(store,request,context,*,model=None):
         child=identity((rid,len(children),kind));children.append(child)
         output={};status="failed";error=None
         try:
-            output=callback();status="failed" if kind=="model" and output.get("error") else "completed";return output
+            output=callback()
+            error=output.get("error") if kind=="model" else None
+            status="failed" if error else "completed"
+            return output
         except (Exception,CancelledError,KeyboardInterrupt) as exc:
             error=type(exc).__name__;status="interrupted" if isinstance(exc,(CancelledError,KeyboardInterrupt)) else "failed"
             if isinstance(exc,RejectedAction):output={"rejected":True,"reason":str(exc)}
@@ -508,7 +511,19 @@ def deep_extraction(store,request,context,*,model=None):
                 return value.model_dump(mode="json")
             invocation=attempt("model",prompt,invoke)
             if invocation.get("error"):
-                messages.append({"role":"user","content":"Invalid model envelope; use one available function call."});continue
+                failure={"code":"model."+invocation["error"],"ordinal":ordinal,
+                    "finish_reason":invocation.get("finish_reason")}
+                data["last_model_error"]=failure
+                data["model_error_count"]=data.get("model_error_count",0)+1
+                instruction=("The provider truncated the previous response at its output limit; no action was executed. "
+                    "Use one complete, compact function call within the configured output budget. "
+                    "Do not resend the same oversized proposal, silently discard required evidence, or invent anchors. "
+                    "If the full candidate cannot fit, report that limit; an operator can increase the model output "
+                    "budget or the harness can plan narrower source selection with a fresh attempt ID."
+                    if invocation["error"]=="truncated" else
+                    "The previous response did not contain one valid function-call envelope; no action was executed. "
+                    "Use exactly one available function call with complete JSON arguments.")
+                messages.append({"role":"user","content":canonical({**failure,"instruction":instruction}).decode()});continue
             raw=invocation["result"];name=raw.get("name","invalid");args=raw.get("arguments",{})
             call_id="extraction_"+str(ordinal)
             messages.append({"role":"assistant","content":None,"tool_calls":[{"id":call_id,"type":"function","function":{"name":name,"arguments":args if isinstance(args,str) else json.dumps(args)}}]})
@@ -561,7 +576,18 @@ def deep_extraction(store,request,context,*,model=None):
         artifact,progress=_finish(store,request,context,data,terminal,[rid,*children]);data["project_progress"]=progress
         artifacts={"outcome":artifact}
         if "result" in data:artifacts["graph_proposal"]=data["result"]["graph_proposal"]["artifact"]["envelope"]["artifact_id"]
-        result=ToolResult(operation="Deep Extraction",status=status,data=data,receipt_ids=(rid,*children),artifacts=artifacts,
+        diagnostics=[]
+        if status=="failed":
+            diagnostics.append(data.get("model_diagnostic") or {
+                "code":"extraction.interrupted" if interrupted else "extraction.failed",
+                "message":data.get("diagnostic","Extraction did not produce a submitted graph proposal; inspect the retained outcome and receipts."),
+                "error":data.get("error"),
+                "next_action":"Inspect the retained attempt before retrying. A transport timeout does not establish cancellation; do not start a duplicate attempt while its outcome is uncertain."})
+        if data.get("last_model_error"):
+            diagnostics.append({**data["last_model_error"],"count":data["model_error_count"],
+                "message":"One or more model responses were unusable; their receipts retain the exact output and finish reason.",
+                "next_action":"For truncation, configure a sufficient model output budget or re-plan a narrower source selection with a fresh plan_attempt_id after reconciling the original attempt. Invalid JSON requires one complete function call."})
+        result=ToolResult(operation="Deep Extraction",status=status,data=data,diagnostics=tuple(diagnostics),receipt_ids=(rid,*children),artifacts=artifacts,
             note="Exact quotation and ontology checks are not semantic fidelity or scientific acceptance. Private OSA state is not the proposed research graph; project admission remains harness-controlled.")
         receipts.record(ExecutionReceipt(receipt_id=rid,operation_id=request.operation_id,stage="deep_extraction",**scope,
             run_id=request.run_id,status=terminal,error=data.get("error"),tool_version=VERSION,

@@ -69,6 +69,39 @@ Size the local model's context window for the workflow, not just its output. Use
 
 NIMA preflights guarded model invocations with a conservative UTF-8 byte estimate plus message/tool framing and the output reserve. This is not exact provider tokenization and can reject inputs that a particular tokenizer would fit. It never silently trims source text or provenance: over-budget feedback asks for fewer regions, less retrieval/history, a smaller output reserve or a larger supported window. Remote servers must still enforce their actual limits. `context_window` and `request_timeout_seconds` are also available in installation profiles and per-tool overrides. SDK request timeouts default to 180 seconds; these are not whole-workflow deadlines and do not guarantee remote generation is cancelled.
 
+The harness has a separate MCP client deadline. New Codex project configuration sets
+`tool_timeout_sec = 3600` for `nima`, `nima-math` and `nima-proof`, including the HTTP
+research endpoint. Increasing Langflow's workflow/worker/MCP settings does not change
+the client's deadline. Codex documents this setting in its
+[official MCP configuration guide](https://developers.openai.com/codex/mcp/).
+Older project installs may have only a `url` under `[mcp_servers."nima"]` because
+the installer discarded the research timeout. Repair that configuration through
+`nima harness reconcile --binding .nima/project.json --path . --harness codex
+--preview-file /tmp/nima-harness-preview.json`, inspect the preview, then use the
+same command with `--apply <preview_hash> --recovery-directory <new-directory>`.
+This preserves per-tool approval policies; reconnect the harness afterward to load
+the repaired configuration. Other clients need their own supported timeout settings.
+
+An error such as `timed out awaiting tools/call after 300s` establishes that the
+client stopped waiting; it does not establish that extraction stopped or failed.
+Inspect the original attempt's saved receipts/outcome before retrying. Preserve
+completed proposals and explicit deferred coverage. Once the attempt is terminal,
+use a fresh `plan_attempt_id` and select only failed/deferred regions for a deliberate
+retry. Planning is read-only and does not exercise the model-driven extraction loop.
+
+Extraction reports distinguish provider request timeouts (`model.request_timeout`),
+output truncation (`model.truncated`), invalid function envelopes (`model.invalid_json`)
+and controller failure (`extraction.failed`). Exact unusable model output remains in
+the authoritative receipts; bounded diagnostics identify the cause without copying
+raw completions. Truncation needs a sufficient model output budget or narrower
+source selection, not a longer transport timeout alone. Failed/unavailable extraction
+results raise an MCP tool error after outcome persistence; partial graph proposals
+remain partial results, with coverage gaps and scientific limitations intact. Visual
+Langflow previews continue to display the structured result. Updating existing saved
+extraction workflows requires publishing the regenerated maintained canvas through
+the normal project workflow update; installing runtime files alone does not replace
+component source embedded in an existing saved flow.
+
 Blocking tool execution runs off Langflow's event loop, keeping health and other non-store requests responsive. Store access remains serialized for consistency. Cancellation waits for an in-flight synchronous operation to finish or time out and close its store; it does not abandon a writer or automatically switch providers.
 
 Provider support does not imply every model supports every workflow: agentic tools require reliable structured/tool-call output and usage reporting. Ollama cannot force tool selection server-side; NIMA rejects invalid or multiple tool calls and does not fall back to a paid cloud model. Choose a suitable local model for those tools; lexical/vector graph retrieval does not require these model capabilities. Native Anthropic and Gemini adapters are tested for construction and protocol binding, but live calls require the operator's own credentials.

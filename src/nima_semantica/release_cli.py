@@ -37,6 +37,11 @@ def graph_command(args,config):
     destination=Path(args.output) if args.output else folder(root,binding,'exports')/'studio-complete'
     result=export_studio(snapshot,destination,regions=regions,vocabulary=vocabulary,sessions=sessions)
     result['private_sessions']=len(sessions)
+    result['knowledge_graph']={
+        'project_nodes':sum(n.project_id==args.project for n in snapshot.nodes),
+        'project_edges':sum(e.project_id==args.project for e in snapshot.edges),
+        'visible_nodes':len(snapshot.nodes),'visible_edges':len(snapshot.edges),
+        'graph_revision':snapshot.graph_revision.model_dump(mode='json')}
     if args.open:result['studio_pid']=open_studio(destination,config.studio_executable)
     return {k:v for k,v in result.items() if k!='files'}
 
@@ -86,6 +91,8 @@ def chat_command(args,config):
     return None
 
 def register_commands(commands,project):
+    from .project_commit_cli import register_command
+    register_command(project)
     graph=project.add_parser('graph',help='Export the complete scoped investigation for OKF Studio')
     graph.add_argument('project');graph.add_argument('--corpus',required=True);graph.add_argument('--path',default='.')
     graph.add_argument('--output');graph.add_argument('--open',action='store_true');graph.add_argument('--session',action='append');graph.add_argument('--no-private',action='store_true')

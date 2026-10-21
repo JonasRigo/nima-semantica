@@ -26,29 +26,34 @@ NOTE = "Read-only metadata inspection. Current projection metadata does not cert
 def inspect_corpus(store, request: InspectCorpusRequest, context: InspectCorpusContext) -> ToolResult:
     request = InspectCorpusRequest.model_validate(request.model_dump(mode="json"))
     context = InspectCorpusContext.model_validate(context.model_dump(mode="json"))
-    def unavailable(code, status="unavailable"):
+    def unavailable(code, status="unavailable", *, metadata_stage=None):
+        diagnostic = {"code": code, "message": "Check the configured scope and revision; restart pagination after a revision change."}
+        if metadata_stage is not None:
+            diagnostic.update(metadata_stage=metadata_stage,
+                message="Metadata validation failed; inspect the indicated metadata stage in the configured scope.")
         return ToolResult(operation="Inspect Corpus", status=status, note=NOTE,
-            diagnostics=({"code": code, "message": "Check the configured scope and revision; restart pagination after a revision change."},))
+            diagnostics=(diagnostic,))
     if store is None:
         return unavailable("corpus.store_unconfigured")
+    metadata_stage = "store_snapshot"
     try:
         # One coherent snapshot; no metadata writes, receipts, or artifact reads.
         with store.joined_transaction():
             revision = store.revision
             if request.expected_store_revision is not None and request.expected_store_revision != revision:
                 return unavailable("corpus.stale_page", "failed")
+            metadata_stage = "corpus_registration"
             if CorpusRegistry(store).corpus(context.corpus_id) is None:
                 return unavailable("corpus.unavailable")
             def visible(kind):
                 # Keep only IDs and aggregate metadata; book regions can repeat large diagnostics.
                 return ((key, record) for key, record in store.iter_records(kind, corpus_id=context.corpus_id,
                     project_id=context.project_id) if record.project_id in (None, context.project_id))
+            metadata_stage = "source_descriptors"
             sources = []
             for _, record in visible(SourceCorpusService.SOURCE_KIND):
-                if record.project_id is not None:
-                    raise ValueError("source descriptor must be corpus-wide")
                 item = SourceDescriptor.model_validate(record.content)
-                if item.corpus_id != context.corpus_id:
+                if item.corpus_id != context.corpus_id or item.project_id != record.project_id:
                     raise ValueError("descriptor scope mismatch")
                 sources.append(item)
             sources.sort(key=lambda s: s.source_id)
@@ -57,18 +62,22 @@ def inspect_corpus(store, request: InspectCorpusRequest, context: InspectCorpusC
             by_source = {s.source_id: s for s in sources}
             counts = {s.source_id: 0 for s in sources}
             region_ids = set()
+            metadata_stage = "source_regions"
             for key, record in visible(SourceCorpusService.REGION_KIND):
                 region = SourceRegion.model_validate(record.content)
                 source = by_source.get(region.source_id)
                 if (region.corpus_id != context.corpus_id or region.project_id != record.project_id
-                    or source is None or source.source_revision != region.source_revision
+                    or source is None or source.project_id not in (None, region.project_id)
+                    or source.source_revision != region.source_revision
                     or source.artifact_id != (region.source_artifact_id or region.artifact_id)):
                     raise ValueError("region binding mismatch")
                 counts[region.source_id] += 1
                 region_ids.add(key)
+            metadata_stage = "revisions"
             graph_revision = store.graph_revision(context.corpus_id, context.project_id)
             source_revision = str(store.embedding_revision(context.corpus_id))
             current, stale, vector_coverage, lexical = 0, 0, 0, False
+            metadata_stage = "projections"
             for _, record in visible("GraphProjection"):
                 # Projections are exact-scope, not inherited from the corpus.
                 if record.project_id != context.project_id:
@@ -105,4 +114,4 @@ def inspect_corpus(store, request: InspectCorpusRequest, context: InspectCorpusC
                     "artifact_integrity_checked": False, "source_fidelity_checked": False},
             })
     except (ValueError, KeyError, TypeError, NimaError, OSError):
-        return unavailable("corpus.invalid_metadata", "failed")
+        return unavailable("corpus.invalid_metadata", "failed", metadata_stage=metadata_stage)

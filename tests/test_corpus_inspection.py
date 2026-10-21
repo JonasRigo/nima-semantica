@@ -81,6 +81,83 @@ def test_corrupt_visible_metadata_sanitized(store):
     assert "PRIVATE DETAIL" not in result.model_dump_json()
 
 
+@pytest.mark.parametrize("kind,stage", [("SourceDescriptor", "source_descriptors"),
+    ("SourceRegion", "source_regions"), ("GraphProjection", "projections")])
+def test_invalid_metadata_identifies_stage_without_payload(store, kind, stage):
+    store.put(Record(kind=kind, corpus_id="papers", project_id="research",
+        content={"secret": "PRIVATE DETAIL"}))
+    before = (store.revision, store.records())
+    result = inspect(store)
+    assert result.status == "failed" and not result.data
+    assert result.diagnostics[0]["code"] == "corpus.invalid_metadata"
+    assert result.diagnostics[0]["metadata_stage"] == stage
+    assert "PRIVATE DETAIL" not in result.model_dump_json()
+    assert not result.receipt_ids and not result.artifacts
+    assert (store.revision, store.records()) == before
+
+
+def test_ingested_project_notes_are_visible_only_in_their_project(store, monkeypatch):
+    pipeline(store, request(operation_id="foreign-note", source_scope="project",
+        sources=[{"name": "foreign.txt", "text": "Foreign project content."}]),
+        context(project_id="other", allow_project_writes=True))
+    pipeline(store)
+    pipeline(store, request(operation_id="project-note", source_scope="project", index_mode="vector",
+        sources=[{"name": "note.txt", "text": "Private project note."}]),
+        context(allow_project_writes=True), provider=Provider())
+    before = (store.revision, store.records())
+    def forbidden(*args, **kwargs):
+        raise AssertionError("inspection must not write or read artifact bytes")
+    for name in ("put", "artifact", "read_artifact"):
+        monkeypatch.setattr(store, name, forbidden)
+    own = inspect(store, limit=1)
+    assert own.status == "complete", own
+    following = inspect(store, **own.data["next_request"])
+    assert following.status == "complete" and not following.data["has_more"]
+    assert {s["name"] for s in own.data["sources"] + following.data["sources"]} == {"source.md", "note.txt"}
+    assert own.data["total_sources"] == own.data["total_regions"] == 2
+    assert own.data["readiness"]["lexical_metadata_ready"]
+    assert own.data["readiness"]["vector_covered_regions"] == 1
+    for project, names in ((None, {"source.md"}), ("other", {"source.md", "foreign.txt"})):
+        result = inspect(store, project)
+        assert result.status == "complete", result
+        assert {s["name"] for s in result.data["sources"]} == names
+    assert (store.revision, store.records()) == before
+
+
+@pytest.mark.parametrize("stored_project,descriptor_project", [(None, "research"),
+    ("research", None), ("research", "other")])
+def test_descriptor_scope_must_match_record(store, stored_project, descriptor_project):
+    pipeline(store)
+    original = store.records("SourceDescriptor")[0][1]
+    store.put(original.model_copy(update={"project_id": stored_project,
+        "content": {**original.content, "project_id": descriptor_project}}))
+    result = inspect(store)
+    assert result.status == "failed" and not result.data
+    assert result.diagnostics[0]["metadata_stage"] == "source_descriptors"
+
+
+def test_project_note_region_cannot_be_corpus_wide(store):
+    pipeline(store, request(source_scope="project"), context(allow_project_writes=True))
+    original = store.records("SourceRegion")[0][1]
+    store.put(original.model_copy(update={"project_id": None,
+        "content": {**original.content, "project_id": None}}))
+    result = inspect(store)
+    assert result.status == "failed" and not result.data
+    assert result.diagnostics[0]["metadata_stage"] == "source_regions"
+
+
+def test_project_note_inventory_through_read_only_snapshot(store):
+    from nima_semantica.corpus_snapshot import CorpusSnapshot
+    pipeline(store, request(source_scope="project"), context(allow_project_writes=True))
+    expected = inspect(store)
+    assert expected.status == "complete", expected
+    before = (store.revision, store.records())
+    with CorpusSnapshot(store.root, corpus_id="papers", project_id="research") as snapshot:
+        assert inspect(snapshot) == expected
+        assert snapshot._db.total_changes == 0
+    assert (store.revision, store.records()) == before
+
+
 def test_foreign_corpus_ignored(store):
     for kind in ("SourceDescriptor", "SourceRegion", "GraphProjection"):
         store.put(Record(kind=kind, corpus_id="secret", content={"secret": "PRIVATE DETAIL"}))

@@ -5,6 +5,8 @@ Check which sources are visible in your configured corpus and project, and wheth
 ## What you provide and receive
 
 You receive a bounded, revision-aware inventory with readiness information. Project notes remain visible only within their authorized scope.
+If inspection returns `corpus.invalid_metadata`, its sanitized `metadata_stage` identifies which check failed: the store snapshot, corpus registration, source descriptors, source regions, revisions or projections.
+Graph snapshots and vocabulary headers validate different records and may remain readable when this inventory fails.
 
 Call this workflow through your project’s Langflow MCP toolbox.
 

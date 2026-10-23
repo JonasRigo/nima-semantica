@@ -910,7 +910,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Inspectable native traversal; no model, proof checker or scientific graph writes.\"\"\"\nimport json\nfrom lfx.io import StrInput,BoolInput,IntInput\nfrom lfx.schema import Message,DataFrame\nfrom nima_semantica.claim_dependencies import TraceDependenciesRequest,TraceDependenciesContext,trace_claim_dependencies,POLICY_DIGEST\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent,handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass TraceClaimDependencies(BaseComponent):\n    name=\"TraceClaimDependencies\"\n    display_name=\"Trace Claim Dependencies · Bounded Traversal\"\n    description=\"Validate the pinned graph/candidate, follow declared necessary dependencies, and return exact paths, conditional edges, cycle witnesses, structural leaves, obligations and explicit cutoffs. Audit persistence only; no entailment or graph admission.\"\n    nima_manifest=manifest_for_component(\"TraceClaimDependencies\")\n    inputs=[handle(\"payload\",\"Pinned claim trace request\"),handle(\"policy\",\"Inspectable traversal policy\",required=False),\n        StrInput(name=\"corpus_id\",display_name=\"Authorized corpus (operator)\",value=\"papers\"),\n        StrInput(name=\"project_id\",display_name=\"Authorized project; blank for corpus (operator)\",value=\"research\"),\n        BoolInput(name=\"allow_audit_writes\",display_name=\"Allow receipts and outcome artifacts (operator)\",value=False),\n        IntInput(name=\"max_nodes\",display_name=\"Maximum input nodes (operator)\",value=256),\n        IntInput(name=\"max_edges\",display_name=\"Maximum input edges (operator)\",value=512),\n        IntInput(name=\"max_visited_nodes\",display_name=\"Maximum visited nodes (operator)\",value=128),\n        IntInput(name=\"max_traversed_edges\",display_name=\"Maximum traversed edges (operator)\",value=256),\n        IntInput(name=\"max_depth\",display_name=\"Maximum path depth (operator)\",value=32),\n        IntInput(name=\"max_paths\",display_name=\"Maximum returned paths (operator)\",value=128),\n        IntInput(name=\"max_steps\",display_name=\"Maximum traversal steps (operator)\",value=10000),\n        IntInput(name=\"timeout_seconds\",display_name=\"Traversal timeout (operator)\",value=30)]\n\n    def run_sync(self):\n        if getattr(self,\"policy\",None) and _value(self.policy).get(\"policy_digest\")!=POLICY_DIGEST:\n            raise ValueError(\"canvas policy differs from native policy\")\n        request=TraceDependenciesRequest.model_validate(_value(self.payload))\n        context=TraceDependenciesContext(corpus_id=self.corpus_id,project_id=self.project_id.strip() or None,\n            allow_audit_writes=self.allow_audit_writes,**{k:getattr(self,k) for k in\n                (\"max_nodes\",\"max_edges\",\"max_visited_nodes\",\"max_traversed_edges\",\"max_depth\",\"max_paths\",\"max_steps\",\"timeout_seconds\")})\n        with configured_store(required=False) as store:\n            return trace_claim_dependencies(store,request,context).model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)\n        for char in (\"`\",\"<\",\">\",\"&\"):text=text.replace(char,\"\\\\u\"+format(ord(char),\"04x\"))\n        return Message(text=\"```json\\n\"+text+\"\\n```\")\n\n    async def table_data(self) -> DataFrame:\n        return DataFrame((await self.result_data()).data.get(\"data\",{}).get(\"trace\",{}).get(\"paths\",[]))\n",
+                "value": "\"\"\"Inspectable native traversal; no model, proof checker or scientific graph writes.\"\"\"\nimport json\nfrom lfx.io import StrInput,BoolInput,IntInput\nfrom lfx.schema import Message,DataFrame\nfrom nima_semantica.claim_dependencies import TraceDependenciesRequest,TraceDependenciesContext,trace_claim_dependencies,POLICY_DIGEST,TRACE_DEFAULT_LIMITS\nfrom nima_semantica.component_contracts import manifest_for_component\nfrom nima_semantica.orchestration.langflow.adapter_support import configured_store\nfrom nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent,handle\nfrom nima_semantica.orchestration.langflow.values import _value\n\n\nclass TraceClaimDependencies(BaseComponent):\n    name=\"TraceClaimDependencies\"\n    display_name=\"Trace Claim Dependencies · Bounded Traversal\"\n    description=\"Validate the pinned graph/candidate, follow declared necessary dependencies, and return exact paths, conditional edges, cycle witnesses, structural leaves, obligations and explicit cutoffs. Audit persistence only; no entailment or graph admission.\"\n    nima_manifest=manifest_for_component(\"TraceClaimDependencies\")\n    inputs=[handle(\"payload\",\"Pinned claim trace request\"),handle(\"policy\",\"Inspectable traversal policy\",required=False),\n        StrInput(name=\"corpus_id\",display_name=\"Authorized corpus (operator)\",value=\"papers\"),\n        StrInput(name=\"project_id\",display_name=\"Authorized project; blank for corpus (operator)\",value=\"research\"),\n        BoolInput(name=\"allow_audit_writes\",display_name=\"Allow receipts and outcome artifacts (operator)\",value=False),\n        IntInput(name=\"max_nodes\",display_name=\"Maximum input nodes (operator)\",value=TRACE_DEFAULT_LIMITS[\"max_nodes\"]),\n        IntInput(name=\"max_edges\",display_name=\"Maximum input edges (operator)\",value=TRACE_DEFAULT_LIMITS[\"max_edges\"]),\n        IntInput(name=\"max_visited_nodes\",display_name=\"Maximum visited nodes (operator)\",value=TRACE_DEFAULT_LIMITS[\"max_visited_nodes\"]),\n        IntInput(name=\"max_traversed_edges\",display_name=\"Maximum traversed edges (operator)\",value=TRACE_DEFAULT_LIMITS[\"max_traversed_edges\"]),\n        IntInput(name=\"max_depth\",display_name=\"Maximum path depth (operator)\",value=TRACE_DEFAULT_LIMITS[\"max_depth\"]),\n        IntInput(name=\"max_paths\",display_name=\"Maximum returned paths (operator)\",value=TRACE_DEFAULT_LIMITS[\"max_paths\"]),\n        IntInput(name=\"max_steps\",display_name=\"Maximum traversal steps (operator)\",value=TRACE_DEFAULT_LIMITS[\"max_steps\"]),\n        IntInput(name=\"timeout_seconds\",display_name=\"Traversal timeout (operator)\",value=TRACE_DEFAULT_LIMITS[\"timeout_seconds\"])]\n\n    def run_sync(self):\n        if getattr(self,\"policy\",None) and _value(self.policy).get(\"policy_digest\")!=POLICY_DIGEST:\n            raise ValueError(\"canvas policy differs from native policy\")\n        request=TraceDependenciesRequest.model_validate(_value(self.payload))\n        context=TraceDependenciesContext(corpus_id=self.corpus_id,project_id=self.project_id.strip() or None,\n            allow_audit_writes=self.allow_audit_writes,**{k:getattr(self,k) for k in\n                (\"max_nodes\",\"max_edges\",\"max_visited_nodes\",\"max_traversed_edges\",\"max_depth\",\"max_paths\",\"max_steps\",\"timeout_seconds\")})\n        with configured_store(required=False) as store:\n            return trace_claim_dependencies(store,request,context).model_dump(mode=\"json\")\n\n    async def preview_message(self) -> Message:\n        text=json.dumps((await self.result_data()).data,ensure_ascii=False,indent=2)\n        for char in (\"`\",\"<\",\">\",\"&\"):text=text.replace(char,\"\\\\u\"+format(ord(char),\"04x\"))\n        return Message(text=\"```json\\n\"+text+\"\\n```\")\n\n    async def table_data(self) -> DataFrame:\n        return DataFrame((await self.result_data()).data.get(\"data\",{}).get(\"trace\",{}).get(\"paths\",[]))\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -975,7 +975,7 @@
                 "placeholder": "",
                 "show": true,
                 "name": "max_edges",
-                "value": 512,
+                "value": 24000,
                 "display_name": "Maximum input edges (operator)",
                 "advanced": false,
                 "api_editable": false,
@@ -996,7 +996,7 @@
                 "placeholder": "",
                 "show": true,
                 "name": "max_nodes",
-                "value": 256,
+                "value": 16000,
                 "display_name": "Maximum input nodes (operator)",
                 "advanced": false,
                 "api_editable": false,
@@ -1017,7 +1017,7 @@
                 "placeholder": "",
                 "show": true,
                 "name": "max_paths",
-                "value": 128,
+                "value": 512,
                 "display_name": "Maximum returned paths (operator)",
                 "advanced": false,
                 "api_editable": false,
@@ -1038,7 +1038,7 @@
                 "placeholder": "",
                 "show": true,
                 "name": "max_steps",
-                "value": 10000,
+                "value": 50000,
                 "display_name": "Maximum traversal steps (operator)",
                 "advanced": false,
                 "api_editable": false,
@@ -1059,7 +1059,7 @@
                 "placeholder": "",
                 "show": true,
                 "name": "max_traversed_edges",
-                "value": 256,
+                "value": 8192,
                 "display_name": "Maximum traversed edges (operator)",
                 "advanced": false,
                 "api_editable": false,
@@ -1080,7 +1080,7 @@
                 "placeholder": "",
                 "show": true,
                 "name": "max_visited_nodes",
-                "value": 128,
+                "value": 4096,
                 "display_name": "Maximum visited nodes (operator)",
                 "advanced": false,
                 "api_editable": false,
@@ -1200,7 +1200,7 @@
             "metadata": {
               "nima_component_id": "trace_claim_dependencies",
               "contract_version": "1",
-              "source_sha256": "5959751285bc03e462229aad4f7df9be419a010798d591dac5c8cb8b11824fa7"
+              "source_sha256": "57755f9d963d293eef82ca7649a45db50e46a732a44e6d6a8f41e9ac5cbe85c1"
             },
             "tool_mode": false
           },
@@ -1595,8 +1595,8 @@
     "visual_approval": "pending",
     "controller_version": "trace-claim-dependencies-v1",
     "native_sources_sha256": {
-      "claim_dependencies": "1890934999be033208cfd42ba5c68c4699662b0eeb4650f896725e039f8b7827",
-      "graph_analysis": "03cbc456e4fc0402bb20615dabe0f8d29bc2a884879b2f4366eeeb42c0a9c012",
+      "claim_dependencies": "fad8a5deca355e1361789b4b1268a65905ea676b582c96e57f7bf1c9e24a66a9",
+      "graph_analysis": "c76cccf4b989c2e3821f68a705cf74e35e5403fa3c8c86921ad72153ee4ff8bc",
       "graph_service": "8866d63819c0ed53a70bcb849fd8661ba7d6e61e6c3b63c3cf4424232aad32b5",
       "ontology_services": "ed5a5922951cd28cda31533b145511d77ae596fd9c2882b2a34fca7c9737a221",
       "evidence_contracts": "16604bf7e734db15c0504969bb09651d215158dfdc51aa43665992cdee00a4fb"
@@ -1611,7 +1611,7 @@
       "TraceClaimDependencies": {
         "nima_component_id": "trace_claim_dependencies",
         "contract_version": "1",
-        "source_sha256": "5959751285bc03e462229aad4f7df9be419a010798d591dac5c8cb8b11824fa7"
+        "source_sha256": "57755f9d963d293eef82ca7649a45db50e46a732a44e6d6a8f41e9ac5cbe85c1"
       },
       "DependencyTraceView": {
         "nima_component_id": "dependency_trace_view",

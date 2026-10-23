@@ -125,7 +125,7 @@ python -m pytest -q
 ```
 
 NIMA is under active development; contributions, including custom Langflow workflows, are welcome.
-Use [CITATION.cff](CITATION.cff) for author and release metadata. The [v0.1.0 archive](https://doi.org/10.5281/zenodo.22998905) remains available; no versioned DOI is asserted for v0.3.1.
+Use [CITATION.cff](CITATION.cff) for author and release metadata. The [v0.1.0 archive](https://doi.org/10.5281/zenodo.22998905) remains available; no versioned DOI is asserted for v0.4.0.
 See the [reliability guide](docs/RELIABILITY.md) for shared private MCP owners, receipt references, execution budgets and recoverable configuration changes.
 See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for project and third-party terms.
 
@@ -134,3 +134,6 @@ It is off by default and remains non-blocking when vocabulary is unavailable.
 
 See [standard knowledge, workspace layouts, Studio, calculation documents and reporting](docs/KNOWLEDGE_AND_REPORTING.md) for the v0.3.0 features.
 See the [v0.3.1 release notes](docs/RELEASE_NOTES_v0.3.1.md) for PDF profile migration, OCR exports and transcription limitations.
+
+See the [v0.4.0 release notes](docs/RELEASE_NOTES_v0.4.0.md) for exact expected-utility evaluation and increased graph/traversal capacity.
+The [expected-utility guide](docs/EXPECTED_UTILITY.md) covers the offline CLI and scoped library service.

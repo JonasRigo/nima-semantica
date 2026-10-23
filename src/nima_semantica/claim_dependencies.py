@@ -43,18 +43,22 @@ class TraceDependenciesRequest(StrictModel):
         return self
 
 
+# Snapshot admission and reachable traversal are separate operator budgets.
+TRACE_DEFAULT_LIMITS = {'max_nodes': 16000, 'max_edges': 24000, 'max_visited_nodes': 4096, 'max_traversed_edges': 8192, 'max_depth': 32, 'max_paths': 512, 'max_steps': 50000, 'timeout_seconds': 30}
+TRACE_HARD_LIMITS = {'max_nodes': 16000, 'max_edges': 24000, 'max_visited_nodes': 16000, 'max_traversed_edges': 16384, 'max_depth': 64, 'max_paths': 2048, 'max_steps': 100000, 'timeout_seconds': 120}
+
 class TraceDependenciesContext(StrictModel):
     corpus_id: GraphIdentifier
     project_id: GraphIdentifier | None=None
     allow_audit_writes: StrictBool=False
-    max_nodes: StrictInt=Field(default=256,ge=1,le=256)
-    max_edges: StrictInt=Field(default=512,ge=0,le=512)
-    max_visited_nodes: StrictInt=Field(default=128,ge=1,le=256)
-    max_traversed_edges: StrictInt=Field(default=256,ge=0,le=512)
-    max_depth: StrictInt=Field(default=32,ge=0,le=64)
-    max_paths: StrictInt=Field(default=128,ge=1,le=2048)
-    max_steps: StrictInt=Field(default=10000,ge=1,le=100000)
-    timeout_seconds: StrictInt=Field(default=30,ge=1,le=120)
+    max_nodes: StrictInt=Field(default=TRACE_DEFAULT_LIMITS["max_nodes"],ge=1,le=TRACE_HARD_LIMITS["max_nodes"])
+    max_edges: StrictInt=Field(default=TRACE_DEFAULT_LIMITS["max_edges"],ge=0,le=TRACE_HARD_LIMITS["max_edges"])
+    max_visited_nodes: StrictInt=Field(default=TRACE_DEFAULT_LIMITS["max_visited_nodes"],ge=1,le=TRACE_HARD_LIMITS["max_visited_nodes"])
+    max_traversed_edges: StrictInt=Field(default=TRACE_DEFAULT_LIMITS["max_traversed_edges"],ge=0,le=TRACE_HARD_LIMITS["max_traversed_edges"])
+    max_depth: StrictInt=Field(default=TRACE_DEFAULT_LIMITS["max_depth"],ge=0,le=TRACE_HARD_LIMITS["max_depth"])
+    max_paths: StrictInt=Field(default=TRACE_DEFAULT_LIMITS["max_paths"],ge=1,le=TRACE_HARD_LIMITS["max_paths"])
+    max_steps: StrictInt=Field(default=TRACE_DEFAULT_LIMITS["max_steps"],ge=1,le=TRACE_HARD_LIMITS["max_steps"])
+    timeout_seconds: StrictInt=Field(default=TRACE_DEFAULT_LIMITS["timeout_seconds"],ge=1,le=TRACE_HARD_LIMITS["timeout_seconds"])
 
 
 def traverse_dependencies(snapshot,request,context,ontology):
@@ -157,7 +161,7 @@ def traverse_dependencies(snapshot,request,context,ontology):
 def trace_claim_dependencies(store,request,context):
     request=TraceDependenciesRequest.model_validate(request.model_dump(mode="json"))
     context=TraceDependenciesContext.model_validate(context.model_dump(mode="json"))
-    if request.mode=="preview":return ToolResult(operation="Trace Claim Dependencies",status="complete",data={"executed":False,"request":request.model_dump(mode="json"),"policy":POLICY})
+    if request.mode=="preview":return ToolResult(operation="Trace Claim Dependencies",status="complete",data={"executed":False,"request":request.model_dump(mode="json"),"policy":POLICY,"limits":context.model_dump(mode="json")})
     if store is None or not context.allow_audit_writes:return ToolResult(operation="Trace Claim Dependencies",status="failed",diagnostics=({"code":"audit_or_store_unavailable"},))
     scope=dict(corpus_id=context.corpus_id,project_id=context.project_id);receipts=ExecutionReceiptService(store)
     rid=identity({"stage":"trace_claim_dependencies","operation_id":request.operation_id,**scope})

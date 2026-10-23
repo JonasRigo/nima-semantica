@@ -7,7 +7,8 @@ PRIVATE_ROOTS = {'.nima', '.git', '.agents', '.codex', 'article', 'benchmarks', 
 PRIVATE_NAMES = {'CLEAN_HOST_TEST.md', 'AGENTS.md', 'CODE_TODO.md', 'Milestone.md', 'IMPLEMENTATION_PLAN.md',
                  'TOOL_BENCH.md', 'TOOL_BLUEPRINT.md', 'TOOL_BLUEPRINT.html',
                  'DEFERRED_WORK.json', 'release-fixtures.json', 'SAD.md', 'TODO.md',
-                 'LANGFLOW_COMPONENT_AUDIT.md'}
+                 'LANGFLOW_COMPONENT_AUDIT.md', 'REWRITE_AUDIT.md',
+                 'MITICULOUS_PROOF_PROCEDURE.md', 'PERFORMANCE_DESIGN_DECISION.md'}
 
 
 def validate_files(root, names):

@@ -2362,7 +2362,7 @@
       "proof_state": "4f1785bdbb12bec8400481ed798a0771de7fe023092070f151780dcc0aa7213b",
       "proof_support": "e3681e68ab167b14aea9d9783cc4dd03eda6128d6174e20abc6d69dd0a66bcb5",
       "review_tool": "72f0b8f5d193efce576a7bb4ddae14da25993d91d686b657fd641edaab0a156e",
-      "graph_analysis": "03cbc456e4fc0402bb20615dabe0f8d29bc2a884879b2f4366eeeb42c0a9c012",
+      "graph_analysis": "c76cccf4b989c2e3821f68a705cf74e35e5403fa3c8c86921ad72153ee4ff8bc",
       "evidence_contracts": "16604bf7e734db15c0504969bb09651d215158dfdc51aa43665992cdee00a4fb",
       "math_retrieval": "b02c7f56eca6fbe900cc37b9237128729305394440be387fa3042d388de1f18c",
       "math_reasoning": "c7eca62e04e55ffb8256b160c755831687ca0348c9ad435ea50337bb356a4728",

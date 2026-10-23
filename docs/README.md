@@ -4,8 +4,8 @@ Use NIMA to carry an investigation across papers, calculations and coding-agent 
 You choose the questions and decide what belongs in the research record.
 We provide persistent knowledge, inspectable tools and adaptable skills to support that work.
 
-See the [v0.3.1 release notes](RELEASE_NOTES_v0.3.1.md) for the current source version.
-The [v0.3.1 qualification status](PLATFORM_SUPPORT_v0.3.1.md) separates local candidate checks, pending platform checks and the open PDF model-fidelity gate.
+See the [v0.4.0 release notes](RELEASE_NOTES_v0.4.0.md) for the current source candidate.
+The [qualification status](PLATFORM_SUPPORT.md) separates v0.4.0 checks from historical platform evidence and the open PDF model-fidelity gate.
 
 ## Get started
 
@@ -20,6 +20,7 @@ The [v0.3.1 qualification status](PLATFORM_SUPPORT_v0.3.1.md) separates local ca
 | --- | --- |
 | Ask questions with `nima chat` or your coding-agent harness | [Chat with the knowledge base](KNOWLEDGE_BASE.md#chat-with-corpus-literature-and-project-notes) |
 | Investigate, calculate, review or develop a proof | [Research workflows](RESEARCH_WORKFLOWS.md) |
+| Compare the expected merit of research actions | [Expected utility](EXPECTED_UTILITY.md) |
 | Understand a tool and its effects | [Tool catalogue](TOOLS.md) |
 | Continue private calculations and proofs | [Private graph sessions](PRIVATE_GRAPHS.md) |
 | Diagnose MCP connections and configure reliable private services | [Reliability and recovery](RELIABILITY.md) |

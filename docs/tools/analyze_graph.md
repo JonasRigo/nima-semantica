@@ -27,3 +27,10 @@ Replace it with the complete execution request after inspecting the returned con
 Logical consequences are conditional on the encoded premises. A recorded verification status is metadata, not a fresh proof of the claim.
 
 [Tool catalogue](../TOOLS.md) · [User guide](../README.md)
+
+## Input capacity
+
+The operator node budget defaults to 16,000 and has a 16,000-node ceiling.
+Operators may choose a lower budget; public requests cannot override it.
+Edges, closure facts, inference supports, rounds and timeout retain their independent bounds, so a permitted input can still produce explicitly partial inference.
+Update the native package, component and managed saved workflow together when adopting the new default.

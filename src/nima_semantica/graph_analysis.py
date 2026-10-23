@@ -50,7 +50,7 @@ class AnalyzeGraphContext(StrictModel):
     corpus_id: GraphIdentifier
     project_id: GraphIdentifier | None = None
     allow_audit_writes: StrictBool = False
-    max_nodes: StrictInt = Field(default=4096,ge=1,le=10000)
+    max_nodes: StrictInt = Field(default=16000,ge=1,le=16000)
     max_edges: StrictInt = Field(default=8192,ge=0,le=20000)
     max_facts: StrictInt = Field(default=20000,ge=1,le=100000)
     max_matches: StrictInt = Field(default=10000,ge=1,le=100000)

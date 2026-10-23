@@ -22,7 +22,8 @@ def checker(monkeypatch):
 
 @pytest.mark.parametrize('path', [
     '../secret', '/secret', 'archive/.nima/config.json', 'archive/AGENTS.md',
-    'archive/paper.pdf', 'archive/.codex/config.toml', 'archive/graphify-out/graph.json',
+    'archive/PERFORMANCE_DESIGN_DECISION.md', 'archive/MITICULOUS_PROOF_PROCEDURE.md',
+    'archive/REWRITE_AUDIT.md', 'archive/paper.pdf', 'archive/.codex/config.toml', 'archive/graphify-out/graph.json',
 ])
 def test_rejects_private_or_escaping_paths(checker, path):
     with pytest.raises(ValueError):

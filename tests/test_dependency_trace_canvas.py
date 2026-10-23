@@ -74,3 +74,31 @@ def test_public_override_denied(configured,extra):
 def test_policy_mismatch_rejected(configured):
     component=load_component("TraceClaimDependencies")().set(payload={},policy={"policy_digest":"foreign"})
     with pytest.raises(ValueError,match="policy differs"):asyncio.run(component.result_data())
+
+
+def test_trace_canvas_defaults_follow_native_operator_capacity():
+    from nima_semantica.claim_dependencies import TRACE_DEFAULT_LIMITS
+    flow = json.loads(CANVAS.read_text())
+    node = next(n for n in flow["data"]["nodes"] if n["data"]["type"] == "TraceClaimDependencies")
+    template = node["data"]["node"]["template"]
+    assert {name: template[name]["value"] for name in TRACE_DEFAULT_LIMITS} == TRACE_DEFAULT_LIMITS
+    assert all(not template[name].get("tool_mode") and not template[name].get("input_types")
+               for name in TRACE_DEFAULT_LIMITS)
+
+
+def test_live_component_loads_large_snapshot_and_traces_only_requested_closure(configured):
+    from nima_semantica.storage import GraphStore
+    links = (("a", "b"), ("b", "c")) + tuple(
+        (f"isolated-{i}", f"isolated-{i+1}") for i in range(600))
+    store = GraphStore(configured)
+    seed(store, links)
+    payload = request(store).model_dump(mode="json")
+    head = store.graph_revision("papers", "research")
+    store.close()
+    result = execute(payload, True)
+    assert result["status"] == "complete", result
+    assert len(result["data"]["trace"]["nodes"]) == 3
+    assert result["data"]["limits"]["max_nodes"] == 16000
+    store = GraphStore(configured)
+    assert store.graph_revision("papers", "research") == head
+    store.close()

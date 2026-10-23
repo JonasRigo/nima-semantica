@@ -806,11 +806,17 @@ def main(argv=None):
             sub.add_argument("--corpus", required=True); sub.add_argument("--project", required=True)
     from .release_cli import register_commands
     register_commands(commands, project)
+    from .decision_cli import register_commands as register_decision_commands
+    register_decision_commands(commands)
     args = parser.parse_args(argv)
     if args.command == "doctor" and args.mcp and not args.project:
         parser.error("doctor --mcp requires --project and its corpus scope")
     config = None
     try:
+        if args.command == "decision":
+            from .decision_cli import evaluate_command
+            emit(evaluate_command(args))
+            return 0
         if args.command == "setup":
             setup(args); return 0
         config = load_installation(args.config)

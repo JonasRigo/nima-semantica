@@ -5,6 +5,26 @@ import subprocess
 from nima_semantica.storage import GraphStore
 
 
+@pytest.fixture(scope="session", autouse=True)
+def isolated_optional_langflow_settings(tmp_path_factory):
+    """Initialize real optional LFX settings in test storage, never the host's."""
+    import importlib.util
+    if importlib.util.find_spec("lfx") is None:
+        yield
+        return
+    previous = os.environ.get("LANGFLOW_CONFIG_DIR")
+    os.environ["LANGFLOW_CONFIG_DIR"] = str(tmp_path_factory.mktemp("langflow-settings"))
+    try:
+        from lfx.services.deps import get_settings_service
+        assert get_settings_service() is not None, "optional LFX settings failed to initialize"
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("LANGFLOW_CONFIG_DIR", None)
+        else:
+            os.environ["LANGFLOW_CONFIG_DIR"] = previous
+
+
 @pytest.fixture
 def lexical_installation(tmp_path, monkeypatch):
     """Explicit operator configuration independent of the host installation."""

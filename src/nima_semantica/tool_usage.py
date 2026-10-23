@@ -51,7 +51,7 @@ def schema_limits(schema):
 def usage(tool_id, schema):
     private = tool_id in {"calculate_mathematics", "draft_proof", "conduct_proof"}
     from .request_diagnostics import MODE_REQUIREMENTS
-    return {"transport": "typed request object" if private else "JSON object serialized in input_value",
+    result = {"transport": "typed request object" if private else "JSON object serialized in input_value",
         "guidance": GUIDANCE[tool_id], "request_limits": schema_limits(schema),
         "example_policy": "Examples illustrate validated request shapes. Replace placeholder identities, artifact hashes, target content and revisions with real scoped values; recompute content_revision when target content changes. Examples grant no execution or commit permission.",
         "mode_requirements": MODE_REQUIREMENTS.get(schema.get("title"), "Use the required fields, enums and descriptions in input_schema; identity/scope prerequisites are checked before execution."),
@@ -59,6 +59,16 @@ def usage(tool_id, schema):
         "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
         "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
         "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage."}
+
+    if tool_id == "trace_claim_dependencies":
+        from .claim_dependencies import TRACE_DEFAULT_LIMITS, TRACE_HARD_LIMITS
+        result["operator_limits"] = {
+            "defaults": dict(TRACE_DEFAULT_LIMITS), "hard_ceilings": dict(TRACE_HARD_LIMITS),
+            "authority": "Operator component settings only; public requests cannot override these limits.",
+            "separation": "Input snapshot bounds apply before traversal. Visited nodes, traversed edges, paths, depth, steps and timeout independently bound the reachable trace.",
+            "configured_values": "Call preview on the deployed workflow to inspect its actual limits; existing saved operator settings may differ from these defaults.",
+        }
+    return result
 
 
 def private_catalog(tools, operation=""):

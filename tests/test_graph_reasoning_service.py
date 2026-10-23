@@ -110,3 +110,27 @@ def test_hypothesizing_mode_marks_derived_conclusions_conditional(store):
     assert all(result.hypothesis_ids for _ in result.conditional_conclusions)
     assert all(item.hypothesis_ids for item in result.conditional_conclusions)
     assert result.authority == "read_only_reasoning"
+
+
+def test_large_native_result_retains_complete_authenticated_receipt(store):
+    from nima_semantica.execution_receipts import ExecutionReceiptService
+    assertions = tuple(Assertion(atom=Atom(predicate="Base", arguments=(f"n{i}",)),
+        origin="assumed", justification="Explicit fixture premise") for i in range(10001))
+    graph = GraphSnapshot(graph_id="large", context_id="large", policy=ContextPolicy(allow_assumptions=True),
+        predicates=(Predicate(name="Base", argument_types=("Record",)),),
+        entities={f"n{i}": "Record" for i in range(10001)}, assertions=assertions)
+    def native_fixture(g):
+        return InferenceReport(backend="exact-seed-fixture", complete=True, atoms=tuple(a.atom for a in g.assertions),
+            supports=(), seed_supports={a.atom.key: (a.id,) for a in g.assertions}, blocked=(), diagnostics=(),
+            rounds=0, assessment="consistent_under_assumptions")
+    request = GraphReasoningRequest(graph=graph, corpus_id="papers", project_id="project-a",
+        graph_revision=store.graph_revision("papers", "project-a"), mode="strict", idempotency_key="large-output")
+    service = GraphReasoningService(store, backend=native_fixture)
+    result = service.execute(request)
+    assert result.status == "completed" and len(result.admitted_conclusions) == 10001
+    receipts = ExecutionReceiptService(store)
+    reference = receipts.reference(result.receipt_id, corpus_id="papers", project_id="project-a")
+    actual = receipts.resolve(reference, corpus_id="papers", project_id="project-a")
+    assert actual.output_ids == () and actual.metadata["output_index"]["count"] == 10001
+    assert len(actual.metadata["result"]["admitted_conclusions"]) == 10001
+    assert service.execute(request) == result

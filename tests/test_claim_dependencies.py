@@ -209,3 +209,96 @@ def test_proposed_endpoint_taints_recorded_relation(store):
     seed(store,(("a","b"),),statuses={"b":"proposed"})
     trace=run(store).data["trace"]
     assert trace["paths"][0]["conditional"] and ids(trace["paths"][0]["proposed_edges"])==["e0"]
+
+
+def test_large_input_snapshot_with_small_claim_closure_preserves_public_statuses(store):
+    links = (("a", "b"), ("b", "c")) + tuple(
+        (f"isolated-{i}", f"isolated-{i+1}") for i in range(600))
+    seed(store, links)
+    before = GraphService(store).read_snapshot(corpus_id="papers", project_id="research")
+    assert len(before.nodes) > 256 and len(before.edges) > 512
+    result = run(store)
+    assert result.status == "complete", result
+    trace = result.data["trace"]
+    assert ids(trace["paths"][0]["nodes"]) == ["a", "b", "c"]
+    assert len(trace["nodes"]) == 3 and len(trace["edges"]) == 2
+    assert {item["recorded_status"] for item in trace["outstanding_obligations"]} == {"unresolved"}
+    after = GraphService(store).read_snapshot(corpus_id="papers", project_id="research")
+    assert before == after
+    assert result.data["analysis_scope"] == "stored_corpus_and_project_snapshot"
+
+
+def test_default_traversal_can_complete_a_closure_above_previous_ceiling(store):
+    links = tuple((a, b) for i in range(200)
+                  for a, b in (("a", f"branch-{i}"), (f"branch-{i}", f"leaf-{i}")))
+    seed(store, links)
+    result = run(store)
+    trace = result.data["trace"]
+    assert result.status == "complete" and not trace["truncated"]
+    assert len(trace["nodes"]) == 401 and len(trace["edges"]) == 400
+    assert len(trace["paths"]) == 200
+    assert trace["reachable_subgraph_complete"] and trace["cycle_search_complete"]
+
+
+def test_large_trace_still_reports_real_operator_cutoffs(store):
+    seed(store, tuple(("a", f"leaf-{i}") for i in range(1100)))
+    result = run(store, max_visited_nodes=1024)
+    trace = result.data["trace"]
+    assert result.status == "partial" and trace["truncated"]
+    assert "node_limit" in trace["limits_reached"]
+    assert len(trace["nodes"]) == 1024
+    assert trace["frontier"] and not trace["reachable_subgraph_complete"]
+    assert not trace["paths_complete"] and not trace["cycle_search_complete"]
+
+
+@pytest.mark.parametrize("field,maximum", [
+    ("max_nodes", 16000), ("max_edges", 24000),
+    ("max_visited_nodes", 16000), ("max_traversed_edges", 16384),
+    ("max_depth", 64), ("max_paths", 2048),
+    ("max_steps", 100000), ("timeout_seconds", 120),
+])
+def test_trace_operator_ceiling_remains_bounded_and_not_public(field, maximum):
+    assert getattr(context(**{field: maximum}), field) == maximum
+    with pytest.raises(ValueError):
+        context(**{field: maximum + 1})
+    with pytest.raises(ValueError):
+        TraceDependenciesRequest.model_validate({field: maximum})
+
+
+def test_snapshot_loading_budget_can_still_be_lowered_by_operator(store):
+    seed(store)
+    result = trace_claim_dependencies(
+        store, request(store, operation_id="lower-input-budget"), context(max_nodes=1))
+    assert result.status == "failed" and "trace" not in result.data
+    assert result.data["error"] == "ValueError"
+
+
+def test_preview_and_tool_guide_report_operator_limits_without_granting_authority():
+    from nima_semantica.claim_dependencies import TRACE_DEFAULT_LIMITS, TRACE_HARD_LIMITS
+    from nima_semantica.tool_guide import ToolGuideRequest, tool_guide
+    preview = trace_claim_dependencies(None, TraceDependenciesRequest(), context())
+    assert {name: preview.data["limits"][name] for name in TRACE_DEFAULT_LIMITS} == TRACE_DEFAULT_LIMITS
+    descriptor = tool_guide(ToolGuideRequest(tool="trace_claim_dependencies")).data["tools"][0]
+    limits = descriptor["usage"]["operator_limits"]
+    assert limits["defaults"] == TRACE_DEFAULT_LIMITS and limits["hard_ceilings"] == TRACE_HARD_LIMITS
+    assert set(TRACE_DEFAULT_LIMITS).isdisjoint(descriptor["input_schema"]["properties"])
+
+
+def test_full_16000_node_traversal_retains_independent_path_budget():
+    from nima_semantica.claim_dependencies import traverse_dependencies
+    from nima_semantica.okf_contracts import OKFSnapshot, GraphRevision
+    from nima_semantica.ontology_services import OntologyService
+    revision = GraphRevision(corpus_id="papers", project_id="research", project_revision=0)
+    nodes = tuple(OKFNode(node_id=name, node_type="claim", corpus_id="papers", project_id="research",
+        status="supported") for name in ("a", *(f"leaf-{i}" for i in range(15999))))
+    edges = tuple(OKFEdge(edge_id=f"e{i}", relation="requires", source_id=ref("a"), target_id=ref(f"leaf-{i}"),
+        corpus_id="papers", project_id="research", status="supported") for i in range(15999))
+    snapshot = OKFSnapshot(snapshot_id="large-traversal", corpus_id="papers", project_id="research",
+        graph_revision=revision, ontology_profile="claim_obligation", nodes=nodes, edges=edges)
+    req = TraceDependenciesRequest(mode="trace", operation_id="full-traversal", graph_revision=revision, claim=ref("a"))
+    trace = traverse_dependencies(snapshot, req, context(max_visited_nodes=16000, max_traversed_edges=16384,
+        max_paths=1, timeout_seconds=120), OntologyService())
+    assert len(trace["nodes"]) == 16000 and len(trace["edges"]) == 15999
+    assert trace["reachable_subgraph_complete"]
+    assert not trace["paths_complete"] and "path_limit" in trace["limits_reached"]
+    assert not trace["outstanding_obligations"]

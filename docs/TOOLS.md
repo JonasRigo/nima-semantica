@@ -75,3 +75,8 @@ This separation lets you test a proposal without quietly turning it into accepte
 Successful execution tells you that a represented operation completed.
 Its scientific meaning still depends on the definitions, assumptions and source interpretation you supplied.
 Inspect exact evidence, preserve unresolved questions and approve the specific project changes you want to retain.
+
+## Decision support service
+
+The [expected-utility service](EXPECTED_UTILITY.md) evaluates supplied candidate actions through the offline `nima decision evaluate` CLI or the Python library.
+It is separate from the published Langflow MCP toolbox and does not execute an action or grant approval.

@@ -27,3 +27,19 @@ Replace it with the complete execution request after inspecting the returned con
 A visible dependency makes an argument easier to inspect. Connectivity alone cannot establish that one scientific statement entails another.
 
 [Tool catalogue](../TOOLS.md) · [User guide](../README.md)
+
+
+## Input capacity and traversal budgets
+
+The operator settings distinguish loading a complete scoped snapshot from traversing one claim's reachable dependencies.
+The default input allowance is 16,000 nodes and 24,000 edges.
+It does not change the public graph's admission capacity, the graph reasoner, retrieval settings, artifact/status rules or scientific certification.
+
+The default reachable traversal allows 4,096 visited nodes, 8,192 traversed edges, 512 returned paths, depth 32 and 50,000 steps, with a 30-second traversal timeout.
+Operators may lower these settings or raise traversal settings up to 16,000 visited nodes, 16,384 traversed edges, 2,048 paths, depth 64, 100,000 steps and 120 seconds.
+Reaching a budget still returns explicit partial coverage and boundaries; it never turns an unexplored branch into a leaf or a complete cycle search.
+
+These settings belong to the operator component, not the public request.
+Tool Guide reports the defaults and ceilings; workflow preview reports its actual configured limits.
+For an existing installation, update the native package, the Trace Claim Dependencies component and its saved operator values together, then reconnect clients after the approved service reload.
+An old failed operation retains its receipt: use a fresh operation ID for a deliberate retry under the new configuration.

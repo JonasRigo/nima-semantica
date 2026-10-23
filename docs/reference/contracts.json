@@ -8753,6 +8753,31 @@
         "guidance": "Select a scoped claim and revision. Report traversal boundaries and unresolved dependencies. Independently traced subgraphs do not automatically establish complete closure.",
         "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
         "mode_requirements": "trace requires operation_id, exact graph_revision, and claim with corpus_id, optional project_id and local_id.",
+        "operator_limits": {
+          "authority": "Operator component settings only; public requests cannot override these limits.",
+          "configured_values": "Call preview on the deployed workflow to inspect its actual limits; existing saved operator settings may differ from these defaults.",
+          "defaults": {
+            "max_depth": 32,
+            "max_edges": 24000,
+            "max_nodes": 16000,
+            "max_paths": 512,
+            "max_steps": 50000,
+            "max_traversed_edges": 8192,
+            "max_visited_nodes": 4096,
+            "timeout_seconds": 30
+          },
+          "hard_ceilings": {
+            "max_depth": 64,
+            "max_edges": 24000,
+            "max_nodes": 16000,
+            "max_paths": 2048,
+            "max_steps": 100000,
+            "max_traversed_edges": 16384,
+            "max_visited_nodes": 16000,
+            "timeout_seconds": 120
+          },
+          "separation": "Input snapshot bounds apply before traversal. Visited nodes, traversed edges, paths, depth, steps and timeout independently bound the reachable trace."
+        },
         "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
         "request_limits": [
           {

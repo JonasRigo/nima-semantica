@@ -27,7 +27,8 @@ def test_ignore_negation_works_without_git_history(tmp_path):
     assert not (tmp_path / '.git').exists()
 
 
-@pytest.mark.parametrize('name', ['benchmarks/report.txt', 'article/draft.tex', 'CODE_TODO.md', 'TOOL_BLUEPRINT.md', 'docs/CLEAN_HOST_TEST.md'])
+@pytest.mark.parametrize('name', ['benchmarks/report.txt', 'article/draft.tex', 'CODE_TODO.md', 'TOOL_BLUEPRINT.md', 'docs/CLEAN_HOST_TEST.md',
+    'MITICULOUS_PROOF_PROCEDURE.md', 'PERFORMANCE_DESIGN_DECISION.md', 'REWRITE_AUDIT.md'])
 def test_explicit_private_paths_fail_without_ignore_file(tmp_path, name):
     with pytest.raises(ValueError, match='Private release path'):
         policy.validate_files(tmp_path, [name])

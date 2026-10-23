@@ -177,6 +177,18 @@ class GraphReasoningService:
             conclusion["atom"]["predicate"] + ":" + ":".join(conclusion["atom"]["arguments"])
             for conclusion in result_payload.get("admitted_conclusions", ())
         )
+        output_index = {"representation": "direct_output_ids", "count": len(output_ids)}
+        if len(output_ids) > 10_000:
+            # The complete result is retained in this authenticated receipt's
+            # metadata (and the receipt service externalizes large payloads).
+            # Use that lossless inventory instead of exceeding the ID-list bound.
+            output_index = {
+                "representation": "complete_receipt_result",
+                "count": len(output_ids),
+                "json_pointer": "/metadata/result/admitted_conclusions",
+                "identifier_format": "predicate + ':' + ':'.join(arguments)",
+            }
+            output_ids = ()
         receipt = ExecutionReceipt(
             receipt_id=receipt_id,
             operation_id=operation_id,
@@ -193,7 +205,8 @@ class GraphReasoningService:
             provider="semantica",
             tool_version="semantica-horn-adapter-v1",
             idempotency_key=request.idempotency_key,
-            metadata={"request_hash": request_hash, "mode": request.mode, "result": result_payload},
+            metadata={"request_hash": request_hash, "mode": request.mode, "result": result_payload,
+                      "output_index": output_index},
         )
         self.receipts.record(receipt)
         if interruption is not None:

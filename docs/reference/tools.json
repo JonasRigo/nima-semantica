@@ -6214,7 +6214,32 @@
       "limit_policy": "Schema bounds apply per call, not to the total number of calls. Do not silently truncate. Split only independent work; preserve coherent operations and approval boundaries.",
       "operator_policy": "Scope, permissions, model configuration and execution budgets remain operator-owned. Requests cannot grant themselves capabilities.",
       "retry_policy": "Replay uncertain delivery with identical arguments and ID. Inspect status/receipts before retrying interrupted work. Use a new ID for changed work or a deliberate new attempt; stop repeated unchanged failures and diagnose.",
-      "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage."
+      "completion_policy": "Retain artifacts and receipts across calls. Report failed/deferred scope explicitly; partial work is not full coverage.",
+      "operator_limits": {
+        "defaults": {
+          "max_nodes": 16000,
+          "max_edges": 24000,
+          "max_visited_nodes": 4096,
+          "max_traversed_edges": 8192,
+          "max_depth": 32,
+          "max_paths": 512,
+          "max_steps": 50000,
+          "timeout_seconds": 30
+        },
+        "hard_ceilings": {
+          "max_nodes": 16000,
+          "max_edges": 24000,
+          "max_visited_nodes": 16000,
+          "max_traversed_edges": 16384,
+          "max_depth": 64,
+          "max_paths": 2048,
+          "max_steps": 100000,
+          "timeout_seconds": 120
+        },
+        "authority": "Operator component settings only; public requests cannot override these limits.",
+        "separation": "Input snapshot bounds apply before traversal. Visited nodes, traversed edges, paths, depth, steps and timeout independently bound the reachable trace.",
+        "configured_values": "Call preview on the deployed workflow to inspect its actual limits; existing saved operator settings may differ from these defaults."
+      }
     }
   },
   {

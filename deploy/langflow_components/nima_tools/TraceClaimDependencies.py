@@ -2,7 +2,7 @@
 import json
 from lfx.io import StrInput,BoolInput,IntInput
 from lfx.schema import Message,DataFrame
-from nima_semantica.claim_dependencies import TraceDependenciesRequest,TraceDependenciesContext,trace_claim_dependencies,POLICY_DIGEST
+from nima_semantica.claim_dependencies import TraceDependenciesRequest,TraceDependenciesContext,trace_claim_dependencies,POLICY_DIGEST,TRACE_DEFAULT_LIMITS
 from nima_semantica.component_contracts import manifest_for_component
 from nima_semantica.orchestration.langflow.adapter_support import configured_store
 from nima_semantica.orchestration.langflow.stages.base import BlockingStage as BaseComponent,handle
@@ -18,14 +18,14 @@ class TraceClaimDependencies(BaseComponent):
         StrInput(name="corpus_id",display_name="Authorized corpus (operator)",value="papers"),
         StrInput(name="project_id",display_name="Authorized project; blank for corpus (operator)",value="research"),
         BoolInput(name="allow_audit_writes",display_name="Allow receipts and outcome artifacts (operator)",value=False),
-        IntInput(name="max_nodes",display_name="Maximum input nodes (operator)",value=256),
-        IntInput(name="max_edges",display_name="Maximum input edges (operator)",value=512),
-        IntInput(name="max_visited_nodes",display_name="Maximum visited nodes (operator)",value=128),
-        IntInput(name="max_traversed_edges",display_name="Maximum traversed edges (operator)",value=256),
-        IntInput(name="max_depth",display_name="Maximum path depth (operator)",value=32),
-        IntInput(name="max_paths",display_name="Maximum returned paths (operator)",value=128),
-        IntInput(name="max_steps",display_name="Maximum traversal steps (operator)",value=10000),
-        IntInput(name="timeout_seconds",display_name="Traversal timeout (operator)",value=30)]
+        IntInput(name="max_nodes",display_name="Maximum input nodes (operator)",value=TRACE_DEFAULT_LIMITS["max_nodes"]),
+        IntInput(name="max_edges",display_name="Maximum input edges (operator)",value=TRACE_DEFAULT_LIMITS["max_edges"]),
+        IntInput(name="max_visited_nodes",display_name="Maximum visited nodes (operator)",value=TRACE_DEFAULT_LIMITS["max_visited_nodes"]),
+        IntInput(name="max_traversed_edges",display_name="Maximum traversed edges (operator)",value=TRACE_DEFAULT_LIMITS["max_traversed_edges"]),
+        IntInput(name="max_depth",display_name="Maximum path depth (operator)",value=TRACE_DEFAULT_LIMITS["max_depth"]),
+        IntInput(name="max_paths",display_name="Maximum returned paths (operator)",value=TRACE_DEFAULT_LIMITS["max_paths"]),
+        IntInput(name="max_steps",display_name="Maximum traversal steps (operator)",value=TRACE_DEFAULT_LIMITS["max_steps"]),
+        IntInput(name="timeout_seconds",display_name="Traversal timeout (operator)",value=TRACE_DEFAULT_LIMITS["timeout_seconds"])]
 
     def run_sync(self):
         if getattr(self,"policy",None) and _value(self.policy).get("policy_digest")!=POLICY_DIGEST:

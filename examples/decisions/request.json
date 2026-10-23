@@ -1,0 +1,116 @@
+{
+  "operation_id": "decision-1",
+  "context": {
+    "corpus_id": "papers",
+    "project_id": "research",
+    "graph_revision": {
+      "corpus_id": "papers",
+      "corpus_revision": 0,
+      "project_id": "research",
+      "project_revision": 0
+    },
+    "state_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "target": "Resolve the selected obligation",
+    "run_id": null,
+    "evidence_cutoff": null,
+    "vocabulary_hash": null
+  },
+  "policy": {
+    "policy_id": "progress",
+    "version": "1",
+    "objective": "Assess useful target progress",
+    "utility_unit": "declared progress units",
+    "horizon": "one attempted action",
+    "cost_definition": "Supplied expected_cost includes all converted resource costs."
+  },
+  "actions": [
+    {
+      "action_id": "proof",
+      "description": "Attempt the lemma",
+      "model": {
+        "outcomes": [
+          {
+            "outcome_id": "success",
+            "probability": "1/2",
+            "utility_gain": "10/1"
+          },
+          {
+            "outcome_id": "failure",
+            "probability": "1/2",
+            "utility_gain": "0/1"
+          }
+        ],
+        "information": null,
+        "expected_cost": "2/1",
+        "basis": {
+          "origin": "judgment",
+          "rationale": "Declared fixture estimate, not measured success.",
+          "evidence": [],
+          "sample_size": null,
+          "calibration_scope": null
+        }
+      },
+      "scenarios": [],
+      "prerequisites": []
+    },
+    {
+      "action_id": "read",
+      "description": "Read the definition",
+      "model": {
+        "outcomes": [
+          {
+            "outcome_id": "success",
+            "probability": "1/2",
+            "utility_gain": "4/1"
+          },
+          {
+            "outcome_id": "failure",
+            "probability": "1/2",
+            "utility_gain": "0/1"
+          }
+        ],
+        "information": null,
+        "expected_cost": "0/1",
+        "basis": {
+          "origin": "judgment",
+          "rationale": "Declared fixture estimate, not measured success.",
+          "evidence": [],
+          "sample_size": null,
+          "calibration_scope": null
+        }
+      },
+      "scenarios": [],
+      "prerequisites": []
+    },
+    {
+      "action_id": "stop",
+      "description": "Return current partial work",
+      "model": {
+        "outcomes": [
+          {
+            "outcome_id": "success",
+            "probability": "1/2",
+            "utility_gain": "0/1"
+          },
+          {
+            "outcome_id": "failure",
+            "probability": "1/2",
+            "utility_gain": "0/1"
+          }
+        ],
+        "information": null,
+        "expected_cost": "0/1",
+        "basis": {
+          "origin": "judgment",
+          "rationale": "Declared fixture estimate, not measured success.",
+          "evidence": [],
+          "sample_size": null,
+          "calibration_scope": null
+        }
+      },
+      "scenarios": [],
+      "prerequisites": []
+    }
+  ],
+  "candidate_limitations": []
+}

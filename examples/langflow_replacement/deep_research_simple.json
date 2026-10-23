@@ -2258,8 +2258,8 @@
     "policy_digest": "c3e4118d070f10070cb238bf1c7f413931bc6b9f75932651a464a0861f84d048",
     "native_sources_sha256": {
       "deep_research_passes": "7838a31d7dcef2f675048f2ecb340f55ffc29f280ce47c474a78308e5e90237a",
-      "deep_research_fast": "a788ed732c388e1f155646fee89ec2ac03060ad22fb5b20f466f7d24f9013df0",
-      "deep_research_fast_pdf": "9dc6ddb92729bcb5dbb3a5a4f9c54be761c8913b8ec15137869e6bf0021f4960",
+      "deep_research_fast": "82739301024e10943687c4c1de01a7b48e8c5a8ca0bb2ef289d44c27930a5146",
+      "deep_research_fast_pdf": "64fd71a74cd748e9bb43d6e83890c756e8e24d1001f08704eee4b1429cf69511",
       "arxiv_search_fallback": "6d55243dbf5bdae8142214c579e40220f44380d63d686a835c7193ca5422dd6d",
       "simple_deep_research": "03e28c41c86c9accdbf248858887565da055d1ef95f19652716ae4ac548330d7",
       "graph_extraction": "d2b297d4937755fdb8dd2248aa036a1209650521ed2ed07149592efae56d14ba",
